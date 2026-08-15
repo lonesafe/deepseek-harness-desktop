@@ -8,15 +8,24 @@ const root = resolve(appDir, '../..')
 const stage = join(root, 'dist', 'desktop-stage')
 
 rmSync(stage, { recursive: true, force: true })
-const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-const deployed = spawnSync(command, [
+const deployArgs = [
   '--filter',
   '@deepseek-ai/dsh-desktop',
   'deploy',
   '--prod',
   '--legacy',
   stage,
-], { cwd: root, stdio: 'inherit' })
+]
+const packageManagerScript = process.env.npm_execpath
+const command = packageManagerScript === undefined
+  ? (process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
+  : process.execPath
+const args = packageManagerScript === undefined ? deployArgs : [packageManagerScript, ...deployArgs]
+const deployed = spawnSync(command, args, {
+  cwd: root,
+  stdio: 'inherit',
+  shell: packageManagerScript === undefined && process.platform === 'win32',
+})
 if (deployed.error !== undefined) throw deployed.error
 if (deployed.status !== 0) process.exit(deployed.status ?? 1)
 

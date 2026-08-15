@@ -1,59 +1,59 @@
 # DeepSeek Harness Desktop
 
-[中文（首选）](README.zh.md) | English
+[English](README.en.md) | 中文
 
 [![Desktop installers](https://github.com/lonesafe/deepseek-harness-desktop/actions/workflows/desktop.yml/badge.svg)](https://github.com/lonesafe/deepseek-harness-desktop/actions/workflows/desktop.yml) [![Release](https://img.shields.io/github/v/release/lonesafe/deepseek-harness-desktop?include_prereleases)](https://github.com/lonesafe/deepseek-harness-desktop/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **运行环境零配置 · 简单易用 · 开箱即用 · 零开发门槛**
 
-Download, install, and open. There is no need to install Node.js, pnpm, Electron, run terminal commands, or start a browser manually. The desktop client includes everything required to run DeepSeek Harness; model-provider credentials can be entered inside the application when needed.
+下载安装后直接打开，无需安装 Node.js、pnpm、Electron，无需执行终端命令，也无需手动启动浏览器。桌面客户端已经包含运行 DeepSeek Harness 所需的完整环境；需要调用模型时，可直接在应用内填写服务商要求的凭据。
 
-[Download DeepSeek Harness Desktop 1.0 Beta 1](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)
+[下载 DeepSeek Harness Desktop 1.0 Beta 1](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)
 
-DeepSeek Harness Desktop packages the official open-source [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web experience as a self-contained desktop application for macOS, Linux, and Windows. Electron, Node.js, the production plugin graph, and the Web assets travel inside the installer, so users do not need to install Node.js, pnpm, or launch a browser.
+DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 体验打包成适用于 macOS、Linux 和 Windows 的自包含桌面应用。安装包内含 Electron、Node.js、生产插件图和 Web 资源，用户无需安装 Node.js、pnpm，也无需手动打开浏览器。
 
-This is a community-maintained desktop distribution. It is not an official DeepSeek product and is not endorsed by or affiliated with DeepSeek AI.
+这是由社区维护的桌面发行版，并非 DeepSeek 官方产品，也未获得 DeepSeek AI 的认可或隶属关系。
 
-## Download and start
+## 下载并开始使用
 
-1. Open the [v1.0.0-beta.1 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1).
-2. Download the package for your system.
-3. Install and open the application.
+1. 打开 [v1.0.0-beta.1 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)。
+2. 下载适合当前系统的安装包。
+3. 安装并打开应用。
 
-| Platform | Architecture | Packages |
+| 平台 | 架构 | 安装包 |
 |---|---:|---|
-| macOS | Apple Silicon | DMG or ZIP |
-| macOS | Intel | DMG or ZIP |
-| Windows | x64 | NSIS installer or ZIP |
-| Linux | x64 | AppImage or DEB |
+| macOS | Apple Silicon | DMG 或 ZIP |
+| macOS | Intel | DMG 或 ZIP |
+| Windows | x64 | NSIS 安装程序或 ZIP |
+| Linux | x64 | AppImage 或 DEB |
 
-The beta installers are unsigned. macOS may require Control-clicking the app and choosing **Open**; Windows SmartScreen may display an unknown-publisher warning. Review the release checksums before installing.
+Beta 安装包尚未签名。macOS 可能需要按住 Control 点击应用并选择**打开**；Windows SmartScreen 可能显示未知发布者警告。安装前请核对 Release 中的校验值。
 
-## Why it is zero setup
+## 为什么能够零配置使用
 
-- **No runtime installation:** Electron, Node.js, the production plugin graph, and Web assets are included.
-- **No command line:** the desktop launcher starts and stops the local Harness service automatically.
-- **No separate browser:** the complete Harness interface opens in its own desktop window.
-- **No development setup:** download the native package for macOS, Windows, or Linux and start using it.
+- **无需安装运行环境：**安装包已经包含 Electron、Node.js、生产插件图和 Web 资源。
+- **无需使用命令行：**桌面启动器会自动启动和关闭本地 Harness 服务。
+- **无需单独打开浏览器：**完整的 Harness 界面会直接显示在桌面窗口中。
+- **无需开发环境：**下载适用于 macOS、Windows 或 Linux 的原生安装包即可开始使用。
 
-## Beta status
+## Beta 状态
 
-`v1.0.0-beta.1` is the first public desktop beta. The launcher and packaged runtime have been smoke-tested on Apple Silicon macOS; the native build matrix produces separate macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
+`v1.0.0-beta.1` 是首个公开桌面 Beta。启动器和打包运行时已在 Apple Silicon macOS 上完成冒烟测试；原生构建矩阵会分别生成 macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
 
-## What the desktop shell does
+## 桌面壳的工作方式
 
-- Starts the packaged `dsh web` runtime with Electron's embedded Node.js on an operating-system-assigned `127.0.0.1` port.
-- Loads only that exact local origin in a sandboxed Electron window.
-- Disables renderer Node integration, webviews, insecure content, and permission grants.
-- Opens credential-free HTTPS links in the system browser and rejects other external navigation.
-- Keeps Harness profiles below Electron's per-user application-data directory and shuts down the owned backend process tree when the app quits.
-- Reuses the upstream Harness Web UI and plugin composition without maintaining a second desktop-only frontend.
+- 使用 Electron 内嵌的 Node.js 启动已打包的 `dsh web` 运行时，并监听操作系统分配的 `127.0.0.1` 端口。
+- 在沙箱化 Electron 窗口中只加载该精确本地 origin。
+- 关闭 renderer Node integration、webview、不安全内容和权限授予。
+- 将无凭据的 HTTPS 链接交给系统浏览器打开，并拒绝其他外部导航。
+- 把 Harness profile 放在 Electron 逐用户应用数据目录下，并在应用退出时关闭自己拥有的后端进程树。
+- 直接复用上游 Harness Web UI 与插件组合，不维护第二套桌面专用前端。
 
 <a id="run"></a><a id="run-from-source"></a>
 
-## Build from source
+## 从源码构建
 
-Requirements: Git, Node.js 24, and pnpm 11.
+需要 Git、Node.js 24 和 pnpm 11。
 
 ```sh
 git clone https://github.com/lonesafe/deepseek-harness-desktop.git
@@ -62,7 +62,7 @@ pnpm install
 pnpm run desktop:dist
 ```
 
-The current platform's installers are written to `dist/desktop`. Native dependencies are selected during installation, so package each target on its own operating system:
+当前平台的安装包会写入 `dist/desktop`。原生依赖会在安装阶段按平台选择，因此每个目标都应在对应操作系统上打包：
 
 ```sh
 pnpm run desktop:dist:mac
@@ -70,9 +70,9 @@ pnpm run desktop:dist:linux
 pnpm run desktop:dist:windows
 ```
 
-The [Desktop installers workflow](.github/workflows/desktop.yml) builds macOS arm64, macOS x64, Linux x64, and Windows x64 in native GitHub-hosted runners. Pushing a `v*` tag attaches the installers to the matching GitHub Release.
+[桌面安装包工作流](.github/workflows/desktop.yml)使用 GitHub 原生 runner 构建 macOS arm64、macOS x64、Linux x64 和 Windows x64。推送 `v*` 标签后，工作流会把安装包附加到对应 GitHub Release。
 
-## Development and verification
+## 开发与验证
 
 ```sh
 pnpm run desktop:dev
@@ -81,22 +81,22 @@ pnpm run verify-desktop-runtime-closure
 pnpm run build
 ```
 
-The runtime-closure gate verifies that every required workspace peer needed by the dynamically loaded production plugin graph is present in the packaged application.
+运行时闭包门禁会验证：动态加载的生产插件图所需的每个 workspace peer 都已进入打包后的应用。
 
-## Application data
+## 应用数据
 
-Harness data lives in the `runtime` child of Electron's standard per-user application-data directory. Uninstalling the application does not automatically delete that data. Back it up before moving between beta versions if the stored sessions matter to you.
+Harness 数据位于 Electron 标准逐用户应用数据目录的 `runtime` 子目录。卸载应用不会自动删除这些数据。如果已保存的会话很重要，请在不同 Beta 版本之间迁移前进行备份。
 
-## Known beta limitations
+## 已知 Beta 限制
 
-- Installers are not code-signed or notarized yet.
-- The application is large because it contains Electron and the complete production Harness runtime.
-- Automatic updates are not implemented; install a newer Release manually.
-- Only x64 Linux and Windows builds are currently published.
-- The desktop client inherits upstream Harness developer-preview compatibility changes.
+- 安装包尚未代码签名或公证。
+- 应用体积较大，因为其中包含 Electron 和完整的 Harness 生产运行时。
+- 尚未实现自动更新，需要手动安装较新的 Release。
+- Linux 与 Windows 目前只发布 x64 构建。
+- 桌面客户端会继承上游 Harness 开发者预览阶段的兼容性变化。
 
-## Upstream and license
+## 上游与许可证
 
-The agent runtime, Web UI, and plugin system come from [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Desktop-specific code lives in [`apps/desktop`](apps/desktop), and the architectural decision is recorded in the [Electron desktop launcher note](.agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md).
+智能体运行时、Web UI 和插件系统来自 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。桌面专用代码位于 [`apps/desktop`](apps/desktop)，架构决策记录在 [Electron 桌面启动器说明](.agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md)中。
 
-Distributed under the [MIT License](LICENSE). Third-party notices are available in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+项目采用 [MIT 许可证](LICENSE)分发。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

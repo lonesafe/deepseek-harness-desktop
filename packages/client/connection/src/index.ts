@@ -73,10 +73,10 @@ export const Config: z<ConnectionConfig> = z.object({
  * privileged — `settings.describe` returns every exposed namespace's
  * configuration and `credentials.describe` reports whether an arbitrary
  * environment-variable name is configured and where from, which is
- * reconnaissance no anonymous caller should have. `trustedHosts` is a
- * DNS-rebinding fence, explicitly not authentication, so the whole
- * configuration plane stays loopback-same-origin until a real authentication
- * layer exists. `llm.discoverModels` belongs to that plane on both counts: it
+ * reconnaissance no remote caller should have. `trustedHosts` is a
+ * DNS-rebinding fence, explicitly not authentication; even when the composing
+ * Web carrier authenticates LAN users, the whole configuration plane stays
+ * loopback-same-origin. `llm.discoverModels` belongs to that plane on both counts: it
  * carries a draft credential, and it makes the HOST issue a GET to a URL the
  * caller chose and reports back the status or the parsed body — an anonymous
  * LAN caller would have a probe for whatever the host can reach and the

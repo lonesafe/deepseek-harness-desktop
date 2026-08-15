@@ -16,10 +16,12 @@
 // sequentially in-file.
 import type { ChildProcess } from 'node:child_process'
 import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
+import { connect } from 'node:net'
+import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { Browser, Page } from 'playwright'
@@ -48,6 +50,13 @@ function waitForReadyLine(child: ChildProcess): Promise<string> {
       reject(new Error(`dsh web exited early (code ${code}); output:\n${out}`))
     })
   })
+}
+
+/** First non-loopback IPv4 address available for a same-host LAN request. */
+function firstLanAddress(): string | undefined {
+  return Object.values(networkInterfaces()).flat()
+    .find((address): address is NonNullable<typeof address> =>
+      address !== undefined && address.family === 'IPv4' && !address.internal)?.address
 }
 
 async function rpc<T>(baseUrl: string, method: string, payload: unknown): Promise<T> {
@@ -177,6 +186,108 @@ describe('dsh web keyless CLI smoke', () => {
       const readyUrl = await waitForReadyLine(child)
       expect(readyUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
       expect((await fetch(readyUrl)).status).toBe(200)
+    } finally {
+      const closed = child.exitCode === null
+        ? new Promise<void>((resolveClose) => { child.once('close', () => { resolveClose() }) })
+        : Promise.resolve()
+      if (child.exitCode === null) child.kill('SIGTERM')
+      await closed
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+
+  it('requires credentials before serving the LAN page, API, or WebSocket', async (testContext) => {
+    requireDist()
+    const lanAddress = firstLanAddress()
+    if (lanAddress === undefined) {
+      testContext.skip()
+      return
+    }
+    const accessToken = 'keyless-lan-access-token-1234'
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'dsh-web-keyless-lan-'))
+    const tsxLoader = pathToFileURL(createRequire(join(REPO_ROOT, 'package.json')).resolve('tsx')).href
+    const child = spawn(
+      process.execPath,
+      [
+        '--import', tsxLoader, join(REPO_ROOT, 'apps/cli/src/bin.ts'), 'web', '--port', '0',
+        '--host', '0.0.0.0', '--access-token', accessToken,
+      ],
+      {
+        cwd: sessionsDir,
+        env: {
+          ...process.env,
+          DEEPSEEK_API_KEY: 'keyless-web-no-call',
+          DSH_HOME: join(sessionsDir, '.dsh'),
+          DSH_AGENTS_HOME: join(sessionsDir, '.agents'),
+          TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
+    try {
+      const readyUrl = await waitForReadyLine(child)
+      const lanUrl = new URL(readyUrl)
+      lanUrl.hostname = lanAddress
+      const unauthorized = await fetch(lanUrl)
+      expect(unauthorized.status).toBe(401)
+      expect(unauthorized.headers.get('www-authenticate')).toContain('DeepSeek Harness LAN')
+
+      const loginRedirect = await fetch(lanUrl, {
+        headers: { accept: 'text/html' },
+        redirect: 'manual',
+      })
+      expect(loginRedirect.status).toBe(303)
+      expect(loginRedirect.headers.get('location')).toBe('/__dsh_lan_login')
+      const loginPage = await fetch(new URL('/__dsh_lan_login', lanUrl), { headers: { accept: 'text/html' } })
+      expect(await loginPage.text()).toContain('局域网登录')
+
+      const authorization = `Basic ${Buffer.from(`deepseek:${accessToken}`).toString('base64')}`
+      const page = await fetch(lanUrl, { headers: { authorization } })
+      expect(page.status).toBe(200)
+      await page.body?.cancel()
+      const setCookie = page.headers.getSetCookie()[0]
+      expect(setCookie).toMatch(/^dsh_lan_access=.*HttpOnly; SameSite=Lax$/u)
+      const cookie = setCookie?.split(';', 1)[0]
+      const api = await fetch(new URL('/api/host.describe', lanUrl), {
+        method: 'POST',
+        headers: { cookie: cookie!, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'client-request',
+          rpcId: 'keyless-lan-smoke',
+          method: 'host.describe',
+          payload: {},
+        }),
+      })
+      expect(api.status).toBe(200)
+      expect(await api.json()).toMatchObject({ result: { ok: true } })
+
+      const socket = connect(Number(lanUrl.port), lanAddress)
+      await once(socket, 'connect')
+      const upgraded = once(socket, 'data')
+      socket.write([
+        'GET /api/events.mux HTTP/1.1',
+        `Host: ${lanUrl.host}`,
+        `Origin: ${lanUrl.origin}`,
+        'Connection: Upgrade',
+        'Upgrade: websocket',
+        'Sec-WebSocket-Version: 13',
+        'Sec-WebSocket-Key: ZGVlcHNlZWstaGFybmVzcw==',
+        `Cookie: ${cookie!}`,
+        '',
+        '',
+      ].join('\r\n'))
+      const [upgradeResponse] = await upgraded as [Buffer]
+      expect(upgradeResponse.toString()).toContain('101 Switching Protocols')
+      socket.destroy()
+
+      const formLogin = await fetch(new URL('/__dsh_lan_login', lanUrl), {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ username: 'deepseek', password: accessToken }),
+        redirect: 'manual',
+      })
+      expect(formLogin.status).toBe(303)
+      expect(formLogin.headers.getSetCookie()[0]).toContain('HttpOnly; SameSite=Lax')
     } finally {
       const closed = child.exitCode === null
         ? new Promise<void>((resolveClose) => { child.once('close', () => { resolveClose() }) })

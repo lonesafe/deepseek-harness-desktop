@@ -10,7 +10,7 @@ DeepSeek Harness 已有完整的浏览器应用，但要求用户安装 Node.js�
 
 ## 决策
 
-`apps/desktop` 是 Electron 主进程应用。它设置 `ELECTRON_RUN_AS_NODE=1`，复用 Electron 内嵌可执行文件，以 `node --expose-internals <dsh-entry> web --port 0` 启动已打包的 `@deepseek-ai/dsh` 入口；该 Node 标志提供已发布 HMR 插件所需的 loader internals。现有 Web 组合只绑定 `127.0.0.1`；启动器等待就绪输出、加载该精确随机 origin，并在应用退出时终止自己拥有的进程树。Harness 状态使用 Electron 逐用户应用数据目录下的 `runtime` 子目录，使 Electron socket 与缓存永远不会进入 Harness 文件监视范围；初始 workspace 位置则使用用户主目录。
+`apps/desktop` 是 Electron 主进程应用。它设置 `ELECTRON_RUN_AS_NODE=1`，复用 Electron 内嵌可执行文件，以 `node --expose-internals <dsh-entry> web --port 0` 启动已打包的 `@deepseek-ai/dsh` 入口；该 Node 标志提供已发布 HMR 插件所需的 loader internals。Web 组合默认只绑定 `127.0.0.1`；用户在桌面端明确操作后，经过认证的[局域网访问决策](../feature/2026-08-15-authenticated-lan-web-access.md)可以添加全接口 host 与访问 token。独立的[账号设备中转](../feature/2026-08-15-account-device-remote-relay.md)保持本地绑定不变，并且只有用户开启远程控制后，才由主进程把经过认证的出站隧道流量代理到这个精确回环 origin。启动器等待就绪输出，始终加载精确的随机回环 origin，并在应用退出时终止自己拥有的进程树与隧道。Harness 状态使用 Electron 逐用户应用数据目录下的 `runtime` 子目录，使 Electron socket 与缓存永远不会进入 Harness 文件监视范围；初始 workspace 位置则使用用户主目录。
 
 BrowserWindow 开启 context isolation 与 renderer sandbox，关闭 Node integration、webview、权限授予和不安全内容，只允许在受管 origin 内导航。无凭据的 HTTPS 链接可以交给系统浏览器打开，其他外部目标一律拒绝。启动器不暴露 preload API。
 
@@ -20,7 +20,7 @@ electron-builder 运行前，pnpm 会先部署桌面包。因为自动 peer 安�
 
 ## 验证
 
-单元测试固定就绪信息解析、有界子进程关闭、精确 origin 导航和外链策略。运行时闭包门禁遍历 workspace 依赖与必需 peer。暂存运行时冒烟测试从部署后的生产目录启动 `dsh web` 并抓取生成的应用页面；随后平台打包测试通过已打包可执行文件运行内嵌运行时。
+单元测试固定本机与局域网就绪信息解析、持久化局域网与远程偏好校验、浏览器设备授权、固定回环中转、特权方法拒绝、有界子进程关闭、精确 origin 导航和外链策略。运行时闭包门禁遍历 workspace 依赖与必需 peer。暂存运行时冒烟测试从部署后的生产目录启动 `dsh web` 并抓取生成的应用页面；随后平台打包测试通过已打包可执行文件运行内嵌运行时。
 
 ## 考虑过的替代方案
 
@@ -36,4 +36,4 @@ electron-builder 运行前，pnpm 会先部署桌面包。因为自动 peer 安�
 
 用户获得常规桌面应用，无需另装 Node.js、pnpm、终端或浏览器；Web 与桌面产品仍共享同一套 UI 和后端组合。启动错误会包含有界的子进程诊断；一个应用实例拥有一个本地后端；退出时不会有意遗留该后端。
 
-代价是产物体积：Electron 加显式 Harness 运行时闭包远大于单独的 Web 资源，且 `asar: false` 会生成可直接查看的资源树。应用仍会短暂开放一个随机回环监听端口，不过它只绑定 `127.0.0.1`，且特权窗口只接受其精确 origin。平台签名、公证和软件仓库发布仍属于发布基础设施职责，不是本地构建自带的性质。
+代价是产物体积：Electron 加显式 Harness 运行时闭包远大于单独的 Web 资源，且 `asar: false` 会生成可直接查看的资源树。随机监听端口默认仍只绑定回环；经过认证的局域网绑定与基于账号的远程控制是两项独立、明确且持久化的偏好，而特权 Electron 窗口始终只接受其精确回环 origin。平台签名、公证、软件仓库发布以及独立中转服务的运营仍属于发布基础设施职责，不是本地构建自带的性质。

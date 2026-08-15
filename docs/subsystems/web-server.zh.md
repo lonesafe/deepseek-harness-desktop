@@ -35,10 +35,12 @@ interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Login token required from non-loopback peers; at least 24 characters. */
+  accessToken: string
 }
 ```
 
-`host` 只接受 `127.0.0.1`（默认姿态）和 `0.0.0.0`（刻意的网络暴露）；没有 TLS、认证或 origin 策略，因此绑定到非回环地址会把服务器暴露给该网络。dist 位置是认领席位的前端插件的组装事实。
+`host` 只接受 `127.0.0.1`（默认姿态）和 `0.0.0.0`（刻意的网络暴露）。全接口绑定要求不少于 24 个字符的 `accessToken`；远程 HTML 导航使用中文登录页，生成的 HttpOnly session 会在路由分发前保护后续 HTTP 与 WebSocket 请求。该载体不终止 TLS，因此直接局域网访问只适用于可信网络。dist 位置是认领席位的前端插件的组装事实。
 
 ## 服务
 
@@ -104,5 +106,5 @@ tapIndex(transform: (html: string) => string): () => void
 applyIndexTaps(html: string): string
 ```
 
-Source: [`packages/host/webserver/src/index.ts:60`](../../packages/host/webserver/src/index.ts)
+Source: [`packages/host/webserver/src/index.ts:224`](../../packages/host/webserver/src/index.ts)
 <!-- END GENERATED cordis-surface -->

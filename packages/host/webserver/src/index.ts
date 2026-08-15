@@ -9,6 +9,7 @@
  * belongs to the shell.
  */
 
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse, Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -48,6 +49,169 @@ export interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Login token required from non-loopback peers; at least 24 characters. */
+  accessToken: string
+}
+
+/** Fixed LAN username used by the login page and HTTP Basic clients. */
+export const LAN_ACCESS_USERNAME = 'deepseek'
+
+/** Minimum accepted access-token length for an all-interfaces bind. */
+export const MIN_LAN_ACCESS_TOKEN_LENGTH = 24
+
+/** HttpOnly cookie established by successful LAN authentication. */
+export const LAN_ACCESS_COOKIE = 'dsh_lan_access'
+
+/** Authentication page served before any application route. */
+export const LAN_LOGIN_PATH = '/__dsh_lan_login'
+
+const MAX_LOGIN_BODY_BYTES = 4_096
+
+/**
+ * Whether a socket peer address is local to this host.
+ * @param remoteAddress - socket peer address supplied by Node.
+ * @returns True for IPv4, IPv4-mapped, or IPv6 loopback peers.
+ */
+export function isLoopbackPeer(remoteAddress: string | undefined): boolean {
+  if (remoteAddress === undefined) return false
+  if (remoteAddress === '::1') return true
+  const ipv4 = remoteAddress.startsWith('::ffff:') ? remoteAddress.slice('::ffff:'.length) : remoteAddress
+  const first = ipv4.split('.', 1)[0]
+  return first === '127'
+}
+
+/**
+ * Authenticate one HTTP or upgrade request before route dispatch.
+ * @param remoteAddress - socket peer address supplied by Node.
+ * @param authorization - request Authorization header.
+ * @param accessToken - configured LAN token.
+ * @param cookie - request Cookie header.
+ * @returns True for loopback peers or a matching session/Basic credential.
+ */
+export function isAuthorizedPeer(
+  remoteAddress: string | undefined,
+  authorization: string | undefined,
+  accessToken: string,
+  cookie?: string,
+): boolean {
+  if (isLoopbackPeer(remoteAddress)) return true
+  if (hasLanAccessCookie(cookie, accessToken)) return true
+  return hasBasicCredentials(authorization, accessToken)
+}
+
+/** Compare an HTTP Basic value with the one configured process credential. */
+function hasBasicCredentials(authorization: string | undefined, accessToken: string): boolean {
+  const match = /^Basic\s+([^\s]+)$/iu.exec(authorization ?? '')
+  const encoded = match?.at(1)
+  if (encoded === undefined) return false
+  const supplied = Buffer.from(encoded, 'base64')
+  const expected = Buffer.from(`${LAN_ACCESS_USERNAME}:${accessToken}`)
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected)
+}
+
+/** Deterministic bearer value kept out of renderer JavaScript by HttpOnly. */
+function lanAccessCookieValue(accessToken: string): string {
+  return createHash('sha256').update(`DeepSeek Harness LAN\0${accessToken}`).digest('base64url')
+}
+
+/** Find and timing-safely validate the LAN session cookie. */
+function hasLanAccessCookie(cookie: string | undefined, accessToken: string): boolean {
+  const value = cookie?.split(';').map(part => part.trim())
+    .find(part => part.startsWith(`${LAN_ACCESS_COOKIE}=`))
+    ?.slice(LAN_ACCESS_COOKIE.length + 1)
+  if (value === undefined) return false
+  const supplied = Buffer.from(value)
+  const expected = Buffer.from(lanAccessCookieValue(accessToken))
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected)
+}
+
+/** Session cookie sent after exact form or Basic authentication. */
+function lanAccessSetCookie(accessToken: string): string {
+  return `${LAN_ACCESS_COOKIE}=${lanAccessCookieValue(accessToken)}; Path=/; HttpOnly; SameSite=Lax`
+}
+
+/** Render the script-free LAN credential form. */
+function lanLoginPage(invalid: boolean): string {
+  const error = invalid ? '<p class="error" role="alert">用户名或访问密钥不正确。</p>' : ''
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DeepSeek Harness · 局域网登录</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { align-items: center; background: #111827; display: flex; min-height: 100vh; justify-content: center; margin: 0; }
+    main { background: #fff; border-radius: 16px; box-shadow: 0 24px 64px #0005; color: #111827; max-width: 360px; padding: 32px; width: calc(100% - 64px); }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { color: #4b5563; font-size: 14px; line-height: 1.6; margin: 0 0 24px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin: 16px 0 6px; }
+    input { border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; font: inherit; padding: 10px 12px; width: 100%; }
+    button { background: #111827; border: 0; border-radius: 8px; color: #fff; cursor: pointer; font: inherit; font-weight: 600; margin-top: 24px; padding: 11px 16px; width: 100%; }
+    .error { color: #b91c1c; margin: 0 0 12px; }
+    @media (prefers-color-scheme: dark) { main { background: #1f2937; color: #f9fafb; } p { color: #d1d5db; } input { background: #111827; border-color: #4b5563; color: #f9fafb; } button { background: #f9fafb; color: #111827; } }
+  </style>
+</head>
+<body><main>
+  <h1>DeepSeek Harness</h1>
+  <p>请输入桌面客户端“局域网访问”中显示的连接凭据。</p>
+  ${error}
+  <form method="post" action="${LAN_LOGIN_PATH}">
+    <label for="username">用户名</label>
+    <input id="username" name="username" value="${LAN_ACCESS_USERNAME}" autocomplete="username" required>
+    <label for="password">访问密钥</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">登录</button>
+  </form>
+</main></body>
+</html>`
+}
+
+/** Write the LAN login page without making its credential state cacheable. */
+function writeLanLoginPage(res: ServerResponse, invalid = false): void {
+  const body = lanLoginPage(invalid)
+  res.writeHead(invalid ? 401 : 200, {
+    'cache-control': 'no-store',
+    'content-length': Buffer.byteLength(body),
+    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    'content-type': 'text/html; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+  })
+  res.end(body)
+}
+
+/** Read the small URL-encoded login form, returning undefined when oversized. */
+async function readLanLogin(req: IncomingMessage): Promise<URLSearchParams | undefined> {
+  const chunks: Uint8Array[] = []
+  let bytes = 0
+  for await (const chunk of req as AsyncIterable<Uint8Array>) {
+    bytes += chunk.byteLength
+    if (bytes > MAX_LOGIN_BODY_BYTES) return undefined
+    chunks.push(chunk)
+  }
+  return new URLSearchParams(Buffer.concat(chunks).toString('utf8'))
+}
+
+/** Authenticate the browser form and establish its opaque LAN session. */
+async function handleLanLogin(req: IncomingMessage, res: ServerResponse, accessToken: string): Promise<void> {
+  const form = await readLanLogin(req)
+  if (form === undefined) {
+    res.writeHead(413, { 'cache-control': 'no-store', 'content-type': 'text/plain; charset=utf-8' })
+    res.end('Login request is too large.')
+    return
+  }
+  const supplied = Buffer.from(`${form.get('username') ?? ''}:${form.get('password') ?? ''}`)
+  const expected = Buffer.from(`${LAN_ACCESS_USERNAME}:${accessToken}`)
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+    writeLanLoginPage(res, true)
+    return
+  }
+  res.writeHead(303, {
+    'cache-control': 'no-store',
+    location: '/',
+    'set-cookie': lanAccessSetCookie(accessToken),
+  })
+  res.end()
 }
 
 /**
@@ -61,6 +225,7 @@ export class WebServer extends Service {
   static Config: z<Config> = z.object({
     host: z.union([z.const('127.0.0.1'), z.const('0.0.0.0')]).required(),
     port: z.natural().max(65535).required(),
+    accessToken: z.string().role('secret').default(''),
   })
 
   private readonly exact = new Map<string, WebRoute>()
@@ -74,6 +239,9 @@ export class WebServer extends Service {
 
   constructor(ctx: Context, private config: Config) {
     super(ctx, 'webServer')
+    if (config.host === '0.0.0.0' && config.accessToken.length < MIN_LAN_ACCESS_TOKEN_LENGTH) {
+      throw new Error(`webserver: an all-interfaces bind requires an accessToken of at least ${String(MIN_LAN_ACCESS_TOKEN_LENGTH)} characters`)
+    }
   }
 
   /** The listening port (the OS-assigned value when config.port is 0). */
@@ -151,6 +319,40 @@ export class WebServer extends Service {
       /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server
       requests; the field is only optional on the client-side IncomingMessage type */
       const rawPath = new URL(req.url ?? '/', 'http://x').pathname
+      const loopback = isLoopbackPeer(req.socket.remoteAddress)
+      const cookieAuthorized = hasLanAccessCookie(req.headers.cookie, this.config.accessToken)
+      const basicAuthorized = hasBasicCredentials(req.headers.authorization, this.config.accessToken)
+      if (!loopback && !cookieAuthorized && !basicAuthorized) {
+        if (rawPath === LAN_LOGIN_PATH && req.method === 'GET') {
+          writeLanLoginPage(res)
+          return
+        }
+        if (rawPath === LAN_LOGIN_PATH && req.method === 'POST') {
+          await handleLanLogin(req, res, this.config.accessToken)
+          return
+        }
+        if (req.method === 'GET' && req.headers.accept?.includes('text/html') === true) {
+          res.writeHead(303, { 'cache-control': 'no-store', location: LAN_LOGIN_PATH })
+          res.end()
+          return
+        }
+        res.writeHead(401, {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+          'www-authenticate': 'Basic realm="DeepSeek Harness LAN", charset="UTF-8"',
+        })
+        res.end('Authentication required.')
+        return
+      }
+      if (!loopback && basicAuthorized && !cookieAuthorized) {
+        res.setHeader('set-cookie', lanAccessSetCookie(this.config.accessToken))
+      }
+      if (!loopback) res.setHeader('cache-control', 'no-store')
+      if (!loopback && rawPath === LAN_LOGIN_PATH) {
+        res.writeHead(303, { 'cache-control': 'no-store', location: '/' })
+        res.end()
+        return
+      }
       const route = this.match(rawPath)
       if (route !== undefined) {
         await route.handler(req, res)
@@ -189,6 +391,22 @@ export class WebServer extends Service {
         socket.off('error', onError)
         this.upgradedSockets.delete(socket)
       })
+      if (!isAuthorizedPeer(
+        req.socket.remoteAddress,
+        req.headers.authorization,
+        this.config.accessToken,
+        req.headers.cookie,
+      )) {
+        socket.end([
+          'HTTP/1.1 401 Unauthorized',
+          'WWW-Authenticate: Basic realm="DeepSeek Harness LAN", charset="UTF-8"',
+          'Cache-Control: no-store',
+          'Content-Length: 0',
+          '',
+          '',
+        ].join('\r\n'))
+        return
+      }
       let route: WebUpgradeRoute | undefined
       try {
         /* v8 ignore next -- node:http always sets url on server requests. */

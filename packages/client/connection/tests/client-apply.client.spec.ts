@@ -52,6 +52,7 @@ afterEach(() => {
   sockets.length = 0
   if (originalWebSocket === undefined) delete (globalThis as WebSocketGlobal).WebSocket
   else globalThis.WebSocket = originalWebSocket
+  vi.unstubAllGlobals()
 })
 
 async function mount(): Promise<ConnectionHandle> {
@@ -172,6 +173,9 @@ describe('connection client apply', () => {
 
   it('WebApiClient keeps unary calls and respond on globalThis.fetch', async () => {
     ;(globalThis as Win).location = { hostname: 'localhost', search: '' }
+    vi.stubGlobal('crypto', {
+      getRandomValues(bytes: Uint8Array) { return bytes.fill(0) },
+    })
     const handle = await mount()
     const original = globalThis.fetch
     const seen: string[] = []

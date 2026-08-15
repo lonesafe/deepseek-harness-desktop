@@ -33,6 +33,16 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 
 Beta 安装包尚未签名。macOS 可能需要按住 Control 点击应用并选择**打开**；Windows SmartScreen 可能显示未知发布者警告。安装前请核对 Release 中的校验值。
 
+## 远程访问
+
+需要从外网手机或其他浏览器使用自己的电脑的dsh时：
+
+1. 在桌面客户端的 **DeepSeek Harness**／**应用**菜单中选择**远程访问…**，再选择**登录并授权**。登录和注册在系统浏览器打开的官网中完成，桌面客户端不会读取官网密码。
+2. 网页确认设备授权后返回桌面客户端，选择**开启远程控制**。该功能默认关闭；开启后电脑主动建立加密出站连接，无需公网 IP、端口映射或路由器设置。
+3. 登录官网的**设备中心**，选择属于当前账号的在线电脑并点击**连接**。
+
+远程连接使用一次性短期票据和独立设备凭据。网页壳、插件脚本、样式和字体由官网直接提供并长期缓存，只有 `/api` 请求和业务 WebSocket 经过设备隧道；关闭桌面端远程控制会立即停止出站连接，也可以在设备中心撤销设备。远程浏览器可以运行会话和 Agent，但宿主设置、凭据管理、原生文件选择及打开路径等本机专属操作仍只允许桌面窗口调用。官网和中转服务是独立部署的 Go、MySQL 与 Vue 3 项目，不包含在本仓库中。
+
 ## 为什么能够零配置使用
 
 - **无需安装运行环境：**安装包已经包含 Electron、Node.js、生产插件图和 Web 资源。
@@ -43,15 +53,6 @@ Beta 安装包尚未签名。macOS 可能需要按住 Control 点击应用并选
 ## Beta 状态
 
 `v1.0.0-beta.1` 是首个公开桌面 Beta。启动器和打包运行时已在 Apple Silicon macOS 上完成冒烟测试；原生构建矩阵会分别生成 macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
-
-## 桌面壳的工作方式
-
-- 使用 Electron 内嵌的 Node.js 启动已打包的 `dsh web` 运行时，并监听操作系统分配的 `127.0.0.1` 端口。
-- 在沙箱化 Electron 窗口中只加载该精确本地 origin。
-- 关闭 renderer Node integration、webview、不安全内容和权限授予。
-- 将无凭据的 HTTPS 链接交给系统浏览器打开，并拒绝其他外部导航。
-- 把 Harness profile 放在 Electron 逐用户应用数据目录下，并在应用退出时关闭自己拥有的后端进程树。
-- 直接复用上游 Harness Web UI 与插件组合，不维护第二套桌面专用前端。
 
 <a id="run"></a><a id="run-from-source"></a>
 
@@ -91,16 +92,8 @@ pnpm run build
 
 Harness 数据位于 Electron 标准逐用户应用数据目录的 `runtime` 子目录。卸载应用不会自动删除这些数据。如果已保存的会话很重要，请在不同 Beta 版本之间迁移前进行备份。
 
-## 已知 Beta 限制
-
-- 安装包尚未代码签名或公证。
-- 应用体积较大，因为其中包含 Electron 和完整的 Harness 生产运行时。
-- 尚未实现自动更新，需要手动安装较新的 Release。
-- Linux 与 Windows 目前只发布 x64 构建。
-- 桌面客户端会继承上游 Harness 开发者预览阶段的兼容性变化。
-
 ## 上游与许可证
 
-智能体运行时、Web UI 和插件系统来自 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。桌面专用代码位于 [`apps/desktop`](apps/desktop)，架构决策记录在 [Electron 桌面启动器说明](.agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md)中。
+智能体运行时、Web UI 和插件系统来自 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)。桌面专用代码位于 [`apps/desktop`](apps/desktop)，架构决策记录在 [Electron 桌面启动器说明](.agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md)和[账号设备中转说明](.agents/notes/implemented/feature/2026-08-15-account-device-remote-relay.md)中。
 
 项目采用 [MIT 许可证](LICENSE)分发。第三方声明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -4,7 +4,7 @@
 
 [![Desktop installers](https://github.com/lonesafe/deepseek-harness-desktop/actions/workflows/desktop.yml/badge.svg)](https://github.com/lonesafe/deepseek-harness-desktop/actions/workflows/desktop.yml) [![Release](https://img.shields.io/github/v/release/lonesafe/deepseek-harness-desktop?include_prereleases)](https://github.com/lonesafe/deepseek-harness-desktop/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) ![Views](https://komarev.com/ghpvc/?username=lonesafe-deepseek-harness-desktop&label=Views&color=0e75b6&style=flat)
 
-**运行环境零配置 · 简单易用 · 开箱即用 · 零开发门槛**
+**Zero runtime setup · Simple to use · Ready out of the box · No development experience required**
 
 Download, install, and open. There is no need to install Node.js, pnpm, Electron, run terminal commands, or start a browser manually. The desktop client includes everything required to run DeepSeek Harness; model-provider credentials can be entered inside the application when needed.
 
@@ -33,6 +33,16 @@ This is a community-maintained desktop distribution. It is not an official DeepS
 
 The beta installers are unsigned. macOS may require Control-clicking the app and choosing **Open**; Windows SmartScreen may display an unknown-publisher warning. Review the release checksums before installing.
 
+## Remote access
+
+To use DSH on your computer from a phone or another browser outside its network:
+
+1. Choose **远程访问…** from the desktop client's **DeepSeek Harness** or **应用** menu, then choose **登录并授权**. Sign-in and registration happen in the system browser on the portal; the desktop client never reads the portal password.
+2. After the Web page approves the device, return to the desktop client and choose **开启远程控制**. This setting is off by default. When enabled, the computer creates an encrypted outbound connection without requiring a public IP, port forwarding, or router changes.
+3. Sign in to the portal's device center, choose an online computer owned by the current account, and select **连接**.
+
+Remote connections use one-time short-lived tickets and a separate device credential. The portal directly serves and caches the Web shell, plugin scripts, styles, and fonts; only `/api` requests and application WebSockets cross the device tunnel. Disabling remote control stops the outbound connection immediately, and the device center can revoke the device. A remote browser can operate sessions and agents, while Host settings, credential management, native file selection, and path opening remain available only in the desktop window. The Go, MySQL, and Vue 3 portal and relay service is deployed independently and is not part of this repository.
+
 ## Why it is zero setup
 
 - **No runtime installation:** Electron, Node.js, the production plugin graph, and Web assets are included.
@@ -43,15 +53,6 @@ The beta installers are unsigned. macOS may require Control-clicking the app and
 ## Beta status
 
 `v1.0.0-beta.1` is the first public desktop beta. The launcher and packaged runtime have been smoke-tested on Apple Silicon macOS; the native build matrix produces separate macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
-
-## What the desktop shell does
-
-- Starts the packaged `dsh web` runtime with Electron's embedded Node.js on an operating-system-assigned `127.0.0.1` port.
-- Loads only that exact local origin in a sandboxed Electron window.
-- Disables renderer Node integration, webviews, insecure content, and permission grants.
-- Opens credential-free HTTPS links in the system browser and rejects other external navigation.
-- Keeps Harness profiles below Electron's per-user application-data directory and shuts down the owned backend process tree when the app quits.
-- Reuses the upstream Harness Web UI and plugin composition without maintaining a second desktop-only frontend.
 
 <a id="run"></a><a id="run-from-source"></a>
 
@@ -91,16 +92,8 @@ The runtime-closure gate verifies that every required workspace peer needed by t
 
 Harness data lives in the `runtime` child of Electron's standard per-user application-data directory. Uninstalling the application does not automatically delete that data. Back it up before moving between beta versions if the stored sessions matter to you.
 
-## Known beta limitations
-
-- Installers are not code-signed or notarized yet.
-- The application is large because it contains Electron and the complete production Harness runtime.
-- Automatic updates are not implemented; install a newer Release manually.
-- Only x64 Linux and Windows builds are currently published.
-- The desktop client inherits upstream Harness developer-preview compatibility changes.
-
 ## Upstream and license
 
-The agent runtime, Web UI, and plugin system come from [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Desktop-specific code lives in [`apps/desktop`](apps/desktop), and the architectural decision is recorded in the [Electron desktop launcher note](.agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md).
+The agent runtime, Web UI, and plugin system come from [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness). Desktop-specific code lives in [`apps/desktop`](apps/desktop); the decisions are recorded in the [Electron desktop launcher note](.agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md) and [account device relay note](.agents/notes/implemented/feature/2026-08-15-account-device-remote-relay.md).
 
 Distributed under the [MIT License](LICENSE). Third-party notices are available in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

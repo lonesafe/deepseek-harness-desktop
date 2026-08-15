@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
-const READY_PATTERN = /^dsh web: (http:\/\/127\.0\.0\.1:\d+)(?:\s|$)/m
+const READY_PATTERN = /^dsh web: (http:\/\/127\.0\.0\.1:\d+)(?: \(LAN: (http:\/\/[^\s)]+)\))?(?:\s|$)/m
 const STARTUP_TIMEOUT_MS = 120_000
 const SHUTDOWN_GRACE_MS = 5_000
 const MAX_DIAGNOSTIC_CHARS = 16_384
@@ -17,6 +17,11 @@ export interface HarnessProcessOptions {
   cwd: string
   /** Desktop-owned DSH_HOME. */
   home: string
+  /** Authenticated LAN exposure selected by the desktop user. */
+  lanAccess?: {
+    enabled: boolean
+    accessToken: string
+  }
   /** Notification for an exit after readiness. */
   onUnexpectedExit(message: string): void
 }
@@ -24,11 +29,19 @@ export interface HarnessProcessOptions {
 /** Running process, including startup settlement and bounded shutdown. */
 export interface HarnessProcess {
   /** Resolves with the random loopback URL after the full Web composition settles. */
-  readonly ready: Promise<string>
+  readonly ready: Promise<HarnessReady>
   /** Last bounded slice of stdout and stderr for user-facing startup failures. */
   diagnostics(): string
   /** Idempotently requests graceful shutdown, then kills the owned process if necessary. */
   stop(): Promise<void>
+}
+
+/** Addresses printed after the managed Web composition settles. */
+export interface HarnessReady {
+  /** Canonical loopback URL loaded by Electron. */
+  localUrl: string
+  /** First LAN URL detected by the Web runtime, when LAN access is enabled. */
+  lanUrl?: string
 }
 
 /**
@@ -37,7 +50,23 @@ export interface HarnessProcess {
  * @returns A loopback URL, or undefined before readiness.
  */
 export function extractHarnessUrl(output: string): string | undefined {
-  return READY_PATTERN.exec(output)?.[1]
+  return extractHarnessReady(output)?.localUrl
+}
+
+/**
+ * Extract both local and LAN readiness addresses from process output.
+ * @param output - accumulated process output.
+ * @returns Readiness addresses, or undefined before readiness.
+ */
+export function extractHarnessReady(output: string): HarnessReady | undefined {
+  const match = READY_PATTERN.exec(output)
+  const localUrl = match?.at(1)
+  if (localUrl === undefined) return undefined
+  const lanUrl = match?.at(2)
+  return {
+    localUrl,
+    ...lanUrl === undefined ? {} : { lanUrl },
+  }
 }
 
 /**
@@ -45,8 +74,15 @@ export function extractHarnessUrl(output: string): string | undefined {
  * @param entry - resolved built dsh CLI entry.
  * @returns Node flags followed by the dsh Web command.
  */
-export function harnessArguments(entry: string): string[] {
-  return ['--expose-internals', entry, 'web', '--port', '0']
+export function harnessArguments(
+  entry: string,
+  lanAccess?: HarnessProcessOptions['lanAccess'],
+): string[] {
+  const args = ['--expose-internals', entry, 'web', '--port', '0']
+  if (lanAccess?.enabled === true) {
+    args.push('--host', '0.0.0.0', '--access-token', lanAccess.accessToken)
+  }
+  return args
 }
 
 /**
@@ -110,7 +146,7 @@ function exitMessage(code: number | null, signal: NodeJS.Signals | null): string
  * @returns The managed process immediately, before its readiness promise settles.
  */
 export function startHarnessProcess(options: HarnessProcessOptions): HarnessProcess {
-  const child = spawn(options.executable, harnessArguments(resolveDshEntry()), {
+  const child = spawn(options.executable, harnessArguments(resolveDshEntry(), options.lanAccess), {
     cwd: options.cwd,
     env: {
       ...process.env,
@@ -130,7 +166,7 @@ export function startHarnessProcess(options: HarnessProcessOptions): HarnessProc
     output = `${output}${chunk}`.slice(-MAX_DIAGNOSTIC_CHARS)
   }
 
-  const ready = new Promise<string>((resolve, reject) => {
+  const ready = new Promise<HarnessReady>((resolve, reject) => {
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
@@ -140,11 +176,11 @@ export function startHarnessProcess(options: HarnessProcessOptions): HarnessProc
     const acceptChunk = (chunk: string): void => {
       append(chunk)
       if (settled) return
-      const url = extractHarnessUrl(output)
-      if (url === undefined) return
+      const readiness = extractHarnessReady(output)
+      if (readiness === undefined) return
       settled = true
       clearTimeout(timer)
-      resolve(url)
+      resolve(readiness)
     }
     child.stdout.on('data', acceptChunk)
     child.stderr.on('data', append)

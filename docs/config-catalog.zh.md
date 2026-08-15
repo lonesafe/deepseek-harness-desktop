@@ -798,10 +798,12 @@ export interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Login token required from non-loopback peers; at least 24 characters. */
+  accessToken: string
 }
 ```
 
-来源：[`packages/host/webserver/src/index.ts:46`](../packages/host/webserver/src/index.ts)
+来源：[`packages/host/webserver/src/index.ts:47`](../packages/host/webserver/src/index.ts)
 
 <a id="deepseek-aidsh-invariants"></a>
 

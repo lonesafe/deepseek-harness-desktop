@@ -118,10 +118,12 @@
     "@deepseek-ai/dsh-user-questions": "workspace:^",
     "@deepseek-ai/dsh-web": "workspace:^",
     "@deepseek-ai/dsh-workflow": "workspace:^",
-    "@deepseek-ai/schemastery": "workspace:^"
+    "@deepseek-ai/schemastery": "workspace:^",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.0",
+    "@types/ws": "^8.18.1",
     "electron": "43.4.0",
     "electron-builder": "26.15.3",
     "tsdown": "^0.22.2",

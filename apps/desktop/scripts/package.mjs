@@ -19,6 +19,7 @@ if (platform === undefined) {
 
 const artifacts = await build({
   projectDir: stage,
+  publish: 'never',
   targets: platform.createTarget(undefined, archFromString(archName)),
 })
 for (const artifact of artifacts) process.stdout.write(`desktop artifact: ${artifact}\n`)

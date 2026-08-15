@@ -122,6 +122,7 @@
         compression: gzip
         compressionLevel: 1
         compressionThresholdBytes: 1024
+        accessToken: !!js ctx.webStartup.accessToken ?? ''
 
     # Web glue owned by this bundle: resolves the built frontend dist (an
     # assembly fact of dsh-web-app, never user config), mounts the

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractHarnessUrl, harnessArguments, harnessHome } from '../src/backend.ts'
+import { extractHarnessReady, extractHarnessUrl, harnessArguments, harnessHome } from '../src/backend.ts'
 
 describe('desktop backend readiness', () => {
   it('extracts only the loopback readiness URL', () => {
@@ -10,6 +10,29 @@ describe('desktop backend readiness', () => {
   it('accepts the optional LAN display suffix without widening the app origin', () => {
     expect(extractHarnessUrl('dsh web: http://127.0.0.1:3080 (LAN: http://10.0.0.8:3080)\n'))
       .toBe('http://127.0.0.1:3080')
+    expect(extractHarnessReady('dsh web: http://127.0.0.1:3080 (LAN: http://10.0.0.8:3080)\n'))
+      .toEqual({ localUrl: 'http://127.0.0.1:3080', lanUrl: 'http://10.0.0.8:3080' })
+  })
+
+  it('adds authenticated all-interfaces arguments only when LAN access is enabled', () => {
+    expect(harnessArguments('/runtime/dsh.js', {
+      enabled: true,
+      accessToken: 'desktop-lan-access-token-1234',
+    })).toEqual([
+      '--expose-internals',
+      '/runtime/dsh.js',
+      'web',
+      '--port',
+      '0',
+      '--host',
+      '0.0.0.0',
+      '--access-token',
+      'desktop-lan-access-token-1234',
+    ])
+    expect(harnessArguments('/runtime/dsh.js', {
+      enabled: false,
+      accessToken: 'desktop-lan-access-token-1234',
+    })).toEqual(harnessArguments('/runtime/dsh.js'))
   })
 
   it('exposes Node internals before loading the production Web profile', () => {

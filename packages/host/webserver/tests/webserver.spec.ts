@@ -16,6 +16,13 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import HttpServer, { renderIndexInjections } from '../src/index.ts'
+import {
+  isAuthorizedPeer,
+  isLoopbackPeer,
+  LAN_ACCESS_COOKIE,
+  LAN_ACCESS_USERNAME,
+  MIN_LAN_ACCESS_TOKEN_LENGTH,
+} from '../src/index.ts'
 
 let root: string | undefined
 let context: Context | undefined
@@ -28,13 +35,18 @@ afterEach(async () => {
 })
 
 /** Write a cordis.yml with one webserver row, then boot it through the real Loader. */
-async function loadComposition(port = 0, gzip = false): Promise<Context> {
+async function loadComposition(
+  port = 0,
+  gzip = false,
+  host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1',
+  accessToken = '',
+): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-webserver-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-host-webserver'",
     '  config:',
-    "    host: '127.0.0.1'",
+    `    host: '${host}'`,
     `    port: ${String(port)}`,
     ...(gzip
       ? [
@@ -43,6 +55,7 @@ async function loadComposition(port = 0, gzip = false): Promise<Context> {
         '    compressionThresholdBytes: 16',
       ]
       : []),
+    `    accessToken: '${accessToken}'`,
     '',
   ].join('\n'))
 
@@ -101,6 +114,7 @@ describe('real Loader composition', () => {
     expect(HttpServer.Config({ host: '127.0.0.1', port: 0 })).toEqual({
       host: '127.0.0.1',
       port: 0,
+      accessToken: '',
       compression: 'none',
       compressionLevel: 1,
       compressionThresholdBytes: 1024,
@@ -377,5 +391,39 @@ describe('real Loader composition', () => {
       if (root !== undefined) await rm(root, { recursive: true, force: true })
       root = firstRoot
     }
+  })
+
+  it('rejects an all-interfaces bind without a strong access token', { timeout: 60_000 }, async () => {
+    await expect(loadComposition(0, false, '0.0.0.0', 'too-short')).rejects.toThrow(
+      `requires an accessToken of at least ${String(MIN_LAN_ACCESS_TOKEN_LENGTH)} characters`,
+    )
+  })
+})
+
+describe('LAN access authentication', () => {
+  const accessToken = 'a-secure-24-character-token'
+  const authorization = `Basic ${Buffer.from(`${LAN_ACCESS_USERNAME}:${accessToken}`).toString('base64')}`
+
+  it('keeps every loopback spelling password-free', () => {
+    for (const address of ['127.0.0.1', '127.23.45.67', '::1', '::ffff:127.0.0.1']) {
+      expect(isLoopbackPeer(address)).toBe(true)
+      expect(isAuthorizedPeer(address, undefined, accessToken)).toBe(true)
+    }
+    expect(isLoopbackPeer(undefined)).toBe(false)
+    expect(isLoopbackPeer('192.168.1.9')).toBe(false)
+  })
+
+  it('requires exact Basic credentials from a remote peer', () => {
+    expect(isAuthorizedPeer('192.168.1.9', authorization, accessToken)).toBe(true)
+    expect(isAuthorizedPeer('192.168.1.9', undefined, accessToken)).toBe(false)
+    expect(isAuthorizedPeer('192.168.1.9', 'Bearer anything', accessToken)).toBe(false)
+    expect(isAuthorizedPeer('192.168.1.9', `Basic ${Buffer.from(`${LAN_ACCESS_USERNAME}:wrong`).toString('base64')}`, accessToken)).toBe(false)
+    expect(isAuthorizedPeer('192.168.1.9', `Basic ${Buffer.from(`other:${accessToken}`).toString('base64')}`, accessToken)).toBe(false)
+  })
+
+  it('accepts only the opaque session cookie derived from the configured token', () => {
+    expect(isAuthorizedPeer('192.168.1.9', undefined, accessToken, `${LAN_ACCESS_COOKIE}=wrong`)).toBe(false)
+    expect(isAuthorizedPeer('192.168.1.9', undefined, accessToken, 'other=value')).toBe(false)
+    expect(isAuthorizedPeer('192.168.1.9', undefined, accessToken, undefined)).toBe(false)
   })
 })

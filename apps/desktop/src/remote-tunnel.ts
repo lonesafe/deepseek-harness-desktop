@@ -4,7 +4,11 @@ import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket, { type RawData } from 'ws'
 import type { RemoteDeviceAuthorization } from './remote-access.ts'
 
-const MAX_TUNNEL_BODY_BYTES = 24 << 20
+const MAX_TUNNEL_REQUEST_BODY_BYTES = 24 << 20
+const MAX_TUNNEL_RESPONSE_BODY_BYTES = 128 << 20
+const MAX_LEGACY_RESPONSE_BODY_BYTES = 1 << 20
+const TUNNEL_RESPONSE_CHUNK_BYTES = 512 << 10
+const MAX_TUNNEL_MESSAGE_BYTES = MAX_TUNNEL_REQUEST_BODY_BYTES * 2
 const READ_ONLY_REMOTE_METHODS = new Set([
   'settings.describe',
   'credentials.describe',
@@ -110,7 +114,7 @@ function connect(authorization: RemoteDeviceAuthorization, signal: AbortSignal):
     const socket = new WebSocket(authorization.tunnelUrl, {
       headers: { Authorization: `Bearer ${authorization.deviceToken}` },
       handshakeTimeout: 15_000,
-      maxPayload: MAX_TUNNEL_BODY_BYTES * 2,
+      maxPayload: MAX_TUNNEL_MESSAGE_BYTES,
     })
     const abort = (): void => {
       socket.close()
@@ -148,7 +152,7 @@ function serve(
     signal.addEventListener('abort', finish, { once: true })
     socket.once('close', finish)
     socket.on('message', (raw, binary) => {
-      if (binary || rawByteLength(raw) > MAX_TUNNEL_BODY_BYTES * 2) {
+      if (binary || rawByteLength(raw) > MAX_TUNNEL_MESSAGE_BYTES) {
         socket.close(1009, 'invalid tunnel message')
         return
       }
@@ -211,7 +215,7 @@ async function handleHttp(tunnel: WebSocket, localUrl: string, frame: TunnelFram
     return
   }
   const body = decodeBody(frame.body)
-  if (body.byteLength > MAX_TUNNEL_BODY_BYTES) throw new Error('Remote request body is too large.')
+  if (body.byteLength > MAX_TUNNEL_REQUEST_BODY_BYTES) throw new Error('Remote request body is too large.')
   const requestBody = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer
   const response = await fetch(target, {
     method: frame.method,
@@ -225,12 +229,26 @@ async function handleHttp(tunnel: WebSocket, localUrl: string, frame: TunnelFram
     frame.method,
     Buffer.from(await response.arrayBuffer()),
   )
-  if (responseBody.byteLength > MAX_TUNNEL_BODY_BYTES) throw new Error('Local response body is too large for remote access.')
-  safeSend(tunnel, {
-    type: 'http_response', id: frame.id, status: response.status,
-    headers: responseHeaders(response.headers, localUrl),
-    body: responseBody.toString('base64'),
+  if (responseBody.byteLength > MAX_TUNNEL_RESPONSE_BODY_BYTES) throw new Error('Local response body is too large for remote access.')
+  const headers = responseHeaders(response.headers, localUrl)
+  if (responseBody.byteLength <= MAX_LEGACY_RESPONSE_BODY_BYTES) {
+    safeSend(tunnel, {
+      type: 'http_response', id: frame.id, status: response.status,
+      headers,
+      body: responseBody.toString('base64'),
+    })
+    return
+  }
+  await sendFrame(tunnel, {
+    type: 'http_response_start', id: frame.id, status: response.status, headers,
   })
+  for (let offset = 0; offset < responseBody.byteLength; offset += TUNNEL_RESPONSE_CHUNK_BYTES) {
+    await sendFrame(tunnel, {
+      type: 'http_response_chunk', id: frame.id,
+      body: responseBody.subarray(offset, offset + TUNNEL_RESPONSE_CHUNK_BYTES).toString('base64'),
+    })
+  }
+  await sendFrame(tunnel, { type: 'http_response_end', id: frame.id })
 }
 
 function openLocalWebSocket(
@@ -368,6 +386,19 @@ function decodeBody(value: string | undefined): Buffer {
 function safeSend(socket: WebSocket, frame: TunnelFrame): void {
   if (socket.readyState !== WebSocket.OPEN) return
   socket.send(JSON.stringify(frame))
+}
+
+function sendFrame(socket: WebSocket, frame: TunnelFrame): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (socket.readyState !== WebSocket.OPEN) {
+      reject(new Error('Remote tunnel closed while sending a response.'))
+      return
+    }
+    socket.send(JSON.stringify(frame), (error) => {
+      if (error === undefined) resolve()
+      else reject(error)
+    })
+  })
 }
 
 function rawByteLength(raw: RawData): number {

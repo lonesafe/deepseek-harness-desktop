@@ -17,6 +17,11 @@ files:
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.svg
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: true
   target:
     - dmg
     - zip

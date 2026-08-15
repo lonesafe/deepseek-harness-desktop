@@ -39,6 +39,7 @@ for (const required of [
   'lib/main.js',
   'electron-builder.yml',
   'build/icon.svg',
+  'build/entitlements.mac.plist',
   'node_modules/@deepseek-ai/dsh/lib/bin.js',
 ]) {
   if (!existsSync(join(stage, required))) {

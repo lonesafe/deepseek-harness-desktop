@@ -63,7 +63,7 @@ export interface Config {
   /** Listen port; zero requests an OS-assigned port. */
   port: number
   /** Login token required from non-loopback peers; at least 24 characters. */
-  accessToken: string
+  accessToken?: string
   /** Response compression for socket-backed HTTP requests. @default 'none' */
   compression?: 'none' | 'gzip'
   /** Gzip DEFLATE level from 0 through 9. @default 1 */
@@ -76,7 +76,8 @@ const DEFAULT_COMPRESSION = 'none' as const
 const DEFAULT_COMPRESSION_LEVEL = 1
 const DEFAULT_COMPRESSION_THRESHOLD_BYTES = 1024
 
-interface ResolvedConfig extends Config {
+interface ResolvedConfig extends Omit<Config, 'accessToken' | 'compression' | 'compressionLevel' | 'compressionThresholdBytes'> {
+  accessToken: string
   compression: 'none' | 'gzip'
   compressionLevel: number
   compressionThresholdBytes: number
@@ -304,12 +305,19 @@ export class WebServer extends Service {
   private server!: Server
   private listenedPort!: number
   private readonly gzip: NodeMiddleware | undefined
+  private readonly config: ResolvedConfig
 
-  constructor(ctx: Context, private config: Config) {
+  constructor(ctx: Context, config: Config) {
     super(ctx, 'webServer')
-    const resolved = config as ResolvedConfig
-    this.gzip = resolved.compression === 'gzip' ? createGzipMiddleware(resolved) : undefined
-    if (config.host === '0.0.0.0' && config.accessToken.length < MIN_LAN_ACCESS_TOKEN_LENGTH) {
+    this.config = {
+      ...config,
+      accessToken: config.accessToken ?? '',
+      compression: config.compression ?? DEFAULT_COMPRESSION,
+      compressionLevel: config.compressionLevel ?? DEFAULT_COMPRESSION_LEVEL,
+      compressionThresholdBytes: config.compressionThresholdBytes ?? DEFAULT_COMPRESSION_THRESHOLD_BYTES,
+    }
+    this.gzip = this.config.compression === 'gzip' ? createGzipMiddleware(this.config) : undefined
+    if (this.config.host === '0.0.0.0' && this.config.accessToken.length < MIN_LAN_ACCESS_TOKEN_LENGTH) {
       throw new Error(`webserver: an all-interfaces bind requires an accessToken of at least ${String(MIN_LAN_ACCESS_TOKEN_LENGTH)} characters`)
     }
   }

@@ -16,6 +16,7 @@
   "files": [
     "lib/*.js",
     "build/icon.svg",
+    "build/entitlements.mac.plist",
     "electron-builder.yml"
   ],
   "scripts": {

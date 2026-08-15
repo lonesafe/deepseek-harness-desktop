@@ -10,7 +10,8 @@
     "src/types.ts",
     "src/commands.ts",
     "src/directory-picker.ts",
-    "src/feed.ts"
+    "src/feed.ts",
+    "src/workspace-files.ts"
   ],
   "references": [
     { "path": "../../../vendor/cordis" },

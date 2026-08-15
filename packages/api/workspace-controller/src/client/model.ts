@@ -11,6 +11,10 @@ import type {
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteValue,
+  WorkspaceFileListing,
+  WorkspaceFileListRequest,
+  WorkspaceFilePreview,
+  WorkspaceFileReadRequest,
   WorkspaceInsertSessionBeforeRequest,
   WorkspaceOrderValue,
   WorkspaceValue,
@@ -86,6 +90,22 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     const result = await this.remote.create(input)
     if (result.ok) this.upsert(result.value.workspace)
     return result
+  }
+
+  /** List one bounded directory level inside a registered Workspace. */
+  listFiles(
+    request: WorkspaceFileListRequest,
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<WorkspaceFileListing>> {
+    return this.remote.listFiles(request, signal)
+  }
+
+  /** Read one bounded regular file inside a registered Workspace. */
+  readFile(
+    request: WorkspaceFileReadRequest,
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<WorkspaceFilePreview>> {
+    return this.remote.readFile(request, signal)
   }
 
   /**

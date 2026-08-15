@@ -1,10 +1,12 @@
 /** Host Workspace Remote owner: explicit commands and reconnect-safe state. */
 
 import { Context } from '@deepseek-ai/cordis'
-import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { WorkspaceCommands } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
 import { WorkspaceFeed } from './feed.ts'
+import { listWorkspaceFiles, readWorkspaceFile } from './workspace-files.ts'
 import type {
   WorkspaceArchiveSessionRequest,
   WorkspaceArchiveValue,
@@ -13,6 +15,10 @@ import type {
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
   WorkspaceFollowFrame,
+  WorkspaceFileListing,
+  WorkspaceFileListRequest,
+  WorkspaceFilePreview,
+  WorkspaceFileReadRequest,
   WorkspaceInsertBeforeRequest,
   WorkspaceInsertSessionBeforeRequest,
   WorkspaceOrderValue,
@@ -47,6 +53,18 @@ export class WorkspaceController extends TypertRemoteService {
     // stays pending until a picking backend is composed, so a host without one
     // registers no picking namespace instead of answering an unservable verb.
     ctx.plugin(DirectoryPickerController)
+  }
+
+  /** List one bounded directory level inside a registered Workspace. */
+  @Remote('listFiles')
+  listFiles(request: WorkspaceFileListRequest, signal: AbortSignal): Promise<WorkspaceFileListing> {
+    return listWorkspaceFiles(this.requireWorkspacePath(request.workspaceId), request.path ?? '', signal)
+  }
+
+  /** Read one bounded regular file inside a registered Workspace. */
+  @Remote('readFile')
+  readFile(request: WorkspaceFileReadRequest, signal: AbortSignal): Promise<WorkspaceFilePreview> {
+    return readWorkspaceFile(this.requireWorkspacePath(request.workspaceId), request.path, signal)
   }
 
   /**
@@ -117,6 +135,14 @@ export class WorkspaceController extends TypertRemoteService {
   @Remote({ mode: 'stream' })
   follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {
     return this.feed.follow(signal)
+  }
+
+  private requireWorkspacePath(workspaceId: WorkspaceId): string {
+    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(workspaceId))
+    if (workspace === undefined) {
+      throw new RemoteError('workspace/not-found', `Workspace "${workspaceId}" not found`, { workspaceId })
+    }
+    return workspace.path
   }
 }
 

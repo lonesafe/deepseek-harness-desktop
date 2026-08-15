@@ -38,6 +38,12 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       readonly sessionId: SessionId
       readonly beforeSessionId?: SessionId
     }
+    /** A Workspace-relative file path is malformed or escapes its root. */
+    'workspace/file-invalid-path': { readonly path: string }
+    /** A Workspace-relative file or directory cannot be read. */
+    'workspace/file-unreadable': { readonly path: string }
+    /** A file-preview request resolved to something other than a regular file. */
+    'workspace/file-not-file': { readonly path: string }
     /** The verb needs an interaction the composed backend does not serve. */
     'directory-picker/unavailable': { readonly capability: string }
     /** The target is not fully qualified, or the backend cannot list it. */
@@ -47,6 +53,54 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     /** The parent is not fully qualified, the name is not one segment, or creation failed. */
     'directory-picker/create-failed': { readonly path: string }
   }
+}
+
+/** One direct child returned by the read-only Workspace file browser. */
+export interface WorkspaceFileEntry {
+  readonly name: string
+  /** Portable Workspace-relative path using `/` separators. */
+  readonly path: string
+  readonly kind: 'directory' | 'file'
+  readonly hidden: boolean
+  /** File bytes, or zero for a directory. */
+  readonly size: number
+  /** ISO-8601 modification instant. */
+  readonly modifiedAt: string
+}
+
+/** One bounded directory level inside a registered Workspace. */
+export interface WorkspaceFileListing {
+  /** Portable Workspace-relative directory path; empty means the root. */
+  readonly path: string
+  readonly entries: readonly WorkspaceFileEntry[]
+  /** True when the host stopped after its entry bound. */
+  readonly truncated: boolean
+}
+
+/** Bounded read-only content projection for browser preview and download. */
+export interface WorkspaceFilePreview {
+  readonly path: string
+  readonly name: string
+  readonly mime: string
+  readonly size: number
+  readonly modifiedAt: string
+  readonly kind: 'markdown' | 'text' | 'image' | 'pdf' | 'binary' | 'unsupported'
+  readonly encoding: 'utf8' | 'base64' | 'none'
+  readonly content: string
+  /** Present when the host intentionally omits content. */
+  readonly reason?: 'too-large'
+}
+
+/** Request for a bounded Workspace-relative directory listing. */
+export interface WorkspaceFileListRequest {
+  readonly workspaceId: WorkspaceId
+  readonly path?: string
+}
+
+/** Request for one bounded Workspace-relative file preview. */
+export interface WorkspaceFileReadRequest {
+  readonly workspaceId: WorkspaceId
+  readonly path: string
 }
 
 /** Existing directory requested for Workspace adoption. */

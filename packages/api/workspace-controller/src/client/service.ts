@@ -4,7 +4,7 @@ import { Service, type Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
-import type { WorkspaceView } from '../types.ts'
+import type { WorkspaceFileListing, WorkspaceFilePreview, WorkspaceView } from '../types.ts'
 import type { ClientWorkspaceModel, WorkspaceSnapshot } from './model.ts'
 
 /** Structured create failure for callers that distinguish Host business errors. */
@@ -39,6 +39,10 @@ export interface IWorkspaces {
    * @returns the created or idempotently resolved Workspace.
    */
   create(input: { path: string }): Promise<WorkspaceView>
+  /** List one bounded directory level inside a registered Workspace. */
+  listFiles(workspaceId: WorkspaceId, path?: string, signal?: AbortSignal): Promise<WorkspaceFileListing>
+  /** Read one bounded regular file inside a registered Workspace. */
+  readFile(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFilePreview>
   /**
    * Rename a Workspace.
    * @param workspaceId - target Workspace.
@@ -93,6 +97,26 @@ export class WorkspaceController extends Service implements IWorkspaces {
     const result = await this.model.create(input)
     if (!result.ok) throw new WorkspaceCreateError(result.error)
     return result.value.workspace
+  }
+
+  async listFiles(
+    workspaceId: WorkspaceId,
+    path = '',
+    signal?: AbortSignal,
+  ): Promise<WorkspaceFileListing> {
+    const result = await this.model.listFiles({ workspaceId, path }, signal)
+    if (!result.ok) throw commandError('file listing', result.error)
+    return result.value
+  }
+
+  async readFile(
+    workspaceId: WorkspaceId,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<WorkspaceFilePreview> {
+    const result = await this.model.readFile({ workspaceId, path }, signal)
+    if (!result.ok) throw commandError('file preview', result.error)
+    return result.value
   }
 
   async rename(workspaceId: WorkspaceId, title: string): Promise<WorkspaceView> {

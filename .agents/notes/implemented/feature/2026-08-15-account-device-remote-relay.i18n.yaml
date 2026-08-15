@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-account-device-remote-relay.md
-2026-08-15-account-device-remote-relay.md: ca5b5d8ef0674e0a6f07064ae2ba535184eb0a8c
-2026-08-15-account-device-remote-relay.zh.md: ee853597d4b61040493e4bdf837b8d5229fef1a3
+2026-08-15-account-device-remote-relay.md: aa2b1994985e2ca1deb4ff4da7cc56dc1c11326a
+2026-08-15-account-device-remote-relay.zh.md: 8bc7159f3e4dc13c9f4450d5202f04afb3bbaf48

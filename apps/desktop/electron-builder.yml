@@ -3,7 +3,7 @@ productName: DeepSeek Harness
 electronVersion: 43.4.0
 artifactName: DeepSeek-Harness-${version}-${os}-${arch}.${ext}
 asar: false
-compression: maximum
+compression: normal
 # The staged closure already carries reviewed Node-API/prebuilt native modules;
 # rebuilding a pnpm deploy tree would mutate or replace that frozen closure.
 npmRebuild: false

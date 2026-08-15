@@ -8,7 +8,7 @@
 
 Download, install, and open. There is no need to install Node.js, pnpm, Electron, run terminal commands, or start a browser manually. The desktop client includes everything required to run DeepSeek Harness; model-provider credentials can be entered inside the application when needed.
 
-[Download DeepSeek Harness Desktop 1.0 Beta 1](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)
+[Download DeepSeek Harness Desktop 1.0 Beta 3](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.3)
 
 DeepSeek Harness Desktop packages the official open-source [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web experience as a self-contained desktop application for macOS, Linux, and Windows. Electron, Node.js, the production plugin graph, and the Web assets travel inside the installer, so users do not need to install Node.js, pnpm, or launch a browser.
 
@@ -20,7 +20,7 @@ This is a community-maintained desktop distribution. It is not an official DeepS
 
 ## Download and start
 
-1. Open the [v1.0.0-beta.1 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1).
+1. Open the [v1.0.0-beta.3 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.3).
 2. Download the package for your system.
 3. Install and open the application.
 
@@ -52,7 +52,7 @@ Remote connections use one-time short-lived tickets and a separate device creden
 
 ## Beta status
 
-`v1.0.0-beta.1` is the first public desktop beta. The launcher and packaged runtime have been smoke-tested on Apple Silicon macOS; the native build matrix produces separate macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
+`v1.0.0-beta.3` is the current desktop beta and fixes the incorrect HTTP 403 returned while loading settings catalogs through portal remote access. The native build matrix produces separate macOS Apple Silicon, macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
 
 <a id="run"></a><a id="run-from-source"></a>
 

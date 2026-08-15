@@ -31,6 +31,7 @@ interface RuntimePlatform {
 type RuntimePlatformManifest = Record<string, RuntimePlatform>
 
 const AGENT_PRESET_GLOB = 'packages/preset/agent-presets/presets/*/agent.cordis.yml'
+const DEFAULT_RUNTIME_MANIFEST = 'python/sdk-runtime/package.json'
 
 export interface RuntimeClosureResult {
   failures: string[]
@@ -46,14 +47,17 @@ export interface RuntimeClosureResult {
  */
 export async function verifyRuntimeClosure(
   root: string,
-  manifestPath = 'python/sdk-runtime/package.json',
+  manifestPath = DEFAULT_RUNTIME_MANIFEST,
 ): Promise<RuntimeClosureResult> {
   const runtimeManifest = await loadManifest(resolve(root, manifestPath))
   const runtimeName = runtimeManifest.name ?? manifestPath
   const workspace = await loadWorkspacePackages(root)
   const runtimeDependencies = runtimeManifest.dependencies ?? {}
-  const platforms = await loadJson<RuntimePlatformManifest>(resolve(root, 'python/sdk-runtime/platforms.json'))
-  const presetPaths = globSync(AGENT_PRESET_GLOB, { cwd: root }).sort()
+  const checkShippedPresets = manifestPath === DEFAULT_RUNTIME_MANIFEST
+  const platforms = checkShippedPresets
+    ? await loadJson<RuntimePlatformManifest>(resolve(root, 'python/sdk-runtime/platforms.json'))
+    : {}
+  const presetPaths = checkShippedPresets ? globSync(AGENT_PRESET_GLOB, { cwd: root }).sort() : []
   const targets = Object.keys(platforms).sort()
   const parents = new Map<string, string | undefined>()
   const queue: string[] = []
@@ -65,9 +69,11 @@ export async function verifyRuntimeClosure(
   }
 
   const failures: string[] = []
-  if (presetPaths.length === 0) failures.push(`no agent presets matched ${AGENT_PRESET_GLOB}`)
-  if (targets.length === 0) failures.push('python/sdk-runtime/platforms.json defines no runtime targets')
-  failures.push(...await missingPresetPlugins(root, runtimeDependencies, presetPaths, targets))
+  if (checkShippedPresets) {
+    if (presetPaths.length === 0) failures.push(`no agent presets matched ${AGENT_PRESET_GLOB}`)
+    if (targets.length === 0) failures.push('python/sdk-runtime/platforms.json defines no runtime targets')
+    failures.push(...await missingPresetPlugins(root, runtimeDependencies, presetPaths, targets))
+  }
   for (let index = 0; index < queue.length; index += 1) {
     const packageName = queue[index]
     if (packageName === undefined) continue
@@ -199,7 +205,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function loadWorkspacePackages(root: string): Promise<Map<string, WorkspacePackage>> {
-  const paths = globSync(['packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root })
+  const paths = globSync(['apps/*/package.json', 'packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root })
     .sort()
     .map(relative => resolve(root, relative))
   const result = new Map<string, WorkspacePackage>()

@@ -1,0 +1,39 @@
+appId: ai.deepseek.harness
+productName: DeepSeek Harness
+electronVersion: 43.4.0
+artifactName: DeepSeek-Harness-${version}-${os}-${arch}.${ext}
+asar: false
+compression: maximum
+# The staged closure already carries reviewed Node-API/prebuilt native modules;
+# rebuilding a pnpm deploy tree would mutate or replace that frozen closure.
+npmRebuild: false
+directories:
+  buildResources: build
+  output: ../desktop
+files:
+  - lib/**
+  - package.json
+  - '!**/*.map'
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.svg
+  target:
+    - dmg
+    - zip
+win:
+  icon: build/icon.svg
+  target:
+    - nsis
+    - zip
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+linux:
+  category: Development
+  icon: build/icon.svg
+  executableName: deepseek-harness
+  synopsis: DeepSeek Harness desktop client
+  description: Cross-platform desktop client for DeepSeek Harness
+  target:
+    - AppImage
+    - deb

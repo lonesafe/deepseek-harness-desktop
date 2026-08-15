@@ -38,6 +38,10 @@ peerDependencyRules:
 # default and only allow scripts we need. esbuild (native binary) and lefthook
 # (git hooks) genuinely need theirs.
 allowBuilds:
+  # Electron downloads the pinned desktop runtime used for local packaging.
+  electron: true
+  # electron-builder's Windows target selects the bundled host-architecture 7-Zip helper.
+  electron-winstaller: true
   esbuild: true
   lefthook: true
   # Cross-platform boundary for the persistent PTY backend, including ConPTY on Windows.

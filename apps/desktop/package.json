@@ -2,7 +2,7 @@
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Cross-platform Electron desktop launcher for DeepSeek Harness",
   "author": "DeepSeek AI",
-  "version": "0.1.0-rc.5",
+  "version": "1.0.0-beta.1",
   "publishConfig": {
     "access": "public"
   },

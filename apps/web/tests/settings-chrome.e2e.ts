@@ -239,6 +239,58 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('gives the active settings section the full panel width on phones', async () => {
+    const mobilePage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    const mobileTripwire = watchConsole(mobilePage)
+    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-settings-phone-layout'))
+    try {
+      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
+      await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await mobilePage.getByRole('button', { name: '设置', exact: true }).click()
+      const dialog = mobilePage.getByRole('dialog', { name: '设置' })
+      await dialog.waitFor({ timeout: 10_000 })
+      await dialog.getByText('语言', { exact: true }).waitFor({ timeout: 10_000 })
+      await mobilePage.setViewportSize({ width: 390, height: 844 })
+
+      const layout = await dialog.evaluate((element) => {
+        const nav = element.querySelector('nav')
+        const content = nav?.nextElementSibling
+        const options = content?.lastElementChild
+        if (nav === null || nav === undefined || options === null || options === undefined) {
+          throw new Error('settings panel layout nodes are missing')
+        }
+        const dialogRect = element.getBoundingClientRect()
+        const navRect = nav.getBoundingClientRect()
+        const optionsRect = options.getBoundingClientRect()
+        return {
+          dialogWidth: dialogRect.width,
+          navWidth: navRect.width,
+          optionsWidth: optionsRect.width,
+          navBottom: navRect.bottom,
+          optionsTop: optionsRect.top,
+          viewportWidth: window.innerWidth,
+          pageWidth: document.documentElement.scrollWidth,
+        }
+      })
+
+      expect(layout.dialogWidth).toBeGreaterThan(350)
+      expect(layout.navWidth).toBe(layout.dialogWidth)
+      expect(layout.optionsWidth).toBe(layout.dialogWidth)
+      expect(layout.optionsWidth).toBeGreaterThan(320)
+      expect(layout.optionsTop).toBe(layout.navBottom)
+      expect(layout.pageWidth).toBe(layout.viewportWidth)
+
+      await dialog.getByRole('button', { name: 'Agent 预设' }).click()
+      await dialog.getByRole('heading', { name: 'Agent 预设' }).waitFor({ timeout: 10_000 })
+      await dialog.getByRole('button', { name: '关闭' }).click()
+      await expect.poll(() => mobilePage.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
+      expect(mobileTripwire.pageErrors).toEqual([])
+      expect(mobileTripwire.warnings).toEqual([])
+    } finally {
+      await mobilePage.close()
+    }
+  }, 90_000)
+
   it('flips the theme through the Appearance cubes and persists across reload and a distinct port', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-appearance'))
     interface ThemeState {

@@ -26,6 +26,7 @@ import {
   type RemoteTunnelState,
 } from './remote-tunnel.ts'
 import { isAppNavigation, isSafeExternalUrl } from './security.ts'
+import { offerStartupAccountAuthorization } from './startup-account-onboarding.ts'
 
 const APP_NAME = 'DeepSeek Harness'
 const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
@@ -59,6 +60,7 @@ let remoteTunnelState: RemoteTunnelState = 'stopped'
 let authorizationAbort: AbortController | undefined
 let reconfiguring = false
 let quitting = false
+let startupOnboardingComplete = false
 
 /** Open an HTTPS target outside the privileged app window. */
 function openExternal(target: string): void {
@@ -341,7 +343,7 @@ async function authorizeRemoteDevice(): Promise<void> {
       type: 'info',
       title: '设备授权成功',
       message: `已登录账号：${authorization.accountName}`,
-      detail: `设备授权码 ${pending.userCode} 已确认。远程控制仍然关闭，只有明确开启后服务器才能连接这台电脑。`,
+      detail: `设备授权码 ${pending.userCode} 已确认。登录后，你可以在手机或其他设备上通过设备中心远程使用这台电脑。远程控制仍然关闭，只有明确开启后服务器才能连接。`,
       buttons: ['开启远程控制', '稍后'],
       defaultId: 0,
       cancelId: 1,
@@ -359,6 +361,27 @@ async function authorizeRemoteDevice(): Promise<void> {
     if (authorizationAbort === controller) authorizationAbort = undefined
     installApplicationMenu()
   }
+}
+
+/** Explain account benefits and offer browser login without blocking local-only use. */
+async function showStartupLoginOffer(): Promise<void> {
+  await offerStartupAccountAuthorization({
+    hasAuthorization: () => remoteAccess?.authorization !== undefined,
+    prompt: async () => {
+      const { response } = await showMessageBox({
+        type: 'info',
+        title: '登录 DeepSeek Harness Desktop',
+        message: '登录后，可以从其他设备远程使用这台电脑',
+        detail: '登录和注册将在系统浏览器中完成，桌面客户端不会读取或保存你的密码。你也可以暂不登录，继续在本机使用；开启远程控制时必须先完成登录和设备授权。',
+        buttons: ['登录或注册', '暂不登录，继续使用'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      })
+      return response === 0 ? 'authorize' : 'skip'
+    },
+    authorize: authorizeRemoteDevice,
+  })
 }
 
 /** Human-readable outbound tunnel state for the remote settings dialog. */
@@ -453,12 +476,14 @@ function installApplicationMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-/** Start the desktop preference, menu, product window, and managed backend. */
+/** Start preferences and optional account onboarding, then launch the product window and backend. */
 async function start(): Promise<void> {
   try {
     lanAccess = loadLanAccessPreference(app.getPath('userData'))
     remoteAccess = loadRemoteAccessPreference(app.getPath('userData'))
     installApplicationMenu()
+    await showStartupLoginOffer()
+    startupOnboardingComplete = true
     const window = createWindow()
     mainWindow = window
     await launchBackend(window)
@@ -473,12 +498,14 @@ if (!singleInstance) {
   app.quit()
 } else {
   app.on('second-instance', () => {
+    if (!startupOnboardingComplete) return
     if (mainWindow === undefined) mainWindow = createWindow()
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
     mainWindow.focus()
   })
   app.on('activate', () => {
+    if (!startupOnboardingComplete) return
     if (mainWindow === undefined) mainWindow = createWindow()
   })
   app.on('window-all-closed', () => {

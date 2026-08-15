@@ -5,6 +5,10 @@ import WebSocket, { type RawData } from 'ws'
 import type { RemoteDeviceAuthorization } from './remote-access.ts'
 
 const MAX_TUNNEL_BODY_BYTES = 24 << 20
+const READ_ONLY_REMOTE_METHODS = new Set([
+  'settings.describe',
+  'credentials.describe',
+])
 const PRIVILEGED_REMOTE_METHODS = new Set([
   'agentPreset.read',
   'agentPreset.copy',
@@ -12,12 +16,10 @@ const PRIVILEGED_REMOTE_METHODS = new Set([
   'agentPreset.remove',
   'host.pickDirectory',
   'host.openPath',
-  'settings.describe',
   'settings.openDocument',
   'settings.update',
   'settings.replace',
   'settings.mutate',
-  'credentials.describe',
   'credentials.set',
   'credentials.unset',
   'llm.discoverModels',
@@ -218,7 +220,11 @@ async function handleHttp(tunnel: WebSocket, localUrl: string, frame: TunnelFram
     redirect: 'manual',
     signal,
   })
-  const responseBody = Buffer.from(await response.arrayBuffer())
+  const responseBody = projectReadOnlyResponse(
+    target,
+    frame.method,
+    Buffer.from(await response.arrayBuffer()),
+  )
   if (responseBody.byteLength > MAX_TUNNEL_BODY_BYTES) throw new Error('Local response body is too large for remote access.')
   safeSend(tunnel, {
     type: 'http_response', id: frame.id, status: response.status,
@@ -271,8 +277,57 @@ function isApiPath(path: string): boolean {
 }
 
 function isPrivilegedRequest(target: URL, method: string): boolean {
-  if (method !== 'POST' || !target.pathname.startsWith('/api/')) return false
-  return PRIVILEGED_REMOTE_METHODS.has(target.pathname.slice('/api/'.length))
+  if (method.toUpperCase() !== 'POST') return false
+  const rpcMethod = rpcMethodFrom(target)
+  return rpcMethod !== undefined && PRIVILEGED_REMOTE_METHODS.has(rpcMethod)
+}
+
+function projectReadOnlyResponse(target: URL, method: string, body: Buffer): Buffer {
+  if (method.toUpperCase() !== 'POST') return body
+  const rpcMethod = rpcMethodFrom(target)
+  if (rpcMethod === undefined || !READ_ONLY_REMOTE_METHODS.has(rpcMethod)) return body
+  let envelope: unknown
+  try {
+    envelope = JSON.parse(body.toString('utf8')) as unknown
+  } catch (error) {
+    throw new Error(`Local ${rpcMethod} response was not valid JSON.`, { cause: error })
+  }
+  if (!isRecord(envelope) || !isRecord(envelope.result)) {
+    throw new Error(`Local ${rpcMethod} response had an invalid RPC envelope.`)
+  }
+  if (envelope.result.ok !== true) return body
+  if (!isRecord(envelope.result.value)) {
+    throw new Error(`Local ${rpcMethod} response had an invalid result.`)
+  }
+  const value = envelope.result.value
+  if (rpcMethod === 'settings.describe') {
+    value.writable = false
+    value.hasDocument = false
+  } else {
+    if (!isRecord(value.credentials)) {
+      throw new Error('Local credentials.describe response had an invalid credential map.')
+    }
+    for (const credential of Object.values(value.credentials)) {
+      if (!isRecord(credential)) {
+        throw new Error('Local credentials.describe response had an invalid credential entry.')
+      }
+      credential.writable = false
+    }
+  }
+  return Buffer.from(JSON.stringify(envelope))
+}
+
+function rpcMethodFrom(target: URL): string | undefined {
+  if (!target.pathname.startsWith('/api/')) return undefined
+  try {
+    return decodeURIComponent(target.pathname.slice('/api/'.length))
+  } catch {
+    return undefined
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function requestHeaders(source: Record<string, string[]> | undefined): Headers {

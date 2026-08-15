@@ -32,6 +32,7 @@ linux:
   category: Development
   icon: build/icon.svg
   executableName: deepseek-harness
+  maintainer: lonesafe <lonesafe@users.noreply.github.com>
   synopsis: DeepSeek Harness desktop client
   description: Cross-platform desktop client for DeepSeek Harness
   target:

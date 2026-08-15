@@ -31,6 +31,53 @@ export const workspaceListValueSchema = z.object({
   archivedSessionIds: z.array(sessionIdSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.list'>>>
 
+const workspaceRelativePathSchema = z.string().max(4_096).refine(
+  path => !path.includes('\0') && !path.includes('\\') && !path.startsWith('/')
+    && (path === '' || path.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..')),
+  { message: 'Workspace file paths must be portable relative paths without dot segments' },
+)
+
+/** workspace.listFiles request payload. */
+export const workspaceListFilesRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  path: workspaceRelativePathSchema.optional(),
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.listFiles'>>>
+
+/** workspace.listFiles response value. */
+export const workspaceListFilesValueSchema = z.object({
+  path: workspaceRelativePathSchema,
+  entries: z.array(z.object({
+    name: z.string(),
+    path: workspaceRelativePathSchema,
+    kind: z.enum(['directory', 'file']),
+    hidden: z.boolean(),
+    size: z.number().int().nonnegative(),
+    modifiedAt: z.string(),
+  })),
+  truncated: z.boolean(),
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.listFiles'>>>
+
+/** workspace.readFile request payload. */
+export const workspaceReadFileRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+  path: workspaceRelativePathSchema.refine(path => path !== '', {
+    message: 'workspace.readFile requires a non-empty path',
+  }),
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.readFile'>>>
+
+/** workspace.readFile response value. */
+export const workspaceReadFileValueSchema = z.object({
+  path: workspaceRelativePathSchema,
+  name: z.string(),
+  mime: z.string(),
+  size: z.number().int().nonnegative(),
+  modifiedAt: z.string(),
+  kind: z.enum(['markdown', 'text', 'image', 'pdf', 'binary', 'unsupported']),
+  encoding: z.enum(['utf8', 'base64', 'none']),
+  content: z.string(),
+  reason: z.literal('too-large').optional(),
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.readFile'>>>
+
 /** workspace.create request payload: the existing directory to adopt. */
 export const workspaceCreateRequestSchema = z.object({
   path: z.string(),

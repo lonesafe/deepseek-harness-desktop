@@ -186,6 +186,15 @@ export class FakeApiClient implements IApiClient {
   // the pre-archive `{ items }` shape; a stub carrying the field wins.
   onWorkspaceList: (payload: unknown) => Promise<RpcResponse<{ items: never[]; archivedSessionIds?: never[] }>> =
     () => Promise.resolve(ok({ items: [] }))
+  onWorkspaceListFiles: (payload: unknown) => ReturnType<IApiClient['workspace']['listFiles']> =
+    payload => Promise.resolve(ok({ path: (payload as { path?: string }).path ?? '', entries: [], truncated: false }))
+  onWorkspaceReadFile: (payload: unknown) => ReturnType<IApiClient['workspace']['readFile']> =
+    payload => Promise.resolve(ok({
+      path: (payload as { path: string }).path,
+      name: (payload as { path: string }).path.split('/').at(-1) ?? 'file',
+      mime: 'text/plain', size: 0, modifiedAt: '1970-01-01T00:00:00.000Z',
+      kind: 'text', encoding: 'utf8', content: '',
+    }))
   onWorkspaceCreate: (payload: unknown) => Promise<RpcResponse<{ workspace: WorkspaceView; created: boolean }>> =
     () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws'), created: true }))
 
@@ -210,6 +219,10 @@ export class FakeApiClient implements IApiClient {
         ? { ...response, result: { ok: true as const, value: { archivedSessionIds: [] as never[], ...response.result.value } } }
         : response
     )) as ReturnType<IApiClient['workspace']['list']>),
+    listFiles: (payload: unknown) =>
+      this.record('workspace.listFiles', payload, this.onWorkspaceListFiles(payload)),
+    readFile: (payload: unknown) =>
+      this.record('workspace.readFile', payload, this.onWorkspaceReadFile(payload)),
     create: (payload: unknown) => this.record('workspace.create', payload, this.onWorkspaceCreate(payload)),
     rename: (payload: unknown) => this.record('workspace.rename', payload, this.onWorkspaceRename(payload)),
     delete: (payload: unknown) => this.record('workspace.delete', payload, this.onWorkspaceDelete(payload)),

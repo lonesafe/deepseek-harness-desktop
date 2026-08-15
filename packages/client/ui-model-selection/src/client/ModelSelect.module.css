@@ -259,3 +259,21 @@
   flex: 0 0 auto;
   color: var(--dsw-alias-label-tertiary);
 }
+
+@media (max-width: 639px) {
+  .root {
+    max-width: min(150px, 42vw);
+  }
+
+  .trigger {
+    width: 100%;
+  }
+
+  .triggerEffort {
+    display: none;
+  }
+
+  .menu {
+    max-height: min(360px, calc(100dvh - 96px));
+  }
+}

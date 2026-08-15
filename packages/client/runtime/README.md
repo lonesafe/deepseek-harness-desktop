@@ -26,6 +26,8 @@ Workspace and Session lists have independent monotone `pending` → `ready` base
 
 SlotRegistry gives the renderer separate bare observables for `useSessions` and `useWorkspaces`; web-react creates the hooks. Workspace business state does not enter `SessionListState` or an entry store.
 
+`WorkspaceRuntime.listFiles(workspaceId, path, signal)` and `readFile(workspaceId, path, signal)` are stateless, cancellable actions over the Host's read-only Workspace file projection. The runtime forwards the typed listing or preview without caching file contents or mixing filesystem state into `WorkspaceListState`; each view owns navigation, loading, cancellation, refresh, and stale-result suppression.
+
 `indexSubagentDescendants()` derives per-parent total and running descendant counts from the retained list mirror. It follows only uninterrupted `origin: 'subagent'` ancestry, so an ordinary fork starts a separate ownership subtree; cycles stop without throwing, and a missing parent remains a harmless key until its summary arrives.
 
 `SessionListState.jobsBySession` mirrors the Host's `session/jobs` frames last-wins, keyed by session and needing no Session instance. An emptied set is stored as an absent key, so absence and `[]` are one representation and consumers never test a sentinel. Two clears keep it from outliving its truth: `session/subscribed` drops the session's mirror, because a fresh generation sends a baseline only for a non-empty set and a retained list would survive as a phantom, and `host/session-removed` drops it again, because owner disposal removed the records on the mux stream while the removal frame rides the host stream, leaving the two with no relative order.

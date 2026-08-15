@@ -12,6 +12,8 @@ The optional override parameter `seams` forwards the module system's `loadBundle
 
 The shell owns browser-title projection. With a selected session carrying a durable title, it renders `<session title> — <existing HTML title>` and reacts to later title revisions; no selection or a selected untitled session preserves the existing title, and shell unmount restores it. The existing HTML title remains the configurable product suffix.
 
+The shell root uses the dynamic viewport height where supported and prevents body-level scrolling. Phone browser chrome can therefore resize the application without leaving the bottom composer below the visible area; feature packages own their own safe-area insets and compact controls.
+
 ## Model Experience
 
 None, as the entry shell boots the browser plugin tree; nothing here reaches a model request.
@@ -23,4 +25,4 @@ None; this package neither assembles nor sends a provider request.
 ## Known Limitations and Deferred Work
 
 - **One-shot rendering by design** — the UI waits for the boot settle; a single entry failure keeps the loading page with a loud per-entry report, no partial availability (progressive rendering returns with its own project).
-- **Narrow-window shell behavior lacks an assembled walkthrough** — ui-layout implements the concession chain, but this package has no shell-level narrow-viewport acceptance case.
+- **Phone coverage exercises the primary active-session path** — the assembled browser lane fixes a 390 × 844 running-turn geometry contract for full-width conversation and a non-overflowing composer; other device shapes continue to rely on the same responsive CSS rather than separate goldens.

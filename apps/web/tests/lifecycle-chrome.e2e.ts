@@ -173,7 +173,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await input.fill(PROMPT)
     const observeTurn = async () => {
       const originalViewport = page.viewportSize() ?? { width: 1680, height: 1000 }
-      if (MODE !== 'record') await page.setViewportSize({ width: 480, height: 1000 })
+      if (MODE !== 'record') await page.setViewportSize({ width: 390, height: 844 })
       try {
         await input.press('Enter')
         if (MODE !== 'record') {
@@ -182,6 +182,40 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
             element.scrollWidth > element.clientWidth
               && element.scrollLeft >= element.scrollWidth - element.clientWidth - 1
           )), { timeout: 10_000, interval: 10 }).toBe(true)
+          const phoneLayout = await page.evaluate(() => {
+            const frame = document.querySelector<HTMLElement>('[data-sidebar-overlay]')
+            const center = frame?.querySelector<HTMLElement>('[class*="centerCol"]')
+            const seat = document.querySelector<HTMLElement>('[data-composer-seat]')
+            const card = seat?.querySelector<HTMLElement>('[data-composer-card]')
+            const toolbar = card?.querySelector<HTMLElement>('[data-composer-toolbar]')
+            if (frame === null || frame === undefined || center === null || center === undefined
+              || seat === null || seat === undefined || card === null || card === undefined
+              || toolbar === null || toolbar === undefined) return undefined
+            const rect = (element: HTMLElement) => {
+              const box = element.getBoundingClientRect()
+              return { left: box.left, right: box.right, bottom: box.bottom, width: box.width }
+            }
+            return {
+              viewport: { width: innerWidth, height: innerHeight },
+              frame: rect(frame),
+              center: rect(center),
+              seat: rect(seat),
+              card: rect(card),
+              toolbarFits: toolbar.scrollWidth <= toolbar.clientWidth,
+              documentFits: document.documentElement.scrollWidth <= innerWidth,
+            }
+          })
+          expect(phoneLayout).toBeDefined()
+          expect(phoneLayout!.viewport).toEqual({ width: 390, height: 844 })
+          expect(phoneLayout!.frame.width).toBe(390)
+          expect(phoneLayout!.center.left).toBe(0)
+          expect(phoneLayout!.center.right).toBe(390)
+          expect(phoneLayout!.card.left).toBeGreaterThanOrEqual(8)
+          expect(phoneLayout!.card.right).toBeLessThanOrEqual(382)
+          expect(phoneLayout!.seat.bottom).toBeLessThanOrEqual(844)
+          expect(phoneLayout!.card.bottom).toBeLessThanOrEqual(836)
+          expect(phoneLayout!.toolbarFits).toBe(true)
+          expect(phoneLayout!.documentFits).toBe(true)
         }
         return await settled
       } finally {

@@ -1,7 +1,7 @@
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
-import WebSocket, { WebSocketServer } from 'ws'
+import WebSocket, { type RawData, WebSocketServer } from 'ws'
 import { startRemoteTunnel, type RemoteTunnel } from '../src/remote-tunnel.ts'
 
 const closers: (() => Promise<void>)[] = []
@@ -28,6 +28,48 @@ function nextFrame(socket: WebSocket): Promise<Record<string, unknown>> {
       const body = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer)
       resolve(JSON.parse(body.toString('utf8')) as Record<string, unknown>)
     })
+  })
+}
+
+function collectChunkedResponse(socket: WebSocket, id: string): Promise<{
+  start: Record<string, unknown>
+  chunks: Buffer[]
+}> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { reject(new Error('timed out waiting for chunked tunnel response')) }, 5_000)
+    let start: Record<string, unknown> | undefined
+    const chunks: Buffer[] = []
+    const onMessage = (raw: RawData): void => {
+      const body = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer)
+      const frame = JSON.parse(body.toString('utf8')) as Record<string, unknown>
+      if (frame.id !== id) return
+      if (frame.type === 'error') {
+        clearTimeout(timer)
+        socket.off('message', onMessage)
+        reject(new Error(String(frame.message)))
+        return
+      }
+      if (frame.type === 'http_response') {
+        clearTimeout(timer)
+        socket.off('message', onMessage)
+        reject(new Error('expected chunked response, received one complete frame'))
+        return
+      }
+      if (frame.type === 'http_response_start') {
+        start = frame
+        return
+      }
+      if (frame.type === 'http_response_chunk') {
+        chunks.push(Buffer.from(frame.body as string, 'base64'))
+        return
+      }
+      if (frame.type !== 'http_response_end') return
+      clearTimeout(timer)
+      socket.off('message', onMessage)
+      if (start === undefined) reject(new Error('chunked response ended before its start frame'))
+      else resolve({ start, chunks })
+    }
+    socket.on('message', onMessage)
   })
 }
 
@@ -61,6 +103,10 @@ describe('desktop remote tunnel', () => {
             },
           },
         }))
+        return
+      }
+      if (request.url === '/api/session.history') {
+        response.end(Buffer.alloc((1 << 20) + 17, 0x61))
         return
       }
       response.end(JSON.stringify({ path: request.url, forwardedCookie: request.headers.cookie ?? null }))
@@ -108,6 +154,16 @@ describe('desktop remote tunnel', () => {
     const response = await nextFrame(socket)
     expect(response).toMatchObject({ type: 'http_response', id: '1'.repeat(32), status: 200 })
     expect(JSON.parse(Buffer.from(response.body as string, 'base64').toString())).toEqual({ path: '/api/hello?from=relay', forwardedCookie: null })
+
+    const largeResponse = collectChunkedResponse(socket, '8'.repeat(32))
+    socket.send(JSON.stringify({
+      type: 'http_request', id: '8'.repeat(32), method: 'POST', path: '/api/session.history', body: '',
+    }))
+    const chunked = await largeResponse
+    expect(chunked.start).toMatchObject({ type: 'http_response_start', id: '8'.repeat(32), status: 200 })
+    expect(chunked.chunks.length).toBeGreaterThan(1)
+    expect(chunked.chunks.every(chunk => chunk.byteLength <= 512 << 10)).toBe(true)
+    expect(Buffer.concat(chunked.chunks)).toEqual(Buffer.alloc((1 << 20) + 17, 0x61))
 
     socket.send(JSON.stringify({
       type: 'http_request', id: '3'.repeat(32), method: 'GET', path: '/assets/index.js',
@@ -170,5 +226,5 @@ describe('desktop remote tunnel', () => {
       id: '7'.repeat(32),
       message: 'Local settings.describe response had an invalid RPC envelope.',
     })
-  })
+  }, 15_000)
 })

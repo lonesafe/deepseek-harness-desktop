@@ -2568,6 +2568,21 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         items: workspaces.map(w => ({ ...w })),
         archivedSessionIds: [...archivedSessionIds],
       }),
+      listFiles: request => ok(request, {
+        path: request.payload.path ?? '',
+        entries: [],
+        truncated: false,
+      }),
+      readFile: request => ok(request, {
+        path: request.payload.path,
+        name: request.payload.path.split('/').at(-1) ?? request.payload.path,
+        mime: 'text/plain',
+        size: 0,
+        modifiedAt: new Date(0).toISOString(),
+        kind: 'text' as const,
+        encoding: 'utf8' as const,
+        content: '',
+      }),
       create: (request) => {
         const { path } = request.payload
         const existing = workspaces.find(w => w.path === path)
@@ -3099,6 +3114,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'host.createDirectory': return this.api.host.createDirectory(request)
       case 'host.openPath': return this.api.host.openPath(request, new AbortController().signal)
       case 'workspace.list': return this.api.workspace.list(request)
+      case 'workspace.listFiles': return this.api.workspace.listFiles(request, signal)
+      case 'workspace.readFile': return this.api.workspace.readFile(request, signal)
       case 'workspace.create': return this.api.workspace.create(request)
       case 'workspace.rename': return this.api.workspace.rename(request)
       case 'workspace.delete': return this.api.workspace.delete(request)

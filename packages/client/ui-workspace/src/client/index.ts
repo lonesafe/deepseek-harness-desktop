@@ -1,5 +1,5 @@
 /**
- * Workspace plugin, browser half. Two registrations: WorkspaceBrowser fills
+ * Workspace plugin, browser half. Three registrations: WorkspaceBrowser fills
  * the sidebar shell's `sidebar.workspaces` hole (the whole browsing region),
  * and WorkspacePicker fills the conversation hero's picker hole
  * (`conversation.hero.workspace` — both hero forms). Both read real Host
@@ -12,15 +12,17 @@ import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
+import type { WorkspaceBrowserInjected, WorkspaceFilesInjected, WorkspacePickerInjected } from './contract/slots.ts'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './WorkspaceBrowser.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
+import { WorkspaceFilesView } from './WorkspaceFilesView.tsx'
 import { en, zh, type WorkspaceKey } from './locales.ts'
 
 export type {
   DirectoryFlowOwnerProps, DirectoryFlowSlotName, DirectoryPickingHooks, DirectoryPickingInjected,
-  WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspacePickerInjected, WorkspacePickerProps,
+  WorkspaceBrowserInjected, WorkspaceBrowserProps, WorkspaceFilesInjected, WorkspaceFilesProps,
+  WorkspacePickerInjected, WorkspacePickerProps,
 } from './contract/slots.ts'
 export type { WorkspaceKey } from './locales.ts'
 
@@ -52,6 +54,7 @@ export const inject = ['slots', 'sessions', 'workspaces', 'locale']
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
+  const t = ctx.locale.bind(NS)
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {
     const result = await ctx.sessions.search(query, signal)
@@ -105,6 +108,10 @@ export function apply(ctx: ClientContext): void {
     createWorkspace: input => ctx.workspaces.create(input),
     hooks: { directoryFlow: pickerFlowSource },
   })
+  const filesInjected: WorkspaceFilesInjected = {
+    listFiles: (workspaceId, path, signal) => ctx.workspaces.listFiles(workspaceId, path, signal),
+    readFile: (workspaceId, path, signal) => ctx.workspaces.readFile(workspaceId, path, signal),
+  }
   // Each registration declares its directory-flow child in the same call;
   // slot injection follows both the owner and declaration HMR lifetimes.
   ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
@@ -125,5 +132,16 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
     },
     WorkspacePicker,
+  ))
+  ctx.slots.inject('conversation.view', () => ctx.slots.register(
+    {
+      name: 'conversation.view',
+      id: 'workspace-files',
+      order: 20,
+      locale: NS,
+      label: () => t('files.tab'),
+      inject: () => filesInjected,
+    },
+    WorkspaceFilesView,
   ))
 }

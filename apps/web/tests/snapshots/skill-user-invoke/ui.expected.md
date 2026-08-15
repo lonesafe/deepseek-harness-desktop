@@ -9,6 +9,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Files"
 - text: /user-invoke-demo and confirm the fixture wiring {{clock}}
 - button "Copy":
   - img

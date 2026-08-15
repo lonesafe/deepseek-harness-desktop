@@ -363,3 +363,48 @@
 .root[data-phase='settling'] .composerSeat {
   visibility: hidden;
 }
+
+@media (max-width: 639px) {
+  .root {
+    --dsh-composer-side-clearance: 8px;
+    --dsh-composer-dock-inset: 4px;
+  }
+
+  .header {
+    padding: 10px 10px 0 56px;
+  }
+
+  .titleCluster {
+    gap: 4px;
+  }
+
+  .crumb {
+    max-width: 150px;
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+
+  .headerActions {
+    gap: 4px;
+    overflow: hidden;
+  }
+
+  .headerUtilities {
+    max-width: 116px;
+    margin-left: 4px;
+    overflow: hidden;
+  }
+
+  .tabs {
+    gap: 24px;
+    padding-left: 0;
+  }
+
+  .scrollBody {
+    scrollbar-gutter: auto;
+  }
+
+  .composerSeat {
+    --dsh-composer-text-max-height: min(240px, 40dvh);
+  }
+}

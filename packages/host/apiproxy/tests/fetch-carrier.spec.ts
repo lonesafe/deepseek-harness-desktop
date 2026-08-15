@@ -164,6 +164,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async list(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { items: [], archivedSessionIds: [] } } }
       },
+      async listFiles(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { path: request.payload.path ?? '', entries: [], truncated: false } } }
+      },
+      async readFile(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { path: request.payload.path, name: request.payload.path, mime: 'text/plain', size: 0, modifiedAt: 't', kind: 'text' as const, encoding: 'utf8' as const, content: '' } } }
+      },
       async create(request) {
         return {
           rpcId: request.rpcId,

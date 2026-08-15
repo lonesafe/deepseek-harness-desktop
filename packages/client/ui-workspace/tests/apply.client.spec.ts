@@ -4,8 +4,9 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
-import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
+import type { WorkspaceBrowserInjected, WorkspaceFilesInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { WorkspaceBrowser } from '../src/client/WorkspaceBrowser.tsx'
+import { WorkspaceFilesView } from '../src/client/WorkspaceFilesView.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
 
 // The service reads its initial locale from the browser; these specs assert
@@ -32,24 +33,40 @@ async function bench() {
   const renameSession = vi.fn(async (title: string) => ({ ok: true, value: { title, seq: 1 } }))
   const binding = vi.fn(() => ({ session: { rename: renameSession } }))
   const fork = vi.fn(async () => 'forked' as never)
+  const listFiles = vi.fn(async (_workspaceId: string, path: string) => ({ path, entries: [], truncated: false }))
+  const readFile = vi.fn(async (_workspaceId: string, path: string) => ({
+    path, name: path, mime: 'text/plain', size: 0, modifiedAt: '0',
+    kind: 'text' as const, encoding: 'utf8' as const, content: '',
+  }))
   ctx.provide('workspaces', {
-    create, startSession, rename, insertSessionBefore,
+    create, startSession, rename, insertSessionBefore, listFiles, readFile,
   } as never)
   ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   return {
     ctx, slots: ctx.get('slots') as SlotRegistry, locale, create, startSession, rename,
-    insertSessionBefore, open, clear, search, renameSession, binding, fork,
+    insertSessionBefore, listFiles, readFile, open, clear, search, renameSession, binding, fork,
   }
 }
 
-type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace'
+type HoleName = 'sidebar.workspaces' | 'conversation.hero.workspace' | 'conversation.empty.workspace' | 'conversation.session'
 
 /** Declare any subset of the holes with a single root registration ('root' is a single slot). */
 function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
-  const children = Object.fromEntries(names.map(name => [name, { kind: 'single', scope: 'root' }]))
+  const children = Object.fromEntries(names.map(name => [
+    name,
+    { kind: 'single', scope: name === 'conversation.session' ? 'session' : 'root' },
+  ]))
   return slots.register({ name: 'root', children } as never, () => null)
+}
+
+/** Declare the session body and its additive conversation-view ring. */
+function declareConversationView(slots: SlotRegistry): () => void {
+  const disposeSession = slots.register({
+    name: 'conversation.session', children: { 'conversation.view': { kind: 'list', scope: 'session' } },
+  } as never, () => null)
+  return disposeSession
 }
 
 describe('ui-workspace apply', () => {
@@ -59,25 +76,30 @@ describe('ui-workspace apply', () => {
 
   it('registers browser and pickers for declarations arriving before or after apply', async () => {
     const before = await bench()
-    declare(before.slots, 'sidebar.workspaces')
+    declare(before.slots, 'sidebar.workspaces', 'conversation.session')
+    declareConversationView(before.slots)
     await before.ctx.plugin({ inject: [...inject], apply }).await()
     expect(before.slots.entries('sidebar.workspaces')[0]!.component).toBe(WorkspaceBrowser)
     // Copy rides the standard locale seat: the entry declares the namespace
     // and apply registered both dictionaries.
     expect(before.slots.entries('sidebar.workspaces')[0]!.locale).toBe('workspace')
     expect(before.locale.bind('workspace')('session.new')).toBe('新会话')
+    expect(before.slots.entries('conversation.view')[0]!.component).toBe(WorkspaceFilesView)
 
     const after = await bench()
     await after.ctx.plugin({ inject: [...inject], apply }).await()
-    declare(after.slots, 'conversation.hero.workspace', 'conversation.empty.workspace')
+    declare(after.slots, 'conversation.hero.workspace', 'conversation.empty.workspace', 'conversation.session')
+    declareConversationView(after.slots)
     await Promise.resolve()
     expect(after.slots.entries('conversation.hero.workspace')[0]!.component).toBe(WorkspacePicker)
+    expect(after.slots.entries('conversation.view')[0]!.component).toBe(WorkspaceFilesView)
     // expect(after.slots.entries('conversation.empty.workspace')[0]!.component).toBe(WorkspacePicker)
   })
 
   it('routes browser actions and picker creation to the services', async () => {
     const b = await bench()
-    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace')
+    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'conversation.session')
+    declareConversationView(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
 
     const browser = (b.slots.entries('sidebar.workspaces')[0]!.inject as () => WorkspaceBrowserInjected)()
@@ -113,6 +135,12 @@ describe('ui-workspace apply', () => {
     const picker = (b.slots.entries('conversation.hero.workspace')[0]!.inject as () => WorkspacePickerInjected)()
     await picker.createWorkspace({ path: '/tmp/project' })
     expect(b.create).toHaveBeenCalledWith({ path: '/tmp/project' })
+
+    const files = (b.slots.entries('conversation.view')[0]!.inject as unknown as () => WorkspaceFilesInjected)()
+    await files.listFiles('ws' as never, 'docs', signal)
+    await files.readFile('ws' as never, 'README.md', signal)
+    expect(b.listFiles).toHaveBeenCalledWith('ws', 'docs', signal)
+    expect(b.readFile).toHaveBeenCalledWith('ws', 'README.md', signal)
   })
 
   it('declares the two directory-flow holes and reports their occupancy per surface', async () => {
@@ -155,12 +183,14 @@ describe('ui-workspace apply', () => {
 
   it('unregisters every entry on teardown', async () => {
     const b = await bench()
-    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'conversation.empty.workspace')
+    declare(b.slots, 'sidebar.workspaces', 'conversation.hero.workspace', 'conversation.empty.workspace', 'conversation.session')
+    declareConversationView(b.slots)
     const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     await fiber.dispose()
     expect(b.slots.entries('sidebar.workspaces')).toHaveLength(0)
     expect(b.slots.entries('conversation.hero.workspace')).toHaveLength(0)
+    expect(b.slots.entries('conversation.view')).toHaveLength(0)
     // expect(b.slots.entries('conversation.empty.workspace')).toHaveLength(0)
   })
 })

@@ -39,6 +39,9 @@ export interface RpcErrorDetailsMap {
   'workspace-attach-failed': { sessionId: SessionId; workspaceId: string }
   'workspace-not-found': { workspaceId: string }
   'workspace-invalid-path': { path: string }
+  'workspace-file-invalid-path': { workspaceId: string; path: string }
+  'workspace-file-unreadable': { workspaceId: string; path: string }
+  'workspace-file-not-file': { workspaceId: string; path: string }
   'workspace-name-conflict': { name: string }
   'workspace-move-invalid': { workspaceId: string; sessionId: SessionId; beforeSessionId?: SessionId }
   'directory-unreadable': { path: string }

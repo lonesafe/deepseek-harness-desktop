@@ -13,7 +13,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
+import {
+  computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT, SIDEBAR_OVERLAY_BREAKPOINT,
+} from './columns.ts'
 import type { createLayoutStore } from './stores.ts'
 import css from './AppFrame.module.css'
 
@@ -140,6 +142,8 @@ export function AppFrame({
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
   const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
+  const overlaySidebar = viewport < SIDEBAR_OVERLAY_BREAKPOINT
+  const sidebarTrack = overlaySidebar ? 0 : cols.sidebar
   const colsRef = useRef(cols)
   colsRef.current = cols
 
@@ -165,12 +169,13 @@ export function AppFrame({
     <div
       ref={frameRef}
       className={css.frame}
-      style={{ gridTemplateColumns: `${cols.sidebar}px minmax(0, 1fr) ${cols.details}px` }}
+      style={{ gridTemplateColumns: `${sidebarTrack}px minmax(0, 1fr) ${cols.details}px` }}
       data-sidebar-collapsed={sidebarCollapsed || undefined}
       data-details-collapsed={cols.details === 0 || undefined}
+      data-sidebar-overlay={overlaySidebar || undefined}
       data-dragging={dragging || undefined}
     >
-      <div className={css.sidebarCol}>
+      <div className={css.sidebarCol} style={overlaySidebar ? { width: cols.sidebar } : undefined}>
         {/* Render-site slot call with live concession output: a closed
             sidebar keeps the mounted slot at the compact-rail width, and the
             component sees its rendered state as owner params decided here
@@ -194,7 +199,7 @@ export function AppFrame({
         {renderSlot('shell.overlay', {})}
       </div>
       {/* The collapsed rail is fixed-width: no resize handle while closed. */}
-      {!sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
+      {!overlaySidebar && !sidebarCollapsed && <DragHandle side="sidebar" left={cols.sidebar} onStart={onSidebarStart} onDrag={onSidebarDrag} onEnd={onDragEnd} />}
       {cols.details > 0 && <DragHandle side="details" left={viewport - cols.details} onStart={onDetailsStart} onDrag={onDetailsDrag} onEnd={onDragEnd} />}
     </div>
   )

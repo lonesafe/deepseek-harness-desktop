@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -117,6 +117,34 @@ function stageDir(root: string, name: string): string {
   mkdirSync(path)
   return path
 }
+
+describe('Workspace file API', () => {
+  it('lists and previews files only through a registered Workspace id', async () => {
+    const { api, root } = await harness()
+    const project = stageDir(root, 'files-project')
+    mkdirSync(join(project, 'docs'))
+    writeFileSync(join(project, 'README.md'), '# Project\n')
+    const workspace = expectOk(await api.workspace.create(request({ path: project }))).workspace
+    const abort = new AbortController()
+
+    const listing = expectOk(await api.workspace.listFiles(request({ workspaceId: workspace.workspaceId }), abort.signal))
+    expect(listing.path).toBe('')
+    expect(listing.entries[0]).toMatchObject({ name: 'docs', path: 'docs', kind: 'directory' })
+    expect(expectOk(await api.workspace.readFile(
+      request({ workspaceId: workspace.workspaceId, path: 'README.md' }),
+      abort.signal,
+    ))).toMatchObject({ kind: 'markdown', encoding: 'utf8', content: '# Project\n' })
+
+    expect((await api.workspace.readFile(
+      request({ workspaceId: workspace.workspaceId, path: '../outside' }),
+      abort.signal,
+    )).result).toMatchObject({ ok: false, error: { code: 'workspace-file-invalid-path' } })
+    expect((await api.workspace.listFiles(
+      request({ workspaceId: 'missing' as WorkspaceId }),
+      abort.signal,
+    )).result).toMatchObject({ ok: false, error: { code: 'workspace-not-found' } })
+  })
+})
 
 describe('host.pickDirectory', () => {
   it('returns a selected path or explicit cancellation from the native capability', async () => {

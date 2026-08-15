@@ -56,6 +56,8 @@ preset 自行发布描述，长度不限，而网格让每一行卡片等高—�
 
 未组装任何 preset 的部署返回空名单，本行、chip、标签与分区都不渲染任何内容——此时每个会话共用宿主组装，也就无从选择或管理。未配置可写根目录的部署返回 `authorable: false`，分区随之退化为只读浏览：随附组装仍可在查看器中打开，但每个复制操作都被禁用并以原因作提示，而不是给出一个创建必然失败的对话框。
 
+手机视口中会隐藏静态的会话标题栏 preset 标签，把空间优先留给会话标题、标签页和必要操作；preset 选择与管理仍可从既有的新会话界面和设置界面进入。
+
 ## 模型体验
 
 Indirectly, through the preset a later session is composed from; [`dsh-agent-presets`](../../preset/agent-presets/README.md) owns what that composition puts in front of the model.

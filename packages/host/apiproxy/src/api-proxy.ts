@@ -109,6 +109,9 @@ import {
   inspectApiRemoteSession,
 } from '@deepseek-ai/dsh-api-remotes'
 import { canOpenNativePath, openNativePath, openNativeTextFile } from './native-path-opener.ts'
+import {
+  listWorkspaceFiles, readWorkspaceFile, WorkspaceFileError,
+} from './workspace-files.ts'
 
 /** Page size when history is called without maxMessages. */
 const DEFAULT_MAX_MESSAGES = 50
@@ -2805,6 +2808,40 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           items: ctx.workspaceRegistry.list().map(workspaceView),
           archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
         }))
+      },
+
+      async listFiles(request, signal) {
+        const { workspaceId, path = '' } = request.payload
+        const workspace = ctx.workspaceRegistry.get(brandWorkspaceId(workspaceId))
+        if (workspace === undefined) return workspaceNotFound(request, workspaceId)
+        try {
+          return ok(request, await listWorkspaceFiles(workspace.path, path, signal))
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'Workspace file listing was aborted.', details: {} })
+          }
+          if (error instanceof WorkspaceFileError) {
+            return err(request, { code: error.code, message: error.message, details: { workspaceId, path } })
+          }
+          throw error
+        }
+      },
+
+      async readFile(request, signal) {
+        const { workspaceId, path } = request.payload
+        const workspace = ctx.workspaceRegistry.get(brandWorkspaceId(workspaceId))
+        if (workspace === undefined) return workspaceNotFound(request, workspaceId)
+        try {
+          return ok(request, await readWorkspaceFile(workspace.path, path, signal))
+        } catch (error: unknown) {
+          if (signal.aborted) {
+            return err(request, { code: 'cancelled', message: 'Workspace file preview was aborted.', details: {} })
+          }
+          if (error instanceof WorkspaceFileError) {
+            return err(request, { code: error.code, message: error.message, details: { workspaceId, path } })
+          }
+          throw error
+        }
       },
 
       async create(request) {

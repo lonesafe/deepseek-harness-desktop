@@ -35,6 +35,42 @@ export interface WorkspaceView {
   updatedAt: string
 }
 
+/** One direct child returned by the read-only Workspace file browser. */
+export interface WorkspaceFileEntry {
+  name: string
+  /** Portable Workspace-relative path using `/` separators. */
+  path: string
+  kind: 'directory' | 'file'
+  hidden: boolean
+  /** File bytes, or zero for a directory. */
+  size: number
+  /** ISO-8601 modification instant. */
+  modifiedAt: string
+}
+
+/** One bounded directory level inside a registered Workspace. */
+export interface WorkspaceFileListing {
+  /** Portable Workspace-relative directory path; empty means the root. */
+  path: string
+  entries: WorkspaceFileEntry[]
+  /** True when the host stopped after its entry bound. */
+  truncated: boolean
+}
+
+/** Bounded read-only content projection for browser preview and download. */
+export interface WorkspaceFilePreview {
+  path: string
+  name: string
+  mime: string
+  size: number
+  modifiedAt: string
+  kind: 'markdown' | 'text' | 'image' | 'pdf' | 'binary' | 'unsupported'
+  encoding: 'utf8' | 'base64' | 'none'
+  content: string
+  /** Present when the host intentionally omits content. */
+  reason?: 'too-large'
+}
+
 /** Workspace-domain unary methods (the map keys workspace.* of RpcMethodMap). */
 export interface WorkspaceApi {
   /**
@@ -44,6 +80,25 @@ export interface WorkspaceApi {
    * workspace's `sessionIds` account; grouping surfaces hide them.
    */
   list(request: RpcRequest<{}>): Promise<RpcResponse<{ items: WorkspaceView[]; archivedSessionIds: SessionId[] }>>
+
+  /**
+   * Lists one directory inside a registered Workspace. Paths are portable,
+   * relative to that Workspace, and cannot traverse through a symlink outside
+   * its canonical root.
+   */
+  listFiles(
+    request: RpcRequest<{ workspaceId: WorkspaceId; path?: string }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<WorkspaceFileListing>>
+
+  /**
+   * Reads one bounded regular file inside a registered Workspace. Text and
+   * Markdown use UTF-8; images, PDFs, and binary downloads use Base64.
+   */
+  readFile(
+    request: RpcRequest<{ workspaceId: WorkspaceId; path: string }>,
+    signal: AbortSignal,
+  ): Promise<RpcResponse<WorkspaceFilePreview>>
 
   /**
    * Creates (or idempotently resolves) a workspace over an EXISTING directory

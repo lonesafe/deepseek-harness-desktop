@@ -729,7 +729,7 @@ export function InputBar({
             <div ref={mirrorRef} aria-hidden className={css.mirror} data-input-mirror>{`${draft}\n`}</div>
           </div>
         </div>
-        <div className={css.row}>
+        <div className={css.row} data-composer-toolbar>
           <div className={css.tools}>
             <Tooltip label={t('input.commands')} side="top" delayMs={500}>
               <button

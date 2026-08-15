@@ -328,6 +328,29 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
   })
 })
 
+describe('AppFrame — phone sidebar overlay', () => {
+  it('gives the center the full track while retaining a floating collapsed opener', () => {
+    frameWidth = 390
+    const { frame, slotCalls } = mountFrame()
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.hasAttribute('data-sidebar-overlay')).toBe(true)
+    expect((frame.firstElementChild as HTMLElement).style.width).toBe(`${String(SIDEBAR_COLLAPSED)}px`)
+    expect(slotCalls.filter(c => c.key === 'sidebar').at(-1)!.props)
+      .toEqual({ collapsed: true, width: SIDEBAR_COLLAPSED })
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+
+  it('opens the phone sidebar over the unchanged full-width center track', () => {
+    frameWidth = 390
+    const { frame, instance } = mountFrame()
+    act(() => { instance.actions.toggleSidebar() })
+    expect(tracks(frame)).toEqual([0, 0])
+    expect((frame.firstElementChild as HTMLElement).style.width).toBe('280px')
+    expect(frame.hasAttribute('data-sidebar-collapsed')).toBe(false)
+    expect(frame.querySelectorAll('[class*="handle"]')).toHaveLength(0)
+  })
+})
+
 describe('AppFrame — guard branches', () => {
   it('pointer moves without capture are ignored (no width write)', () => {
     const { frame, instance } = mountFrame()

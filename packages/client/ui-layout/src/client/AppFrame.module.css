@@ -23,13 +23,32 @@
 }
 
 .sidebarCol {
+  grid-column: 1;
   min-width: 0;
   overflow: hidden;
   background: var(--dsw-specific-sidebar-fill);
   border-right: 1px solid var(--dsw-alias-border-l1);
 }
 
+/* Phones keep the conversation at the full viewport width. The mounted
+   sidebar becomes an overlay: its collapsed root is only a floating opener,
+   while an expanded root covers the left side without squeezing the composer. */
+.frame[data-sidebar-overlay] .sidebarCol {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 10;
+  box-shadow: var(--dsw-shadow-lv3);
+  transition: width var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+.frame[data-sidebar-overlay][data-sidebar-collapsed] .sidebarCol {
+  border-right: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .centerCol {
+  grid-column: 2;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -37,6 +56,7 @@
 }
 
 .detailsCol {
+  grid-column: 3;
   min-width: 0;
   overflow: hidden;
   border-left: 1px solid var(--dsw-alias-border-l2);
@@ -71,6 +91,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .handle {
+    transition: none;
+  }
+
+  .frame[data-sidebar-overlay] .sidebarCol {
     transition: none;
   }
 }

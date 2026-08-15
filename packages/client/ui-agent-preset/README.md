@@ -56,6 +56,8 @@ Setting the default writes the `agent-presets` settings namespace, which the hos
 
 A deployment that composes no presets answers with an empty roster, and the row, the chip, the label, and the section all render nothing — every session then shares the host composition, and there is nothing to choose between or manage. A deployment that configures no writable root answers `authorable: false`, and the section stays a read-only browser: the shipped compositions still open in the viewer, but every copy action is disabled with the reason as its tooltip rather than offering a dialog whose create always fails.
 
+The static session-header preset label is omitted on phone viewports, where the session title, tabs, and essential actions have priority; preset selection and management remain available on their existing new-session and Settings surfaces.
+
 ## Model Experience
 
 Indirectly, through the preset a later session is composed from; [`dsh-agent-presets`](../../preset/agent-presets/README.md) owns what that composition puts in front of the model.

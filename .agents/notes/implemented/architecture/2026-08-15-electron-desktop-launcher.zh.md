@@ -16,11 +16,11 @@ BrowserWindow 开启 context isolation 与 renderer sandbox，关闭 Node integr
 
 electron-builder 运行前，pnpm 会先部署桌面包。因为自动 peer 安装已关闭，其 manifest 显式提供可达生产图中的全部必需 workspace peer；`verify-runtime-closure.ts --manifest apps/desktop/package.json` 保证这个仅依赖闭包保持完整。打包不使用 asar，使内嵌 Node 进程可以直接执行 ESM CLI 并加载其运行时资源；它也不会重新构建已暂存的 pnpm 依赖树。
 
-`desktop:dist` 打包当前平台。原生 GitHub Actions 矩阵分别在 macOS arm64、macOS x64、Linux x64 和 Windows x64 上安装和打包，依次生成 DMG/ZIP、AppImage/DEB 与 NSIS/ZIP 产物。签名与公证不属于默认承诺：只有未来发布环境提供平台凭据与签名策略时，产物才会签名。
+`desktop:dist` 打包当前平台。原生 GitHub Actions 矩阵分别在 macOS arm64、macOS x64、Linux x64 和 Windows x64 上安装和打包，依次生成 DMG/ZIP、AppImage/DEB 与 NSIS/ZIP 产物。macOS 发布 job 支持两种明确模式。Actions Secrets 中具备完整的 Base64 编码 Developer ID Application P12、其密码与 App Store Connect API Key 时，electron-builder 会导入该身份，使用 Hardened Runtime 和 Electron JIT entitlements 完成签名，提交 Apple 公证并装订票据。job 随后使用 `codesign --verify --deep --strict`、Gatekeeper 的 `spctl --assess` 与 `stapler validate` 验证应用。没有任何 Apple 凭据时，job 会明确关闭身份自动发现并发布未签名安装包；只配置部分凭据则作为配置错误失败。根 README 记录了未签名安装包首次启动时需要使用的 Control 点击以及「隐私与安全性」路径。没有凭据的本地打包采用相同的未签名行为。
 
 ## 验证
 
-单元测试固定本机与局域网就绪信息解析、持久化局域网与远程偏好校验、浏览器设备授权、固定回环中转、特权方法拒绝、有界子进程关闭、精确 origin 导航和外链策略。运行时闭包门禁遍历 workspace 依赖与必需 peer。暂存运行时冒烟测试从部署后的生产目录启动 `dsh web` 并抓取生成的应用页面；随后平台打包测试通过已打包可执行文件运行内嵌运行时。
+单元测试固定本机与局域网就绪信息解析、持久化局域网与远程偏好校验、浏览器设备授权、固定回环中转、特权方法拒绝、有界子进程关闭、精确 origin 导航和外链策略。运行时闭包门禁遍历 workspace 依赖与必需 peer。暂存运行时冒烟测试从部署后的生产目录启动 `dsh web` 并抓取生成的应用页面；随后平台打包测试通过已打包可执行文件运行内嵌运行时。在两个 macOS 架构上，发布车道会区分配置完整的签名模式与明确的未签名模式；签名模式还会把代码签名有效、Gatekeeper 接受与已装订公证票据作为发布门禁。
 
 ## 考虑过的替代方案
 
@@ -36,4 +36,4 @@ electron-builder 运行前，pnpm 会先部署桌面包。因为自动 peer 安�
 
 用户获得常规桌面应用，无需另装 Node.js、pnpm、终端或浏览器；Web 与桌面产品仍共享同一套 UI 和后端组合。启动错误会包含有界的子进程诊断；一个应用实例拥有一个本地后端；退出时不会有意遗留该后端。
 
-代价是产物体积：Electron 加显式 Harness 运行时闭包远大于单独的 Web 资源，且 `asar: false` 会生成可直接查看的资源树。随机监听端口默认仍只绑定回环；经过认证的局域网绑定与基于账号的远程控制是两项独立、明确且持久化的偏好，而特权 Electron 窗口始终只接受其精确回环 origin。平台签名、公证、软件仓库发布以及独立中转服务的运营仍属于发布基础设施职责，不是本地构建自带的性质。
+代价是产物体积：Electron 加显式 Harness 运行时闭包远大于单独的 Web 资源，且 `asar: false` 会生成可直接查看的资源树。随机监听端口默认仍只绑定回环；经过认证的局域网绑定与基于账号的远程控制是两项独立、明确且持久化的偏好，而特权 Electron 窗口始终只接受其精确回环 origin。macOS 签名与公证依赖外部管理的 Apple 凭据，因此没有凭据时生成的 Release 需要执行文档所述的一次性 Gatekeeper 批准；Windows 签名、软件仓库发布以及独立中转服务的运营仍属于发布基础设施职责，不是本地构建自带的性质。

@@ -16,6 +16,16 @@ body,
 }
 
 body {
+  overflow: hidden;
+}
+
+@supports (height: 100dvh) {
+  #root {
+    height: 100dvh;
+  }
+}
+
+body {
   font-family: var(--dsw-font-family);
   /* Grayscale antialiasing over subpixel rendering: WebKit/Blink and the
      Firefox macOS equivalent; other engines ignore both lines. */

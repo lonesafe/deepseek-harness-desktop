@@ -47,13 +47,22 @@ const repositoryUrl = 'git+https://github.com/deepseek-harness/deepseek-harness.
  * their trusted publishing against the repository that runs the workflow.
  */
 const publishedRepositoryUrl = 'git+https://github.com/deepseek-ai/deepseek-harness.git'
+/** Product forks whose published source lives outside the upstream monorepo. */
+const publishedRepositoryUrlByPackage: Readonly<Record<string, string>> = {
+  '@deepseek-ai/dsh-desktop': 'git+https://github.com/lonesafe/deepseek-harness-desktop.git',
+}
 /** Directories whose packages this repository publishes: one release member each. */
 const releaseMemberDirectory = /^(?:packages\/[^/]+\/[^/]+|apps\/[^/]+|vendor\/[^/]+)$/
 
 const localArtifactDirs = new Set(['node_modules'])
 const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh': ['lib/*.js', 'config'],
-  '@deepseek-ai/dsh-desktop': ['lib/*.js', 'build/icon.svg', 'electron-builder.yml'],
+  '@deepseek-ai/dsh-desktop': [
+    'lib/*.js',
+    'build/icon.svg',
+    'build/entitlements.mac.plist',
+    'electron-builder.yml',
+  ],
   // The Web build emits sourcemaps for browser debugging; publishing them is
   // what the payload policy forbids, so the bundle ships without them.
   '@deepseek-ai/dsh-web-frontend': ['dist', '!dist/**/*.map'],
@@ -258,10 +267,13 @@ function checkWorkspace({ dir, manifest }: WorkspaceManifest): string[] {
     if (manifest.publishConfig?.access !== 'public') {
       errors.push(`${label}: release member must set publishConfig.access to "public"`)
     }
+    const expectedRepositoryUrl = manifest.name === undefined
+      ? publishedRepositoryUrl
+      : publishedRepositoryUrlByPackage[manifest.name] ?? publishedRepositoryUrl
     if (manifest.repository?.type !== 'git'
-      || manifest.repository.url !== publishedRepositoryUrl
+      || manifest.repository.url !== expectedRepositoryUrl
       || manifest.repository.directory !== dir) {
-      errors.push(`${label}: release member repository must use ${publishedRepositoryUrl} with directory ${dir}`)
+      errors.push(`${label}: release member repository must use ${expectedRepositoryUrl} with directory ${dir}`)
     }
   } else if (manifest.private !== true) {
     errors.push(`${label}: package.json must set "private": true`)

@@ -26,6 +26,8 @@ Workspace 和 Session 列表各自具有单调的 `pending` → `ready` 基线�
 
 SlotRegistry 分别为 renderer 提供 `useSessions` 与 `useWorkspaces` 的裸 observable；web-react 创建钩子。Workspace 业务状态不会进入 `SessionListState` 或条目 store。
 
+`WorkspaceRuntime.listFiles(workspaceId, path, signal)` 与 `readFile(workspaceId, path, signal)` 是面向 Host 只读 Workspace 文件投影的无状态、可取消操作。运行时只转发类型化列表或预览，不缓存文件内容，也不把文件系统状态混入 `WorkspaceListState`；导航、加载、取消、刷新与陈旧结果抑制均由具体视图持有。
+
 `indexSubagentDescendants()` 从保留的列表镜像中派生每个 parent 的后代总数与运行中后代数。它只沿不间断的 `origin: 'subagent'` 祖先链追踪，因此普通 fork 会开启独立的归属子树；遇到环时，追踪会停止但不会抛出异常，缺失的 parent 则会保留为无害的键，直至其摘要到达。
 
 `SessionListState.jobsBySession` 按 last-wins 镜像宿主的 `session/jobs` 帧，以会话为键，不需要 Session 实例。被清空的集合存为缺失的键，因此「缺失」与 `[]` 是同一种表示，消费方永远不必检测哨兵值。两处清理让它不至于比它所反映的真相活得更久：`session/subscribed` 丢弃该会话的镜像，因为新一代只为非空集合发送 baseline，被留下的列表会变成幽灵；`host/session-removed` 再丢一次，因为 owner 销毁是在 mux 流上移除记录的，而移除帧走 host 流，两者没有相对顺序。

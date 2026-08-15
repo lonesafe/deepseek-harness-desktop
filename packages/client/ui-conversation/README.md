@@ -46,6 +46,8 @@ The chat stats line takes its token accounting from the generic token-meter `tok
 
 A finished turn materializes one ordered `turn-tail` Conversation Node. Its engine-owned `TurnLocation` supplies the closing Assistant and Turn data; the renderer places the `conversation.chat.turnTail` chain before that node's IconActions and dispatches `TurnTailOwnerProps` containing the Turn, closing seq, and `openFile`. This package owns only the hole; `@deepseek-ai/dsh-client-ui-deliverables` accumulates mutation-tool `locations` into Turn data and owns the produced-files row, chip cap, and copy, so composing that plugin out of cordis.yml turns the surface off while the hole renders empty at zero cost. The closing prose participates through the same off switch: the chat view asks the optional `chatFileMentions` service (ctx.get; provided by the same plugin) for a closing message's inline-code vocabulary and threads the result into MarkdownText's `fileMentions` seam — an absent service leaves the prose inert.
 
+On phone viewports, the active conversation header reserves space for ui-sidebar's floating opener and compacts secondary chrome. The composer uses an 8px side clearance, the browser safe-area inset at the bottom, and a dynamic-viewport text-height cap; its toolbar and model seat shrink without creating horizontal document overflow. The running-turn browser scenario fixes this contract at 390 × 844 while retaining the same full-width desktop component tree.
+
 ## Model Experience
 
 None, as the conversation UI renders session history and streams in the browser; nothing here reaches a model request.

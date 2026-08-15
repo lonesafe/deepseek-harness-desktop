@@ -282,3 +282,32 @@
     animation: none;
   }
 }
+
+@media (max-width: 639px) {
+  .root.collapsed {
+    padding: 10px;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .collapsed .logoRow {
+    margin: 0;
+  }
+
+  .collapsed .toggle {
+    border: 1px solid var(--dsw-alias-border-l2);
+    background: var(--dsw-alias-button-floating-fill);
+    box-shadow: var(--dsw-shadow-lv2);
+    pointer-events: auto;
+  }
+
+  .collapsed .toggle:hover {
+    background: var(--dsw-alias-button-floating-hover);
+  }
+
+  .collapsed .newSession,
+  .collapsed .regionArea,
+  .collapsed .footArea {
+    display: none;
+  }
+}

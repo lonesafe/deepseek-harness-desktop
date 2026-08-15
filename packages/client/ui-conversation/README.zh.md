@@ -46,6 +46,8 @@ Host 带 placement 的 `session/queue` 快照也会携带待处理 steering。Qu
 
 完成的一轮会物化一个有序的 `turn-tail` Conversation Node。它由引擎维护的 `TurnLocation` 提供收尾 Assistant 和 Turn data；renderer 在该 Node 的 IconActions 之前渲染 `conversation.chat.turnTail` chain，并派发包含 Turn、收尾 seq 和 `openFile` 的 `TurnTailOwnerProps`。本包只拥有空位；`@deepseek-ai/dsh-client-ui-deliverables` 把改写工具的 `locations` 累积到 Turn data，并拥有产物行、chip 上限和文案，因此把该插件从 cordis.yml 中组合掉即可关闭该交互面，空位以零成本渲染为空。收尾正文经由同一个开关参与其中：chat 视图向可选的 `chatFileMentions` service（ctx.get；由同一插件提供）索取收尾消息的行内代码词表，并把结果接进 MarkdownText 的 `fileMentions` seam——service 缺席时正文保持死文本。
 
+手机视口中，活跃会话标题栏会为 ui-sidebar 的浮动入口预留空间，并压缩次要 chrome。composer 使用 8px 侧边间距、浏览器底部安全区和动态视口文本高度上限；其工具栏与模型 seat 会收缩，不会产生 document 级横向溢出。运行中轮次的浏览器场景在 390 × 844 下固定这项约定，同时继续复用同一棵全宽桌面组件树。
+
 ## 模型体验
 
 无。会话 UI 在浏览器中渲染会话历史与流；这里没有任何内容进入模型请求。

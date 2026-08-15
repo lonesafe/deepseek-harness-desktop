@@ -2,7 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {
-  DirectoryListing, IApiClient, RpcError,
+  DirectoryListing, IApiClient, RpcError, WorkspaceFileListing, WorkspaceFilePreview,
   SessionId, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '../contract/store.ts'
@@ -222,6 +222,43 @@ export class WorkspaceRuntime implements IWorkspaces {
    */
   async listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
     const response = await this.api.host.listDirectory(path === undefined ? {} : { path }, signal)
+    if (!response.result.ok) throw new DirectoryBrowseError(response.result.error)
+    return response.result.value
+  }
+
+  /**
+   * List one portable relative directory inside a registered Workspace.
+   * @param workspaceId - registered Workspace root.
+   * @param path - relative directory; empty or absent means the root.
+   * @param signal - aborts a superseded request.
+   * @returns one bounded directory level.
+   */
+  async listFiles(
+    workspaceId: WorkspaceId,
+    path = '',
+    signal?: AbortSignal,
+  ): Promise<WorkspaceFileListing> {
+    const response = await this.api.workspace.listFiles(
+      path === '' ? { workspaceId } : { workspaceId, path },
+      signal,
+    )
+    if (!response.result.ok) throw new DirectoryBrowseError(response.result.error)
+    return response.result.value
+  }
+
+  /**
+   * Read one bounded regular file inside a registered Workspace.
+   * @param workspaceId - registered Workspace root.
+   * @param path - non-empty portable relative file path.
+   * @param signal - aborts a superseded request.
+   * @returns preview or download content with host-selected encoding.
+   */
+  async readFile(
+    workspaceId: WorkspaceId,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<WorkspaceFilePreview> {
+    const response = await this.api.workspace.readFile({ workspaceId, path }, signal)
     if (!response.result.ok) throw new DirectoryBrowseError(response.result.error)
     return response.result.value
   }

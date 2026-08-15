@@ -8,7 +8,7 @@
 
 下载安装后直接打开，无需安装 Node.js、pnpm、Electron，无需执行终端命令，也无需手动启动浏览器。桌面客户端已经包含运行 DeepSeek Harness 所需的完整环境；需要调用模型时，可直接在应用内填写服务商要求的凭据。
 
-[下载 DeepSeek Harness Desktop 1.0 Beta 3](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.3)
+[下载 DeepSeek Harness Desktop 1.0 Beta 4](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.4)
 
 DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 体验打包成适用于 macOS、Linux 和 Windows 的自包含桌面应用。安装包内含 Electron、Node.js、生产插件图和 Web 资源，用户无需安装 Node.js、pnpm，也无需手动打开浏览器。
 
@@ -20,7 +20,7 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 
 ## 下载并开始使用
 
-1. 打开 [v1.0.0-beta.3 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.3)。
+1. 打开 [v1.0.0-beta.4 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.4)。
 2. 下载适合当前系统的安装包。
 3. 安装并打开应用。
 
@@ -31,7 +31,14 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 | Windows | x64 | NSIS 安装程序或 ZIP |
 | Linux | x64 | AppImage 或 DEB |
 
-Beta 安装包尚未签名。macOS 可能需要按住 Control 点击应用并选择**打开**；Windows SmartScreen 可能显示未知发布者警告。安装前请核对 Release 中的校验值。
+发布流水线会在具备 Apple Developer 凭据时自动签名、公证并验证 macOS 应用；没有证书时仍会发布未签名安装包，并在 Release 说明中标明状态。Windows SmartScreen 也可能显示未知发布者警告。
+
+### macOS 未签名版本安装与首次启动
+
+1. 下载与 Mac 架构对应的 DMG，打开后把 **DeepSeek Harness** 拖入**应用程序**文件夹；如果下载 ZIP，请先解压，再把应用移入**应用程序**。
+2. 首次启动不要直接双击。在访达的**应用程序**中按住 Control 点击 **DeepSeek Harness**，选择**打开**，然后在确认窗口中再次点击**打开**。
+3. 如果系统只提示无法验证开发者并阻止启动，请打开**系统设置 → 隐私与安全性**，在安全性区域找到被阻止的 **DeepSeek Harness**，点击**仍要打开**并完成系统验证。
+4. 上述操作通常只需执行一次，之后可以像普通应用一样启动。无需也不建议全局关闭 Gatekeeper。
 
 ## 远程访问
 
@@ -41,7 +48,7 @@ Beta 安装包尚未签名。macOS 可能需要按住 Control 点击应用并选
 2. 网页确认设备授权后返回桌面客户端，程序会询问是否**开启远程控制**。该功能默认关闭；开启后电脑主动建立加密出站连接，无需公网 IP、端口映射或路由器设置。之后也可以通过 **DeepSeek Harness**／**应用**菜单中的**远程访问…**修改设置或重新授权。未登录用户开启远程控制时会再次看到登录授权提示，授权完成前无法使用远程控制。
 3. 登录官网的**设备中心**，选择属于当前账号的在线电脑并点击**连接**。
 
-远程连接使用一次性短期票据和独立设备凭据。网页壳、插件脚本、样式和字体由官网直接提供并长期缓存，只有 `/api` 请求和业务 WebSocket 经过设备隧道；关闭桌面端远程控制会立即停止出站连接，也可以在设备中心撤销设备。远程浏览器可以运行会话和 Agent，也能读取经过脱敏且强制只读的设置目录和凭据状态，以便模型、通用设置、插件与 Agent 预设页面正常显示；凭据值不会传输，设置或凭据写入、原生文件选择、打开路径等本机专属操作仍只允许桌面窗口调用。官网和中转服务是独立部署的 Go、MySQL 与 Vue 3 项目，不包含在本仓库中。
+远程连接使用一次性短期票据和独立设备凭据。网页壳、插件脚本、样式和字体由官网直接提供并长期缓存，只有 `/api` 请求和业务 WebSocket 经过设备隧道；大体积会话历史会拆成有上限的 WebSocket 分片传输，避免单条响应过大导致 HTTP 502。关闭桌面端远程控制会立即停止出站连接，也可以在设备中心撤销设备。远程浏览器可以运行会话和 Agent，也能读取经过脱敏且强制只读的设置目录和凭据状态，以便模型、通用设置、插件与 Agent 预设页面正常显示；凭据值不会传输，设置或凭据写入、原生文件选择、打开路径等本机专属操作仍只允许桌面窗口调用。手机宽度下，对话区使用完整屏幕宽度，侧栏变为浮动入口，底部输入框会适配浏览器动态视口和安全区。官网和中转服务是独立部署的 Go、MySQL 与 Vue 3 项目，不包含在本仓库中。
 
 ## 为什么能够零配置使用
 
@@ -50,9 +57,13 @@ Beta 安装包尚未签名。macOS 可能需要按住 Control 点击应用并选
 - **无需单独打开浏览器：**完整的 Harness 界面会直接显示在桌面窗口中。
 - **无需开发环境：**下载适用于 macOS、Windows 或 Linux 的原生安装包即可开始使用。
 
+## 工作区文件预览
+
+对话页新增**文件**视图，可直接浏览当前对话所属工作区，并预览 Markdown、常见源码与配置文本、图片和 PDF。整个文件管理器保持只读，不会修改项目文件；手机端会自动切换为目录与预览分开的全宽页面。通过官网远程使用时，文件列表与预览也走既有的受控接口中转，无需传输整套 Web 页面。
+
 ## Beta 状态
 
-`v1.0.0-beta.3` 是当前桌面 Beta，修复了官网远程使用时设置目录被错误拒绝为 HTTP 403 的问题。原生构建矩阵会分别生成 macOS Apple Silicon、macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
+`v1.0.0-beta.4` 是当前桌面 Beta，新增对话内工作区文件浏览与常见文件预览，修复了官网远程使用时大体积历史记录返回 HTTP 502 的问题，并改善了手机端侧栏、会话区域、设置页与底部输入框的布局。原生构建矩阵会分别生成 macOS Apple Silicon、macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
 
 <a id="run"></a><a id="run-from-source"></a>
 
@@ -76,6 +87,18 @@ pnpm run desktop:dist:windows
 ```
 
 [桌面安装包工作流](.github/workflows/desktop.yml)使用 GitHub 原生 runner 构建 macOS arm64、macOS x64、Linux x64 和 Windows x64。推送 `v*` 标签后，工作流会把安装包附加到对应 GitHub Release。
+
+### macOS 发布签名
+
+macOS 打包始终启用 Hardened Runtime 和 Electron 所需的 entitlements。仓库维护者可以在 GitHub Actions Secrets 中配置以下完整凭据，使 Release 自动使用 `Developer ID Application` 签名并完成 Apple 公证：
+
+- `MACOS_CERTIFICATE_P12_BASE64`：Developer ID Application `.p12` 的 Base64 内容。
+- `MACOS_CERTIFICATE_PASSWORD`：导出 `.p12` 时设置的密码。
+- `APPLE_API_KEY_P8`：App Store Connect API Key 的 `.p8` 内容。
+- `APPLE_API_KEY_ID`：API Key ID。
+- `APPLE_API_ISSUER`：Issuer ID。
+
+五项凭据全部存在时，工作流只在临时 runner 中注入它们，完成签名和公证后执行 `codesign --verify`、`spctl --assess` 与 `stapler validate`；验证失败就停止该 macOS 构建。五项凭据全部缺失时，工作流仍会生成并发布未签名安装包，用户按上面的首次启动步骤打开即可。只配置部分凭据会被视为配置错误并停止构建，避免误以为产物已经签名。本地执行 `desktop:dist:mac` 而未配置凭据时，同样得到未签名安装包。
 
 ## 开发与验证
 

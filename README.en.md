@@ -14,6 +14,10 @@ DeepSeek Harness Desktop packages the official open-source [DeepSeek Harness](ht
 
 This is a community-maintained desktop distribution. It is not an official DeepSeek product and is not endorsed by or affiliated with DeepSeek AI.
 
+## Interface preview
+
+![DeepSeek Harness Desktop main interface](assets/deepseek-harness-desktop-interface.jpg)
+
 ## Download and start
 
 1. Open the [v1.0.0-beta.1 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1).

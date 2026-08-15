@@ -14,6 +14,10 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 
 这是由社区维护的桌面发行版，并非 DeepSeek 官方产品，也未获得 DeepSeek AI 的认可或隶属关系。
 
+## 界面预览
+
+![DeepSeek Harness Desktop 中文主界面](assets/deepseek-harness-desktop-interface.jpg)
+
 ## 下载并开始使用
 
 1. 打开 [v1.0.0-beta.1 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)。

@@ -1,20 +1,24 @@
 # DeepSeek Harness Desktop
 
-[English](README.md) | 中文
+中文（首选） | [English](README.md)
 
 [![Desktop installers](https://github.com/lonesafe/deepseek-harness-desktop/actions/workflows/desktop.yml/badge.svg)](https://github.com/lonesafe/deepseek-harness-desktop/actions/workflows/desktop.yml) [![Release](https://img.shields.io/github/v/release/lonesafe/deepseek-harness-desktop?include_prereleases)](https://github.com/lonesafe/deepseek-harness-desktop/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**运行环境零配置 · 简单易用 · 开箱即用 · 零开发门槛**
+
+下载安装后直接打开，无需安装 Node.js、pnpm、Electron，无需执行终端命令，也无需手动启动浏览器。桌面客户端已经包含运行 DeepSeek Harness 所需的完整环境；需要调用模型时，可直接在应用内填写服务商要求的凭据。
+
+[下载 DeepSeek Harness Desktop 1.0 Beta 1](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)
 
 DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 体验打包成适用于 macOS、Linux 和 Windows 的自包含桌面应用。安装包内含 Electron、Node.js、生产插件图和 Web 资源，用户无需安装 Node.js、pnpm，也无需手动打开浏览器。
 
 这是由社区维护的桌面发行版，并非 DeepSeek 官方产品，也未获得 DeepSeek AI 的认可或隶属关系。
 
-## Beta 状态
+## 下载并开始使用
 
-`v1.0.0-beta.1` 是首个公开桌面 Beta。启动器和打包运行时已在 Apple Silicon macOS 上完成冒烟测试；原生构建矩阵会分别生成 macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
-
-## 下载
-
-打开 [v1.0.0-beta.1 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)，选择适合当前系统的安装包：
+1. 打开 [v1.0.0-beta.1 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)。
+2. 下载适合当前系统的安装包。
+3. 安装并打开应用。
 
 | 平台 | 架构 | 安装包 |
 |---|---:|---|
@@ -24,6 +28,17 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 | Linux | x64 | AppImage 或 DEB |
 
 Beta 安装包尚未签名。macOS 可能需要按住 Control 点击应用并选择**打开**；Windows SmartScreen 可能显示未知发布者警告。安装前请核对 Release 中的校验值。
+
+## 为什么能够零配置使用
+
+- **无需安装运行环境：**安装包已经包含 Electron、Node.js、生产插件图和 Web 资源。
+- **无需使用命令行：**桌面启动器会自动启动和关闭本地 Harness 服务。
+- **无需单独打开浏览器：**完整的 Harness 界面会直接显示在桌面窗口中。
+- **无需开发环境：**下载适用于 macOS、Windows 或 Linux 的原生安装包即可开始使用。
+
+## Beta 状态
+
+`v1.0.0-beta.1` 是首个公开桌面 Beta。启动器和打包运行时已在 Apple Silicon macOS 上完成冒烟测试；原生构建矩阵会分别生成 macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
 
 ## 桌面壳的工作方式
 

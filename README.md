@@ -1,20 +1,24 @@
 # DeepSeek Harness Desktop
 
-English | [中文](README.zh.md)
+[中文（首选）](README.zh.md) | English
 
 [![Desktop installers](https://github.com/lonesafe/deepseek-harness-desktop/actions/workflows/desktop.yml/badge.svg)](https://github.com/lonesafe/deepseek-harness-desktop/actions/workflows/desktop.yml) [![Release](https://img.shields.io/github/v/release/lonesafe/deepseek-harness-desktop?include_prereleases)](https://github.com/lonesafe/deepseek-harness-desktop/releases) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**运行环境零配置 · 简单易用 · 开箱即用 · 零开发门槛**
+
+Download, install, and open. There is no need to install Node.js, pnpm, Electron, run terminal commands, or start a browser manually. The desktop client includes everything required to run DeepSeek Harness; model-provider credentials can be entered inside the application when needed.
+
+[Download DeepSeek Harness Desktop 1.0 Beta 1](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1)
 
 DeepSeek Harness Desktop packages the official open-source [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web experience as a self-contained desktop application for macOS, Linux, and Windows. Electron, Node.js, the production plugin graph, and the Web assets travel inside the installer, so users do not need to install Node.js, pnpm, or launch a browser.
 
 This is a community-maintained desktop distribution. It is not an official DeepSeek product and is not endorsed by or affiliated with DeepSeek AI.
 
-## Beta status
+## Download and start
 
-`v1.0.0-beta.1` is the first public desktop beta. The launcher and packaged runtime have been smoke-tested on Apple Silicon macOS; the native build matrix produces separate macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
-
-## Download
-
-Open the [v1.0.0-beta.1 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1) and choose the package for your system:
+1. Open the [v1.0.0-beta.1 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.1).
+2. Download the package for your system.
+3. Install and open the application.
 
 | Platform | Architecture | Packages |
 |---|---:|---|
@@ -24,6 +28,17 @@ Open the [v1.0.0-beta.1 release](https://github.com/lonesafe/deepseek-harness-de
 | Linux | x64 | AppImage or DEB |
 
 The beta installers are unsigned. macOS may require Control-clicking the app and choosing **Open**; Windows SmartScreen may display an unknown-publisher warning. Review the release checksums before installing.
+
+## Why it is zero setup
+
+- **No runtime installation:** Electron, Node.js, the production plugin graph, and Web assets are included.
+- **No command line:** the desktop launcher starts and stops the local Harness service automatically.
+- **No separate browser:** the complete Harness interface opens in its own desktop window.
+- **No development setup:** download the native package for macOS, Windows, or Linux and start using it.
+
+## Beta status
+
+`v1.0.0-beta.1` is the first public desktop beta. The launcher and packaged runtime have been smoke-tested on Apple Silicon macOS; the native build matrix produces separate macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
 
 ## What the desktop shell does
 

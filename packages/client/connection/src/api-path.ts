@@ -5,3 +5,6 @@
 
 /** Route prefix owning every api request (`/api` and `/api/<anything>`). */
 export const API_PATH = '/api'
+
+/** Remote-portal WebSocket pathname for multiplexed client-initiated RPCs. */
+export const RPC_SOCKET_PATH = `${API_PATH}/rpc`

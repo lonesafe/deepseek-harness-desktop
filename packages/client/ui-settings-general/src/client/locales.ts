@@ -14,6 +14,9 @@ export const zh = {
   'connection.connected': '连接成功',
   'connection.reconnect': '连接异常，点击立即重连',
   'connection.restart': '连接中，点击立即重连',
+  'remote.title': '远程控制',
+  'remote.description': '登录官网并开启后，可从手机或其他设备安全连接这台电脑。',
+  'remote.manage': '管理',
 } satisfies Record<string, string>
 
 /** The settings namespace key union. */
@@ -33,4 +36,7 @@ export const en = {
   'connection.connected': 'Connected',
   'connection.reconnect': 'Disconnected, reconnect now',
   'connection.restart': 'Connecting, restart now',
+  'remote.title': 'Remote control',
+  'remote.description': 'Sign in and enable it to securely use this computer from your phone or another device.',
+  'remote.manage': 'Manage',
 } satisfies Record<SettingsKey, string>

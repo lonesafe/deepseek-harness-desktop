@@ -29,6 +29,8 @@ import { GeneralSection } from './GeneralSection.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
 import { SettingsDocumentStore } from './settings-document-store.ts'
+import { DesktopRemoteAccessRow } from './DesktopRemoteAccessRow.tsx'
+import { isDesktopRenderer } from './desktop-update.ts'
 import { en, zh, type SettingsKey } from './locales.ts'
 
 export type {
@@ -180,4 +182,12 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
   }, GeneralSection))
+  if (typeof globalThis.location === 'object' && isDesktopRenderer(globalThis.location.search)) {
+    ctx.slots.inject('settings.general.item', () => ctx.slots.register({
+      name: 'settings.general.item',
+      id: 'desktop-remote-access',
+      order: 30,
+      locale: NS,
+    }, DesktopRemoteAccessRow))
+  }
 }

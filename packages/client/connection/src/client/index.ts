@@ -13,7 +13,9 @@ import {
 } from './connection.ts'
 import { createFixtureConnectionRpc } from './fixture.ts'
 import { createWebConnectionRpc, type RpcFetch, type RpcStreamOpen } from './rpc.ts'
+import { WebSocketRpcTransport } from './websocket-rpc.ts'
 import { isLoopbackHostname } from '../loopback-hostname.ts'
+import { RPC_SOCKET_PATH } from '../api-path.ts'
 import type { ClientConnectionRpc } from '../rpc.ts'
 
 declare module '@deepseek-ai/cordis' {
@@ -104,6 +106,19 @@ export interface ClientTransportHooks {
 /** Page global carrying {@link ClientTransportHooks}; absent in the served web app. */
 interface ClientTransportGlobal {
   __DSH_TRANSPORT__?: ClientTransportHooks
+  /** Same-origin multiplexed RPC socket injected by the authenticated remote portal. */
+  __DSH_REMOTE_RPC__?: unknown
+}
+
+function portalRpcFetch(global: ClientTransportGlobal): RpcFetch | undefined {
+  if (global.__DSH_REMOTE_RPC__ !== RPC_SOCKET_PATH) return undefined
+  const remote = new WebSocketRpcTransport(RPC_SOCKET_PATH)
+  return async (input, init) => {
+    if (init.method !== 'POST' || typeof init.body !== 'string') {
+      throw new Error('remote portal RPC requires a JSON POST request')
+    }
+    return remote.request(input.pathname, JSON.parse(init.body), init.signal ?? undefined)
+  }
 }
 
 /**
@@ -185,8 +200,12 @@ export function apply(ctx: Context): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureRpc = fixture ? createFixtureConnectionRpc() : undefined
-  const transport = (globalThis as ClientTransportGlobal).__DSH_TRANSPORT__
-  const rpc = fixtureRpc ?? createWebConnectionRpc(transport?.fetch, transport?.openStream)
+  const clientGlobal = globalThis as ClientTransportGlobal
+  const transport = clientGlobal.__DSH_TRANSPORT__
+  const rpc = fixtureRpc ?? createWebConnectionRpc(
+    transport?.fetch ?? portalRpcFetch(clientGlobal),
+    transport?.openStream,
+  )
   let generationSource: ConnectionGenerationSource | undefined
   let owner: ConnectionOwner | undefined
   let generationId = 0

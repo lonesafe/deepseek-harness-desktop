@@ -31,8 +31,9 @@ import {
   DESKTOP_UPDATE_ACTION_URL, DESKTOP_UPDATE_CANCEL_URL, desktopClientURL,
   downloadDesktopUpdate, latestDesktopUpdate,
 } from './app-update.ts'
+import { APP_NAME, desktopWindowTitle } from './product.ts'
 
-const APP_NAME = 'DeepSeek Harness'
+const WINDOW_TITLE = desktopWindowTitle(app.getVersion())
 const DESKTOP_REMOTE_ACTION_URL = 'dsh-remote://manage'
 const DESKTOP_UPDATE_STATE_EVENT = 'dsh-desktop-update-state'
 const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
@@ -41,7 +42,7 @@ const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doct
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${APP_NAME}</title>
+  <title>${WINDOW_TITLE}</title>
   <style>
     :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { align-items: center; background: #111827; color: #f9fafb; display: flex; height: 100vh; justify-content: center; margin: 0; }
@@ -172,7 +173,7 @@ function createWindow(): BrowserWindow {
     minHeight: 640,
     show: false,
     backgroundColor: '#111827',
-    title: APP_NAME,
+    title: WINDOW_TITLE,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -184,6 +185,10 @@ function createWindow(): BrowserWindow {
       backgroundThrottling: false,
       devTools: !app.isPackaged,
     },
+  })
+  window.on('page-title-updated', (event) => {
+    event.preventDefault()
+    window.setTitle(WINDOW_TITLE)
   })
   secureWindow(window)
   window.webContents.on('did-finish-load', () => {

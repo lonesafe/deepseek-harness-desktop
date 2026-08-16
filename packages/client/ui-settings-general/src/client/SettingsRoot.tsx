@@ -21,6 +21,7 @@ import type { ConnectionIndicatorState } from '@deepseek-ai/dsh-client-ui-primit
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
 import css from './SettingsRoot.module.css'
 import { DesktopUpdateBadge } from './DesktopUpdateBadge.tsx'
+import { DesktopVersionLabel } from './DesktopVersionLabel.tsx'
 
 const RECOVERY_CONFIRMATION_MS = 2_000
 
@@ -191,6 +192,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         >
           {renderSlot('settings.trigger', { wide })}
         </button>
+        <DesktopVersionLabel wide={wide} />
         <DesktopUpdateBadge wide={wide} />
         <ConnectionIndicator
           state={wide ? connectionIndicator : undefined}

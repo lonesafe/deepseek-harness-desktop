@@ -1,4 +1,4 @@
-# Agent Note: The approval seam — one-shot permission decisions over a waterfall of answerers
+# Agent Note: The approval seam — permission decisions and session-local remembered grants
 
 Status: implemented
 
@@ -27,7 +27,7 @@ One `cordis.yml` entry mounts the seam. Not loading it is the fail-closed opt-ou
 
 The entry alone provides mechanism, not a channel: with no answerer composed, every ask resolves `unavailable` and the asking tool call denies — fail-closed needs no configuration. Composing the ACP app (`@deepseek-ai/dsh-acp-demo`, as in [the acp-agent example's default tree](../../../../examples/acp-agent/README.md)) completes the loop: its [automation-only bridge](../simplification/2026-07-23-acp-automation-only-protocol.md) registers an answerer that sends `session/request_permission` to the owning client with the exact tool-call id and one-shot allow/reject options. `policy: never` is the unattended stance — every ask auto-rejects deterministically, and the current value joins the runtime-context snapshot. `policy` is validated against the closed list at plugin load; anything else throws.
 
-What a composed deployment observes: `allowed-once` lets exactly that call proceed; rejection, dismissal, and channel absence deny with three distinct reasons the model can tell apart; a successful in-turn request lands a durable `approval/asked`/`approval/decided` pair on the asking agent's session log; nothing about a grant persists past the call that asked. An idle request or audit append failure rejects instead of returning an unaudited decision.
+What a composed deployment observes: `allowed-once` lets exactly that call proceed; `allowed-always` also lets the current call proceed and remembers the asker's stable key for equivalent requests in that session; rejection, dismissal, and channel absence deny with three distinct reasons the model can tell apart; and every successful in-turn request lands a durable `approval/asked`/`approval/decided` pair on the asking agent's session log. An idle request or audit append failure rejects instead of returning an unaudited decision. The strict `never` policy overrides a remembered grant.
 
 One ask under this composition, from the sandbox example's recorded `escalation-approved` scenario — the model requests a sandbox escalation, the gate asks, and the automation client selects Allow once:
 
@@ -51,15 +51,15 @@ The `escalation-rejected` twin ends in `{"outcome": "rejected"}` instead: nothin
 
 #### The seam: mechanism and policy split
 
-After validation and a successful `approval/asked` append, the service resolves the `approval/request` waterfall to `allowed-once`, `rejected`, `cancelled`, or `unavailable`. It borrows the readonly request identity and signal, treats abort as `cancelled`, contains answerer failures and invalid returns as `unavailable`, discards late answers, and appends the paired `approval/decided` event. Pre-commit audit failures reject; post-append observer failures cannot undo an authoritative event. `allowed-once` authorizes only the asked action, and `request()` rejects outside an open turn so the audit pair remains inside the durable commit boundary.
+After validation and a successful `approval/asked` append, the service first applies the strict `never` policy, then folds completed `allowed-always` audit pairs for the request's stable key, and only then resolves the `approval/request` waterfall to `allowed-once`, `allowed-always`, `rejected`, `cancelled`, or `unavailable`. It borrows the readonly request identity and signal, treats abort as `cancelled`, contains answerer failures and invalid returns as `unavailable`, rejects `allowed-always` without a key as `unavailable`, discards late answers, and appends the paired `approval/decided` event. Pre-commit audit failures reject; post-append observer failures cannot undo an authoritative event. Both grant outcomes authorize the current action; only `allowed-always` authorizes later matching asks in the same session. `request()` rejects outside an open turn so the audit pair remains inside the durable commit boundary.
 
 Answerers are `approval/request` waterfall listeners. Zero listeners fall through to `unavailable`; a recognizing listener occupies the first-wins decision slot, while an unrecognized agent must delegate with `next()`. Listeners dispose with their fibers, so an unloaded channel fails closed. Because sibling registration order is not deterministic, a deployment composes one terminal answerer and reserves `prepend` for decide-or-delegate gates.
 
-`ApprovalRequest` carries the asking `agent`, `toolName`, optional exact `callId`, human-readable `reason`, and optional `signal`. It uses the `CallId` brand without importing `dsh-tools`, which depends on this seam. Channel adapters correlate any richer call state by `callId`; the approval request does not duplicate tool arguments.
+`ApprovalRequest` carries the asking `agent`, `toolName`, optional exact `callId`, human-readable `reason`, optional `alwaysAllowKey`, and optional `signal`. The stable key remains inside the host-side approval seam and audit log; interactive clients need only know whether the remembered option is available. Generic pre-execute asks key by tool name, while sandbox escalation keys by tool name plus requested target mode. It uses the `CallId` brand without importing `dsh-tools`, which depends on this seam. Channel adapters correlate any richer call state by `callId`; the approval request does not duplicate tool arguments.
 
 #### Ask routing in dsh-tools
 
-`ToolRuntime.execute()` resolves `ask` before dispatch: `allowed-once` proceeds, while rejection, cancellation, and channel absence produce distinct deny reasons. Opportunistic `ctx.get('approval')` consumption lets an absent or unmounted service fail closed without gating the registry fiber. Agent-less execution also fails closed because it has neither an audit session nor a channel owner.
+`ToolRuntime.execute()` resolves `ask` before dispatch: either grant outcome proceeds, while rejection, cancellation, and channel absence produce distinct deny reasons. Opportunistic `ctx.get('approval')` consumption lets an absent or unmounted service fail closed without gating the registry fiber. Agent-less execution also fails closed because it has neither an audit session nor a channel owner.
 
 #### The per-session policy tier
 
@@ -87,7 +87,7 @@ Snapshots record allowed and rejected sandbox escalation through `session/reques
 
 ## Deferred
 
-- **`allow_always` grant storage** — honoring a persistent grant means designing storage, scope identity (call? path? prefix? session? time window?), and revocation; until designed, only the one-shot options are advertised ([the sandbox Agent Note](2026-07-06-sandbox.md) § Escalation records the open scope question).
+- **In-session revocation and cross-session grants** — remembered grants intentionally live in the session audit log and expire with that session. A user-facing revoke control, time windows, path/prefix scopes, and account- or device-wide durable grants require a separate policy and storage design.
 - **A recorded hook-driven `ask` through a composed answerer** — the permission wire is recorded through the sandbox example's escalation branches. The hook matrix's `hook-cc-pretool-ask` pins the no-ApprovalService fallback denial, while the hook-producer-plus-answerer composition remains on the unit tier.
 - **Routing a child agent's approvals to the parent session** — `subagent-acp`'s child auto-answers its own permission requests; delegating them to the parent controller is its own design.
 
@@ -98,13 +98,13 @@ Snapshots record allowed and rejected sandbox escalation through `session/reques
 - **The generic user-questions seam (`ctx.userQuestions`)** — rejected as the approval mechanism: the two share a skeleton (route by agent, block for a human, handle absence), but approval's contract is narrower in every dimension that matters: a closed outcome vocabulary instead of free text, a protocol-native prompt attached to a tool call instead of a generic form, mandatory fail-closed absence, and audit events. Approval therefore does not ride the shipped `packages/interaction/user-questions` / `ask_user_question` elicitation path — an elicitation form is not a permission prompt, and a free-text answer is not a closed outcome; sharing provider plumbing stays open if the two ever converge.
 - **Static optional injection in `dsh-tools`** — rejected: the vendored cordis `Inject` type has no optional flag — the object form maps service names to intercept config, and a declared inject gates the fiber. `ctx.get('approval')` is the documented opportunistic-consumption pattern (the `tool-bash` owner-token lookup, the loop's persistence probe), reads presence per call, and degrades correctly across HMR without extra machinery.
 - **The capability-seam three-package split** — rejected: Service Definition / Service Provider / Consumer fits a seam whose Service Provider is swappable (bash-local vs bash-sandbox). Here the service body is fixed mechanism and the variable part is listeners that live with their owners — splitting would manufacture a Service Provider package with nothing in it ("don't split preemptively").
-- **Offering `allow_always` now** — rejected: the protocol can express it, but honoring it means designing grant storage, scope identity, and revocation (§ Deferred). Advertising an option the harness cannot honor manufactures doomed grants.
+- **A global durable `allow_always` grant** — rejected: an account- or device-wide grant would need explicit storage, revocation, expiry, migration, and more granular resource identity. The shipped session-local audit fold is recoverable, bounded, and asks again in a new session.
 
 ## Consequences
 
 The implemented contract is pinned by the suites in Testing:
 
-- `allowed-once` dispatches one action; every other outcome denies with a distinct reason, and `'never'` rejects before prompting.
+- Both grant outcomes dispatch the current action; `allowed-always` skips later matching prompts in the same session, every non-grant outcome denies with a distinct reason, and `'never'` rejects before remembered-grant lookup or prompting.
 - Missing, foreign, agent-less, throwing, invalid, and disconnected answer paths fail closed.
 - Successful requests route by exact agent ownership and append one replayable, model-invisible audit pair; idle and pre-commit failures reject.
 - ACP ownership keeps decisions inside their session, while a deployment without the service emits no request or audit events.
@@ -118,7 +118,7 @@ Costs and accepted limits:
 ## FAQ
 
 - **What happens in a deployment with no answerer at all (headless, CI)?** Every ask falls through the empty waterfall to `unavailable` and the tool call denies with the "no approval channel is available" reason. Fail-closed is the zero-listener default, not a configuration.
-- **Can a grant persist — "always allow this"?** No. `allowed-once` authorizes the single asked-about action and the service stores nothing between requests; `allow_always` is deliberately not advertised until grant storage is designed (§ Deferred).
+- **Can a grant persist — "always allow this"?** Within one session, yes. `allowed-always` is recovered from the durable audit pair for the same stable rule key; generic asks match the tool name, while sandbox escalations also match the requested target mode. It does not become a global preference, and a new session asks again.
 - **What does the model see of an approval?** Only the tool result the asker derives from the outcome — the audit pair never enters the transcript. The three non-grant reasons are distinct, so the model can tell a human "no" from a dismissed prompt from a missing channel.
 - **Who decides whether a call asks in the first place?** Policy producers: a hook returning `permissionDecision: ask`, any `tools/pre-execute` listener, or the sandbox escalation gate. The seam and the bridge only route and answer; neither injects its own judgment about what deserves a prompt.
 - **What happens when the user dismisses the prompt, or the turn aborts mid-ask?** Dismissal maps to `cancelled` with its own deny text. An already-aborted signal settles `cancelled` without dispatching; an abort during the ask discards the late answer. When both audit appends commit, either path records one pair, never two.

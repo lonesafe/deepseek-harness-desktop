@@ -77,7 +77,7 @@ Workspace 列表与 Session 列表是相互独立的重连基线。`workspace.cr
 ## 已知限制与暂缓事项
 
 - **转发的 Remote 事件寄居在这套 legacy 帧联合里**：`host/remote-event` 住在 `HostFrame` 中，是为了让投递路径复用现有宿主流、不必新开第三条下行通道，因此读起来像是本包拥有 Remote 事件契约。并非如此：名单归 `dsh-api-remotes`，消费端动词是 `ctx.remote.$on`。将来宿主流整体搬离本包时，该帧随之搬走，消费端契约不受影响（[原委](../../../.agents/notes/implemented/architecture/2026-08-10-remote-event-delivery.md)）。
-- **待处理交互状态位于宿主侧**：wire 使用 POST `/api/respond` 加 `RpcReceipt`；`src/api-proxy.ts` 中的表只处理问题，不包含审批条目。
+- **待处理交互状态位于宿主侧**：审批与问题注册表会跨客户端重连保留可应答请求。审批帧会声明是否可使用会话级已记住授权；`respond` 只为这些条目接受 `allowed-always`，规则身份始终只保留在 Host。
 - **预留 seam 不进入 `RpcMethodMap`**：`prompt.mode: 'inject'`、`job.list` 和描述字段 `hostInstanceId` 都是已记录的预留项；模型发现使用 `llm.models`。未知方法会在信封解析时直接失败，而不会返回「尚未实现」错误码。
 - **没有协议版本字段**：客户端与宿主一同发布；只有出现独立发布的客户端后，`host.describe` 才会增加版本协商字段。
 - **搜索失败会包含提供方诊断信息**：网关是单用户本地服务。将其暴露给多名用户的载体必须用可安全公开的诊断信息替代内部搜索细节。

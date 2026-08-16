@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect, useLayoutEffect, useMemo, useRef, useState,
+  type CSSProperties, type KeyboardEvent,
+} from 'react'
+import { createPortal } from 'react-dom'
 import type { JobView } from '@deepseek-ai/dsh-client-runtime/client'
 import { IconChevronDownOutline14, StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -12,6 +16,12 @@ export type JobListActionProps =
 
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_TASKS: readonly JobView[] = []
+
+/** Viewport clearance shared by narrow phones and desktop browser windows. */
+const MENU_VIEWPORT_MARGIN = 12
+
+/** Design width of the job card before a narrow viewport constrains it. */
+const MENU_WIDTH = 336
 
 /** A job the registry still holds open, and whose duration therefore ticks. */
 function isLive(job: JobView): boolean {
@@ -95,8 +105,10 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
   const jobs = useSessions(state => state.jobsBySession[sessionId]) ?? NO_TASKS
   const [open, setOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLUListElement>(null)
 
   const rows = useMemo(() => ordered(jobs), [jobs])
   const liveCount = useMemo(() => jobs.filter(isLive).length, [jobs])
@@ -104,13 +116,65 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
+      if (
+        event.target instanceof Node
+        && !rootRef.current?.contains(event.target)
+        && !menuRef.current?.contains(event.target)
+      ) {
         setOpen(false)
       }
     }
     document.addEventListener('pointerdown', closeOutside)
     return () => { document.removeEventListener('pointerdown', closeOutside) }
   }, [open])
+
+  // The mobile header deliberately clips its action row to keep long titles
+  // and utilities from widening the page. Render the list at document level
+  // and anchor it with fixed coordinates so that clipping cannot hide it.
+  // Placement is recalculated for rotation, dynamic browser chrome, and any
+  // nested scroll container that moves the trigger.
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuStyle(null)
+      return
+    }
+    const place = (): void => {
+      const trigger = triggerRef.current
+      const menu = menuRef.current
+      if (trigger === null || menu === null) return
+      const rect = trigger.getBoundingClientRect()
+      const viewport = window.visualViewport
+      const viewportLeft = viewport?.offsetLeft ?? 0
+      const viewportTop = viewport?.offsetTop ?? 0
+      const viewportWidth = viewport?.width ?? window.innerWidth
+      const viewportHeight = viewport?.height ?? window.innerHeight
+      const width = Math.max(0, Math.min(MENU_WIDTH, viewportWidth - 2 * MENU_VIEWPORT_MARGIN))
+      const minLeft = viewportLeft + MENU_VIEWPORT_MARGIN
+      const maxLeft = viewportLeft + viewportWidth - width - MENU_VIEWPORT_MARGIN
+      const left = Math.min(Math.max(rect.left, minLeft), Math.max(minLeft, maxLeft))
+      const height = menu.offsetHeight
+      const minTop = viewportTop + MENU_VIEWPORT_MARGIN
+      const maxTop = viewportTop + viewportHeight - height - MENU_VIEWPORT_MARGIN
+      const below = rect.bottom + 5
+      const above = rect.top - height - 5
+      const preferredTop = below + height <= viewportTop + viewportHeight - MENU_VIEWPORT_MARGIN
+        ? below
+        : above
+      const top = Math.min(Math.max(preferredTop, minTop), Math.max(minTop, maxTop))
+      setMenuStyle({ left, top, width, visibility: 'visible' })
+    }
+    place()
+    window.addEventListener('scroll', place, true)
+    window.addEventListener('resize', place)
+    window.visualViewport?.addEventListener('scroll', place)
+    window.visualViewport?.addEventListener('resize', place)
+    return () => {
+      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', place)
+      window.visualViewport?.removeEventListener('scroll', place)
+      window.visualViewport?.removeEventListener('resize', place)
+    }
+  }, [open, rows.length])
 
   // The clock only runs while an open list is showing something that moves.
   useEffect(() => {
@@ -162,8 +226,13 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
         <IconChevronDownOutline14 className={open ? css.triggerOpen : undefined} />
       </button>
       {open
-        ? (
-          <ul className={css.menu} aria-label={t('list.aria')}>
+        ? createPortal(
+          <ul
+            ref={menuRef}
+            className={`${css.menu} ${css.menuPortal}`}
+            style={menuStyle ?? undefined}
+            aria-label={t('list.aria')}
+          >
             {rows.map((job) => {
               const live = isLive(job)
               const elapsed = live ? now - job.startedAt : (job.finishedAt ?? job.startedAt) - job.startedAt
@@ -184,7 +253,8 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
                 </li>
               )
             })}
-          </ul>
+          </ul>,
+          document.body,
         )
         : null}
     </div>

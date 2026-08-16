@@ -1,6 +1,7 @@
 /**
- * Service Definition for the approval capability seam, covering requests, cancellation, audit, and per-session policy. Missing
- * answerers fail closed; grants apply only to the requested action.
+ * Service Definition for the approval capability seam, covering requests, cancellation, audit, per-session policy, and
+ * session-local remembered grants. Missing answerers fail closed; every grant first applies to the requested action, while
+ * an explicit `allowed-always` decision also authorizes later requests carrying the same stable key in that session.
  * @module @deepseek-ai/dsh-user-approval
  */
 
@@ -46,11 +47,15 @@ declare module '@deepseek-ai/dsh-session/types' {
       toolName: string
       callId?: CallId
       reason?: string
+      /** Stable identity for a session-local remembered grant; never sent to an interactive client. */
+      alwaysAllowKey?: string
     }
     /**
      * The outcome of a prior `approval/asked` (same `id`) — log-only audit.
      * Exactly one per ask, appended when the outcome is known: a decision, a
-     * cancellation, or the fail-closed `'unavailable'`.
+     * cancellation, or the fail-closed `'unavailable'`. An
+     * `'allowed-always'` outcome remembers the paired ask's non-empty
+     * `alwaysAllowKey` for matching requests in this session.
      */
     'approval/decided': {
       id: ApprovalRequestId
@@ -79,7 +84,7 @@ export { ApprovalRequestId } from './types.ts'
 export type { ApprovalOutcome } from './types.ts'
 
 /** Every {@link ApprovalOutcome}, for runtime normalization of answerer returns. */
-const OUTCOMES: readonly ApprovalOutcome[] = ['allowed-once', 'rejected', 'cancelled', 'unavailable']
+const OUTCOMES: readonly ApprovalOutcome[] = ['allowed-once', 'allowed-always', 'rejected', 'cancelled', 'unavailable']
 
 /**
  * A session's approval policy — what happens to an {@link ApprovalService}
@@ -167,6 +172,11 @@ export interface ApprovalRequest {
   /** The asker's human-readable explanation of WHY it is asking. */
   readonly reason?: string
   /**
+   * Stable identity for equivalent future requests in this session. When
+   * absent, answerers cannot offer or return a remembered grant.
+   */
+  readonly alwaysAllowKey?: string
+  /**
    * Aborting withdraws the question: the request settles `'cancelled'`
    * immediately and a late answer from a still-pending answerer is discarded.
    */
@@ -242,20 +252,26 @@ export class ApprovalService extends Service {
    * The request requires an open turn because the audit pair must be enclosed
    * by the durable log's commit/replay boundary; an idle ask rejects before
    * appending anything. The answerer phase always produces an outcome: an
-   * aborted signal yields `'cancelled'`, a missing or throwing answerer yields
-   * `'unavailable'` (fail closed), and a rogue non-vocabulary return value is
+   * aborted signal yields `'cancelled'`, the `'never'` policy rejects before
+   * consulting remembered grants, and a matching remembered grant resolves
+   * `'allowed-always'` without opening another interactive prompt. A missing or
+   * throwing answerer yields `'unavailable'` (fail closed); a rogue
+   * non-vocabulary return value, or `'allowed-always'` without a stable key, is
    * normalized to `'unavailable'`. A failure that prevents either audit append
    * from committing still rejects because returning an unlogged decision would
    * violate the pair. Session contains post-commit observer failures, so an
    * authoritative append cannot reject the request or suppress its matching
    * audit event.
    * @param req - the pending decision (agent, tool identity, reason, signal).
-   * @returns the closed outcome; `'allowed-once'` is the only grant.
+   * @returns the closed outcome; `'allowed-once'` and `'allowed-always'` grant the current request.
    * @throws when no turn is open or either audit event fails before the session
    *   append commit point.
    */
   async request(req: ApprovalRequest): Promise<ApprovalOutcome> {
     const session = req.agent.session
+    if (req.alwaysAllowKey !== undefined && req.alwaysAllowKey.length === 0) {
+      throw new TypeError('approval alwaysAllowKey must be non-empty')
+    }
     if (!hasOpenTurn(session.events)) {
       throw new Error(
         'approval.request() outside an open turn: the approval/asked + approval/decided audit pair '
@@ -269,6 +285,7 @@ export class ApprovalService extends Service {
       toolName: req.toolName,
       ...req.callId !== undefined ? { callId: req.callId } : {},
       ...req.reason !== undefined ? { reason: req.reason } : {},
+      ...req.alwaysAllowKey !== undefined ? { alwaysAllowKey: req.alwaysAllowKey } : {},
     })
     const outcome = await this.decide(req, session)
     session.append('approval/decided', { id, outcome })
@@ -310,6 +327,9 @@ export class ApprovalService extends Service {
     // documented promise that 'never' rejects deterministically regardless
     // of registration order — only the service's own request path can.
     if (this.effectivePolicy(session) === 'never') return 'rejected'
+    if (req.alwaysAllowKey !== undefined && hasRememberedGrant(session.events, req.alwaysAllowKey)) {
+      return 'allowed-always'
+    }
     // Enter the promise chain BEFORE dispatching: a listener that throws
     // SYNCHRONOUSLY (before its first await) must land in the same rejection
     // path as an async one — `Promise.resolve(call())` would let it escape
@@ -322,7 +342,10 @@ export class ApprovalService extends Service {
     ).then(
       // Normalize a rogue (non-vocabulary) answerer return to the fail-closed
       // outcome instead of leaking it into callers' closed-union switches.
-      outcome => OUTCOMES.includes(outcome) ? outcome : 'unavailable',
+      outcome => OUTCOMES.includes(outcome)
+        && (outcome !== 'allowed-always' || req.alwaysAllowKey !== undefined)
+        ? outcome
+        : 'unavailable',
       // A throwing answerer must fail the QUESTION closed, not the caller's
       // tool call open — the seam contains its callbacks.
       () => 'unavailable',
@@ -342,6 +365,20 @@ export class ApprovalService extends Service {
       })
     })
   }
+}
+
+/** Whether a completed audit pair grants all requests carrying one stable key. */
+function hasRememberedGrant(events: readonly SessionEvent[], key: string): boolean {
+  const keys = new Map<ApprovalRequestId, string>()
+  for (const event of events) {
+    if (event.type === 'approval/asked' && event.data.alwaysAllowKey !== undefined) {
+      keys.set(event.data.id, event.data.alwaysAllowKey)
+    } else if (event.type === 'approval/decided') {
+      if (event.data.outcome === 'allowed-always' && keys.get(event.data.id) === key) return true
+      keys.delete(event.data.id)
+    }
+  }
+  return false
 }
 
 export default ApprovalService

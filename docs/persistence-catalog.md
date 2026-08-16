@@ -155,12 +155,14 @@ Source: [`packages/preset/agent-presets/src/session.ts:26`](../packages/preset/a
   toolName: string
   callId?: CallId
   reason?: string
+  /** Stable identity for a session-local remembered grant; never sent to an interactive client. */
+  alwaysAllowKey?: string
 }
 ```
 
 Types: [CallId](subsystems/core.md)
 
-Source: [`packages/interaction/user-approval/src/index.ts:44`](../packages/interaction/user-approval/src/index.ts)
+Source: [`packages/interaction/user-approval/src/index.ts:45`](../packages/interaction/user-approval/src/index.ts)
 
 <a id="approvaldecided--log-only"></a>
 
@@ -170,7 +172,9 @@ Source: [`packages/interaction/user-approval/src/index.ts:44`](../packages/inter
 /**
  * The outcome of a prior `approval/asked` (same `id`) — log-only audit.
  * Exactly one per ask, appended when the outcome is known: a decision, a
- * cancellation, or the fail-closed `'unavailable'`.
+ * cancellation, or the fail-closed `'unavailable'`. An
+ * `'allowed-always'` outcome remembers the paired ask's non-empty
+ * `alwaysAllowKey` for matching requests in this session.
  */
 'approval/decided': {
   id: ApprovalRequestId
@@ -178,7 +182,7 @@ Source: [`packages/interaction/user-approval/src/index.ts:44`](../packages/inter
 }
 ```
 
-Source: [`packages/interaction/user-approval/src/index.ts:55`](../packages/interaction/user-approval/src/index.ts)
+Source: [`packages/interaction/user-approval/src/index.ts:60`](../packages/interaction/user-approval/src/index.ts)
 
 <a id="approvalpolicy--log-only"></a>
 
@@ -200,7 +204,7 @@ Source: [`packages/interaction/user-approval/src/index.ts:55`](../packages/inter
 }
 ```
 
-Source: [`packages/interaction/user-approval/src/index.ts:67`](../packages/interaction/user-approval/src/index.ts)
+Source: [`packages/interaction/user-approval/src/index.ts:72`](../packages/interaction/user-approval/src/index.ts)
 
 ### `assistant/*`
 

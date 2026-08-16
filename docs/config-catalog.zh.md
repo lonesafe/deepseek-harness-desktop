@@ -2845,7 +2845,7 @@ export interface Config {
 export type ApprovalPolicy = 'ask' | 'never'
 ```
 
-来源：[`packages/interaction/user-approval/src/index.ts:177`](../packages/interaction/user-approval/src/index.ts)
+来源：[`packages/interaction/user-approval/src/index.ts:187`](../packages/interaction/user-approval/src/index.ts)
 
 <a id="deepseek-aidsh-web"></a>
 

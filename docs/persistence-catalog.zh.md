@@ -157,12 +157,14 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
   toolName: string
   callId?: CallId
   reason?: string
+  /** Stable identity for a session-local remembered grant; never sent to an interactive client. */
+  alwaysAllowKey?: string
 }
 ```
 
 类型：[CallId](subsystems/core.md)
 
-来源：[`packages/interaction/user-approval/src/index.ts:44`](../packages/interaction/user-approval/src/index.ts)
+来源：[`packages/interaction/user-approval/src/index.ts:45`](../packages/interaction/user-approval/src/index.ts)
 
 <a id="approvaldecided--log-only"></a>
 
@@ -172,7 +174,9 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 /**
  * The outcome of a prior `approval/asked` (same `id`) — log-only audit.
  * Exactly one per ask, appended when the outcome is known: a decision, a
- * cancellation, or the fail-closed `'unavailable'`.
+ * cancellation, or the fail-closed `'unavailable'`. An
+ * `'allowed-always'` outcome remembers the paired ask's non-empty
+ * `alwaysAllowKey` for matching requests in this session.
  */
 'approval/decided': {
   id: ApprovalRequestId
@@ -180,7 +184,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/interaction/user-approval/src/index.ts:55`](../packages/interaction/user-approval/src/index.ts)
+来源：[`packages/interaction/user-approval/src/index.ts:60`](../packages/interaction/user-approval/src/index.ts)
 
 <a id="approvalpolicy--log-only"></a>
 
@@ -202,7 +206,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }
 ```
 
-来源：[`packages/interaction/user-approval/src/index.ts:67`](../packages/interaction/user-approval/src/index.ts)
+来源：[`packages/interaction/user-approval/src/index.ts:72`](../packages/interaction/user-approval/src/index.ts)
 
 ### `assistant/*`
 

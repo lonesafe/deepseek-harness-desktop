@@ -28,8 +28,25 @@ import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
 import { SessionQueueMirror } from './queue-mirror.ts'
 
-/** Messages requested per history page. */
-export const PAGE_MESSAGES = 50
+const DEFAULT_PAGE_MESSAGES = 50
+const REMOTE_PAGE_MESSAGES = 1
+
+/**
+ * Resolve the history page size before the first Session is opened.
+ * @param remoteRPCPath - runtime-injected RPC path; the remote portal uses `/api/rpc`.
+ * @returns one message for the remote portal, otherwise the normal local page size.
+ */
+export function resolveHistoryPageMessages(remoteRPCPath: unknown): number {
+  return remoteRPCPath === '/api/rpc' ? REMOTE_PAGE_MESSAGES : DEFAULT_PAGE_MESSAGES
+}
+
+/**
+ * Messages requested per history page. The remote portal keeps each mobile
+ * transfer small; direct desktop and LAN pages retain the wider local page.
+ */
+export const PAGE_MESSAGES = resolveHistoryPageMessages(
+  (globalThis as { __DSH_REMOTE_RPC__?: unknown }).__DSH_REMOTE_RPC__,
+)
 
 /** Manager-owned observers of a Session object's local state edges. */
 export interface SessionOptions {

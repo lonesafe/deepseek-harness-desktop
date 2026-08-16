@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-commands/types'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
-import { Session } from '../src/client/sessions/session.ts'
+import { resolveHistoryPageMessages, Session } from '../src/client/sessions/session.ts'
 import type {
   ChatConversationViewNode, ChatLocationNodeIndex, ChatNodeStore, ChatSnapshot,
   ConversationEventInput, ConversationNode, ConversationNodeDefinition,
@@ -22,6 +22,12 @@ import { entries, ev, plainTurn } from './event-script.client.ts'
 
 const SID = 'fk-s1' as SessionId
 const PARENT = 'fk-parent' as SessionId
+
+it('uses one message per remote portal page while keeping direct pages wide', () => {
+  expect(resolveHistoryPageMessages('/api/rpc')).toBe(1)
+  expect(resolveHistoryPageMessages(undefined)).toBe(50)
+  expect(resolveHistoryPageMessages('/api/other')).toBe(50)
+})
 
 afterEach(() => {
   vi.unstubAllGlobals()

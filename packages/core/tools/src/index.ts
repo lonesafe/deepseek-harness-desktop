@@ -581,7 +581,7 @@ export type ToolExecutionResult = ToolExecutionSuccess | ToolExecutionFailure
 
 /**
  * Pre-dispatch decision. `allow` runs the call; `deny` materializes an error;
- * `ask` runs only after an approval service returns `allowed-once` and otherwise
+ * `ask` runs only after an approval service grants this request and otherwise
  * denies. Input rewriting is excluded because arguments are already logged and
  * presented.
  */
@@ -1682,7 +1682,7 @@ export class ToolRuntime extends Service {
    * to deny, and an unmount mid-session degrades the same way on the next ask.
    * An agent-less execution also degrades: without an agent there is no
    * session to audit to and no UI to route to. Otherwise the outcome maps
-   * one-to-one — `allowed-once` proceeds; the three non-grants deny with
+   * one-to-one — either grant proceeds; the three non-grants deny with
    * distinct reasons so the model can tell a human "no" from an absent
    * approval channel.
    */
@@ -1708,10 +1708,12 @@ export class ToolRuntime extends Service {
       toolName: exec.name,
       callId: exec.callId,
       ...ask.reason !== undefined ? { reason: ask.reason } : {},
+      alwaysAllowKey: `tool:${exec.name}`,
       signal: exec.signal,
     })
     switch (outcome) {
-      case 'allowed-once': return { decision: { kind: 'allow' }, approvalCancelled: false }
+      case 'allowed-once':
+      case 'allowed-always': return { decision: { kind: 'allow' }, approvalCancelled: false }
       case 'rejected': return {
         decision: { kind: 'deny', reason: `the user rejected tool "${exec.name}"` },
         approvalCancelled: false,

@@ -754,8 +754,22 @@ describe('ToolRuntime', () => {
 
       expect(result).toMatchObject({ isError: false, content: [{ type: 'text', text: 'hi' }] })
       expect(seen).toHaveLength(1)
-      expect(seen[0]).toMatchObject({ agent, toolName: 'echo', callId: 'c1', reason: 'hook wants a human' })
+      expect(seen[0]).toMatchObject({
+        agent, toolName: 'echo', callId: 'c1', reason: 'hook wants a human', alwaysAllowKey: 'tool:echo',
+      })
       expect(seen[0]?.signal).toBe(controller.signal)
+    })
+
+    it('dispatches the tool when the answerer grants matching requests for the session', async () => {
+      const ctx = await approvalSetup()
+      ctx.on('approval/request', () => Promise.resolve<ApprovalOutcome>('allowed-always'))
+      ctx.on('tools/pre-execute', async (_exec, _next): Promise<PreToolDecision> => ({ kind: 'ask' }))
+
+      const result = await ctx.tools.execute({
+        signal: testToolSignal, callId: CallId('c1'), name: 'echo', arguments: { text: 'remembered' }, agent: fakeAgent(),
+      })
+
+      expect(result).toMatchObject({ isError: false, content: [{ type: 'text', text: 'remembered' }] })
     })
 
     it('denies with the user-rejection reason on rejected', async () => {

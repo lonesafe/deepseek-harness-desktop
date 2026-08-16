@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Channel-neutral one-shot approval seam. `ctx.approval.request(req)` returns `allowed-once`, `rejected`, `cancelled`, or `unavailable`; missing or failing answerers fail closed, and a grant applies only to the requested action. Exact event signatures live in the generated region of [approval.md](../../../docs/subsystems/approval.md#cordis-surface).
+Channel-neutral approval seam. `ctx.approval.request(req)` returns `allowed-once`, `allowed-always`, `rejected`, `cancelled`, or `unavailable`; missing or failing answerers fail closed. `allowed-once` grants only the requested action. `allowed-always` also grants the current action and remembers its Host-authored `alwaysAllowKey` for matching requests in this session. Exact event signatures live in the generated region of [approval.md](../../../docs/subsystems/approval.md#cordis-surface).
 
 Each request must belong to an open agent turn. The service appends a paired `approval/asked` and `approval/decided` audit record, while the model sees only the resulting logged tool outcome. An aborted request resolves `cancelled`; an audit append that fails before commit rejects rather than returning an unlogged decision.
 
@@ -10,7 +10,7 @@ Answerers are `approval/request` waterfall listeners. Return an outcome to answe
 
 `ApprovalPolicy` is `'ask'` or `'never'`. The effective value is the last `approval/policy` event, falling back to config; `setApprovalPolicy()` is the write path. `'never'` rejects before interactive dispatch. Both policies contribute their complete current meaning to the cache-safe runtime-context snapshot.
 
-The tools pipeline routes `ask` decisions through this seam and fails closed when it is absent; the sandboxed bash tool also uses it for escalated retries. The ACP automation bridge answers calls for its own agents through the client's machine policy. Audit events remain log-only, so the model sees only the asking consumer's result. See the [approval-seam Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-approval-seam.md) and [sandbox Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.md).
+The tools pipeline routes `ask` decisions through this seam and fails closed when it is absent; generic asks use one key per tool, while sandbox escalations use one key per tool and target mode. The service derives remembered grants from completed audit pairs before dispatching an interactive answerer. The `never` policy still rejects first. The ACP automation bridge answers calls for its own agents through the client's machine policy and offers only one-shot choices. Audit events remain log-only, so the model sees only the asking consumer's result. See the [approval-seam Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-approval-seam.md) and [sandbox Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.md).
 
 ## Model Experience
 
@@ -57,6 +57,6 @@ Append-only; newly visible content follows the reusable request prefix and does 
 ## Known Limitations and Deferred Work
 
 - **Requests are valid only inside an open turn** — an idle or between-turn caller throws before auditing; a durable out-of-turn approval workflow is deferred.
-- **Only one-shot grants exist** — the outcome vocabulary has `allowed-once` but no `allow-always`, remembered rule, revocation, or grant store; session policy is only `ask` / `never`.
+- **Remembered grants are session-local** — they follow the durable session log and inherited fork seed, have no in-session revocation command, and do not grant requests whose Host omits or changes `alwaysAllowKey`; starting a new session restores interactive approval.
 - **The request carries no tool arguments** — an answerer sees the tool name, reason, and optional call id; the ACP machine channel requires a call id and delegates requests without one.
 - **No built-in answerer** — headless or incompletely composed deployments resolve `unavailable` and fail closed; the service itself never prompts a human.

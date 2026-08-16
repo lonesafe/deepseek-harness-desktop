@@ -22,6 +22,7 @@ import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
+const HISTORY_LOAD_THRESHOLD = 96
 
 /** Active column host when present; otherwise the view-local scroller. */
 function scrollerOf(from: HTMLElement): HTMLElement {
@@ -296,6 +297,15 @@ export function ChatView({
     if (isAtBottom) chatScroll.save(null)
     else if (position !== null) chatScroll.save(position)
     observedTopRef.current = el.scrollTop
+    if (
+      movedByReader
+      && el.scrollTop <= HISTORY_LOAD_THRESHOLD
+      && openState === 'open'
+      && hasMore
+      && !loadingOlder
+    ) {
+      loadOlderAnchored()
+    }
   }
 
   // Bind the scroll listener on the resolved scrollport once per mount;

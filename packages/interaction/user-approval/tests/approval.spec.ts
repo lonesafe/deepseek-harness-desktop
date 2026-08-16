@@ -40,6 +40,15 @@ function requestOf(agent: Agent, overrides: Partial<ApprovalRequest> = {}): Appr
 }
 
 describe('ApprovalService.request', () => {
+  it('rejects an empty remembered-grant key before writing audit events', async () => {
+    const ctx = await mounted()
+    const { agent, appended } = fakeAgent()
+
+    await expect(ctx.approval.request(requestOf(agent, { alwaysAllowKey: '' })))
+      .rejects.toThrow('approval alwaysAllowKey must be non-empty')
+    expect(appended).toHaveLength(0)
+  })
+
   it('throws before appending anything when no turn has ever opened (idle ask)', async () => {
     const ctx = await mounted()
     const { agent, appended } = fakeAgent([])
@@ -68,6 +77,43 @@ describe('ApprovalService.request', () => {
     expect(asked?.data).toMatchObject({ toolName: 'echo', callId: 'call-1', reason: 'hook says ask' })
     expect(decided?.data).toMatchObject({ outcome: 'unavailable' })
     expect(decided?.data['id']).toBe(asked?.data['id'])
+  })
+
+  it('remembers an allowed-always decision for matching requests in the same session', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(ApprovalService)
+    const session = ctx.sessions.create(SessionId('remembered-approval'))
+    session.append('turn/start', { turn: 1 })
+    const agent = { session } as unknown as Agent
+    const answers: ApprovalOutcome[] = ['allowed-always', 'rejected']
+    let asked = 0
+    ctx.on('approval/request', () => Promise.resolve(answers[asked++] ?? 'unavailable'))
+
+    await expect(ctx.approval.request(requestOf(agent, { alwaysAllowKey: 'sandbox:bash:danger-full-access' })))
+      .resolves.toBe('allowed-always')
+    await expect(ctx.approval.request(requestOf(agent, { alwaysAllowKey: 'sandbox:bash:danger-full-access' })))
+      .resolves.toBe('allowed-always')
+    await expect(ctx.approval.request(requestOf(agent, { alwaysAllowKey: 'sandbox:write:danger-full-access' })))
+      .resolves.toBe('rejected')
+
+    expect(asked).toBe(2)
+    expect(session.events.filter(event => event.type === 'approval/asked').map(event => event.data))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ alwaysAllowKey: 'sandbox:bash:danger-full-access' }),
+        expect.objectContaining({ alwaysAllowKey: 'sandbox:write:danger-full-access' }),
+      ]))
+    expect(session.events.filter(event => event.type === 'approval/decided').map(event => event.data.outcome))
+      .toEqual(['allowed-always', 'allowed-always', 'rejected'])
+  })
+
+  it('fails closed when an answerer returns allowed-always for a request without a rule key', async () => {
+    const ctx = await mounted()
+    const { agent, appended } = fakeAgent()
+    ctx.on('approval/request', () => Promise.resolve<ApprovalOutcome>('allowed-always'))
+
+    await expect(ctx.approval.request(requestOf(agent))).resolves.toBe('unavailable')
+    expect(appended[1]?.data).toMatchObject({ outcome: 'unavailable' })
   })
 
   it('omits absent optional fields from the asked audit event', async () => {

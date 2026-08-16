@@ -1,4 +1,5 @@
 import { mkdtempSync, readFileSync, statSync, unlinkSync } from 'node:fs'
+import { spawn as nodeSpawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -118,6 +119,22 @@ async function waitForPidFile(path: string, timeoutMs = 5_000): Promise<number> 
 }
 
 describe('spawnSubprocess', () => {
+  it('hides the Windows console for every managed command', async () => {
+    let windowsHide: boolean | undefined
+    const running = spawnSubprocess(spec('true'), {
+      spillDir,
+      platform: 'win32',
+      taskkill: () => {},
+      spawn: (program, args, options) => {
+        windowsHide = options?.windowsHide
+        return nodeSpawn(program, args, options)
+      },
+    })
+
+    expect((await running.done).exitCode).toBe(0)
+    expect(windowsHide).toBe(true)
+  })
+
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, MAX_TIMER_DELAY_MS + 1])(
     'rejects an invalid grace before spawning: %s',
     (graceMs) => {

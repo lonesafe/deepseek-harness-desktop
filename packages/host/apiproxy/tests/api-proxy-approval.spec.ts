@@ -80,7 +80,7 @@ async function waitForCount(mux: { frames: MuxFrame[] }, type: MuxFrame['type'],
   expect(mux.frames.filter(frame => frame.type === type).length).toBeGreaterThanOrEqual(count)
 }
 
-function answer(rpcId: RpcId, sessionId: unknown, approvalId: ApprovalRequestId, outcome: 'allowed-once' | 'rejected'): Parameters<ApiProxy['respond']>[0] {
+function answer(rpcId: RpcId, sessionId: unknown, approvalId: ApprovalRequestId, outcome: 'allowed-once' | 'allowed-always' | 'rejected'): Parameters<ApiProxy['respond']>[0] {
   return { type: 'client-response', rpcId, result: { ok: true, value: { sessionId, approvalId, outcome } } }
 }
 
@@ -93,7 +93,9 @@ describe('approval pending registry', () => {
 
     const asked = ctx.approval.request({ agent, toolName: 'bash', reason: 'sandbox escalation' })
     const requested = requestedOf(await mux.waitFor('approval/requested'))
-    expect(requested).toMatchObject({ toolName: 'bash', reason: 'sandbox escalation', sessionId: agent.session.id })
+    expect(requested).toMatchObject({
+      toolName: 'bash', reason: 'sandbox escalation', sessionId: agent.session.id, allowAlways: false,
+    })
 
     const envelope = mux.envelopes.find(e => e.payload.type === 'approval/requested') as RpcRequest<MuxFrame>
     const receipt = await api.respond(answer(envelope.rpcId, requested.sessionId, requested.approvalId, 'allowed-once'))
@@ -106,6 +108,29 @@ describe('approval pending registry', () => {
     // The question settled: a duplicate answer is late, not re-decidable.
     const dup = await api.respond(answer(envelope.rpcId, requested.sessionId, requested.approvalId, 'rejected'))
     expect(dup).toEqual({ accepted: false, reason: 'not-pending' })
+    abort.abort()
+  })
+
+  it('offers and remembers allowed-always only when the request supplies a session rule key', async () => {
+    const { ctx, api } = await harness()
+    const abort = new AbortController()
+    const mux = openMux(api, abort)
+    const agent = agentOf(ctx)
+    const request = {
+      agent, toolName: 'bash', reason: 'sandbox escalation', alwaysAllowKey: 'sandbox:bash:danger-full-access',
+    }
+
+    const first = ctx.approval.request(request)
+    const requested = requestedOf(await mux.waitFor('approval/requested'))
+    expect(requested.allowAlways).toBe(true)
+    const envelope = mux.envelopes.find(e => e.payload.type === 'approval/requested') as RpcRequest<MuxFrame>
+    expect(await api.respond(answer(envelope.rpcId, requested.sessionId, requested.approvalId, 'allowed-always')))
+      .toEqual({ accepted: true })
+    await expect(first).resolves.toBe('allowed-always')
+
+    const requestedCount = mux.frames.filter(frame => frame.type === 'approval/requested').length
+    await expect(ctx.approval.request(request)).resolves.toBe('allowed-always')
+    expect(mux.frames.filter(frame => frame.type === 'approval/requested')).toHaveLength(requestedCount)
     abort.abort()
   })
 
@@ -153,6 +178,9 @@ describe('approval pending registry', () => {
       .toEqual({ accepted: false, reason: 'bad-response' })
     // Malformed payload shape.
     expect(await api.respond({ type: 'client-response', rpcId: envelope.rpcId, result: { ok: true, value: { nonsense: 1 } } }))
+      .toEqual({ accepted: false, reason: 'bad-response' })
+    // A client cannot manufacture a remembered grant when the request did not offer one.
+    expect(await api.respond(answer(envelope.rpcId, requested.sessionId, requested.approvalId, 'allowed-always')))
       .toEqual({ accepted: false, reason: 'bad-response' })
     abort.abort()
   })

@@ -1230,6 +1230,23 @@ describe('ChatView', () => {
     expect(view.getByText('加载中…')).toBeTruthy()
   })
 
+  it('loads an older page automatically when reader scrolling reaches the history head', () => {
+    const h = makeHarness({ nodes: [user(5, 'later')], hasMore: true })
+    const view = render(<h.ChatView {...h.props} />)
+    const scrollport = view.container.querySelector<HTMLElement>('[data-chat-flow]')?.parentElement
+    if (scrollport === null || scrollport === undefined) throw new Error('chat scrollport missing')
+    installScrollMetrics(scrollport, 1_000, 200)
+
+    readerScroll(scrollport, 300)
+    expect(h.loadOlder).not.toHaveBeenCalled()
+    readerScroll(scrollport, 80)
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+
+    act(() => { h.set({ loadingOlder: true }) })
+    readerScroll(scrollport, 40)
+    expect(h.loadOlder).toHaveBeenCalledTimes(1)
+  })
+
   it('shows open error and loading states', () => {
     const h = makeHarness({
       openState: 'error',

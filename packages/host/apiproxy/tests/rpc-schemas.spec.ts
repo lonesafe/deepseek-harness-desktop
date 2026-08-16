@@ -441,8 +441,8 @@ describe('events frame schemas', () => {
     const frames = [
       { type: 'session/event', sessionId: 's', event: { type: 't', seq: 0, time: 1, data: null } },
       { type: 'session/subscribed', sessionId: 's', lastSeq: -1 },
-      { type: 'approval/requested', sessionId: 's', approvalId: 'a', toolName: 'bash', callId: 'c', reason: 'r' },
-      { type: 'approval/resolved', sessionId: 's', approvalId: 'a', outcome: 'allowed-once' },
+      { type: 'approval/requested', sessionId: 's', approvalId: 'a', toolName: 'bash', callId: 'c', reason: 'r', allowAlways: true },
+      { type: 'approval/resolved', sessionId: 's', approvalId: 'a', outcome: 'allowed-always' },
       { type: 'question/requested', sessionId: 's', questions: [{ id: 'q', question: 'Q?', options: [{ label: 'L' }], multiSelect: true }] },
       { type: 'question/resolved', sessionId: 's', questionRpcId: 'r', outcome: 'answered' },
       { type: 'session/queue', sessionId: 's', items: [

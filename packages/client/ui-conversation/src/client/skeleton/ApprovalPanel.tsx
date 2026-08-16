@@ -4,7 +4,7 @@
 // pending, this panel occupies the composer slot in place of the InputBar:
 // an amber "Waiting for approval" strip on the card top, the model's
 // justification as the headline, the paired command in muted code text, and
-// a right-aligned refuse/allow action row. Justification and command are
+// a right-aligned reject/one-shot/remembered action row. Justification and command are
 // unbounded model text, so they scroll inside the card at the shared composer
 // cap (`data-approval-scroll`) and the action row stays outside it — the
 // buttons must be reachable no matter how long the command is.
@@ -58,7 +58,7 @@ function ApprovalFlow({ pending, command, t }: {
   // lands; until then the buttons must not re-fire. An answer failure
   // (rejected receipt / transport) re-arms them for retry.
   const [answered, setAnswered] = useState(false)
-  const answer = (outcome: 'allowed-once' | 'rejected'): void => {
+  const answer = (outcome: 'allowed-once' | 'allowed-always' | 'rejected'): void => {
     setAnswered(true)
     void pending.answer(outcome).catch(() => { setAnswered(false) })
   }
@@ -77,9 +77,14 @@ function ApprovalFlow({ pending, command, t }: {
           <Button variant="outline" className={css.reject} disabled={answered} onClick={() => { answer('rejected') }}>
             {t('approval.reject')}
           </Button>
-          <Button variant="primary" disabled={answered} onClick={() => { answer('allowed-once') }}>
+          <Button variant="outline" disabled={answered} onClick={() => { answer('allowed-once') }}>
             {t('approval.allowOnce')}
           </Button>
+          {pending.allowAlways && (
+            <Button variant="primary" disabled={answered} onClick={() => { answer('allowed-always') }}>
+              {t('approval.allowAlways')}
+            </Button>
+          )}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 [English](approval.md) | 中文
 
-[dsh-user-approval](../../packages/interaction/user-approval) 的用户审批 seam 回答一个问题：这个具体操作是否可以继续？它拥有共享的请求/结果词汇、`ctx.approval` 分发服务、`approval/request` 应答者 waterfall（瀑布式事件）、仅记录日志的审计事件对，以及按会话的 `ask`/`never` 策略。UI 通道可以提供人类应答者；[ACP（Agent Client Protocol）自动化桥接层](../../packages/acp/acp)为其拥有的 agent（智能体）提供一次性机器决策。调用方如 [dsh-tools](../../packages/core/tools) 和 [dsh-tool-bash](../../packages/shell/tool-bash) 消费闭合的结果，除非结果为 `allowed-once`，否则一律拒绝。
+[dsh-user-approval](../../packages/interaction/user-approval) 的用户审批 seam 回答一个问题：这个操作是否可以继续？它拥有共享的请求/结果词汇、`ctx.approval` 分发服务、`approval/request` 应答者 waterfall（瀑布式事件）、仅记录日志的审计事件对、会话级已记住授权，以及按会话的 `ask`/`never` 策略。UI 通道可以提供人类应答者；[ACP（Agent Client Protocol）自动化桥接层](../../packages/acp/acp)为其拥有的 agent（智能体）提供一次性机器决策。调用方如 [dsh-tools](../../packages/core/tools) 和 [dsh-tool-bash](../../packages/shell/tool-bash) 消费闭合的结果，除非结果为 `allowed-once` 或 `allowed-always`，否则一律拒绝。
 
 源码：[`packages/interaction/user-approval/src/index.ts`](../../packages/interaction/user-approval/src/index.ts)
 
@@ -18,14 +18,15 @@
 type ApprovalRequestId = Branded<'ApprovalRequestId'>
 ```
 
-`ApprovalOutcome` 是闭合的，且失败时拒绝。`allowed-once` 仅授权所询问的那一个操作；调用方对 `rejected`、`cancelled` 和 `unavailable` 均执行拒绝。缺失、不负责该请求、抛异常或不合规的应答者会产生 `unavailable`，而非放行。
+`ApprovalOutcome` 是闭合的，且失败时拒绝。`allowed-once` 仅授权所询问的那一个操作；`allowed-always` 还会授权该操作，并在同一会话中记住由 Host 生成的规则键，以匹配后续请求。调用方对 `rejected`、`cancelled` 和 `unavailable` 均执行拒绝。缺失、不负责该请求、抛异常或不合规的应答者会产生 `unavailable`，而非授权访问。
 
 ```ts type-equiv
 /**
- * Closed approval outcomes: a one-shot grant, explicit rejection, withdrawn
- * request, or unavailable answerer. Callers fail closed on `unavailable`.
+ * Closed approval outcomes: a one-shot grant, a grant remembered for matching
+ * requests in this session, explicit rejection, withdrawn request, or
+ * unavailable answerer. Callers fail closed on `unavailable`.
  */
-type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'
+type ApprovalOutcome = 'allowed-once' | 'allowed-always' | 'rejected' | 'cancelled' | 'unavailable'
 ```
 
 ## 按会话策略
@@ -74,6 +75,11 @@ interface ApprovalRequest {
   /** The asker's human-readable explanation of WHY it is asking. */
   readonly reason?: string
   /**
+   * Stable identity for equivalent future requests in this session. When
+   * absent, answerers cannot offer or return a remembered grant.
+   */
+  readonly alwaysAllowKey?: string
+  /**
    * Aborting withdraws the question: the request settles `'cancelled'`
    * immediately and a late answer from a still-pending answerer is discarded.
    */
@@ -83,7 +89,7 @@ interface ApprovalRequest {
 
 ## 分发与审计
 
-`ctx.approval.request(req)` 要求发起请求的会话处于一个尚未结束的轮次内。它追加 `approval/asked`，获取一个结果，追加对应的 `approval/decided`，然后以该结果完成。`never` 策略在服务内部、waterfall 分发之前强制执行，因此即使后来以 `prepend` 注册的应答者也无法绕过它。应答者在负责处理该请求时返回结果，否则调用 `next()` 委托；第一个应答占据唯一的决策槽位。
+`ctx.approval.request(req)` 要求发起请求的会话处于一个尚未结束的轮次内。它追加 `approval/asked`，获取一个结果，追加对应的 `approval/decided`，然后以该结果完成。一对 `allowed-always` 事件会成为持久的已记住规则；后续携带相同非空 `alwaysAllowKey` 的请求无需交互式分发即可解析，并记录自己的审计事件对。`never` 策略在已记住规则和 waterfall 分发之前强制执行，因此两者都无法绕过它。应答者在负责处理该请求时返回结果，否则调用 `next()` 委托；第一个应答占据唯一的决策槽位。缺少规则键时返回 `allowed-always` 会以 `unavailable` 失败关闭。
 
 审计事件仅写入日志，不进入模型 transcript（文本记录）。模型可见的行为是调用方派生的工具结果与当前运行时上下文快照。服务 dispose（资源释放）时会移除其上下文贡献；应答者监听器独立地通过 effect 绑定到其所属插件。
 
@@ -117,15 +123,18 @@ setPolicy(agent: Agent, policy: ApprovalPolicy): void
  * The request requires an open turn because the audit pair must be enclosed
  * by the durable log's commit/replay boundary; an idle ask rejects before
  * appending anything. The answerer phase always produces an outcome: an
- * aborted signal yields `'cancelled'`, a missing or throwing answerer yields
- * `'unavailable'` (fail closed), and a rogue non-vocabulary return value is
+ * aborted signal yields `'cancelled'`, the `'never'` policy rejects before
+ * consulting remembered grants, and a matching remembered grant resolves
+ * `'allowed-always'` without opening another interactive prompt. A missing or
+ * throwing answerer yields `'unavailable'` (fail closed); a rogue
+ * non-vocabulary return value, or `'allowed-always'` without a stable key, is
  * normalized to `'unavailable'`. A failure that prevents either audit append
  * from committing still rejects because returning an unlogged decision would
  * violate the pair. Session contains post-commit observer failures, so an
  * authoritative append cannot reject the request or suppress its matching
  * audit event.
  * @param req - the pending decision (agent, tool identity, reason, signal).
- * @returns the closed outcome; `'allowed-once'` is the only grant.
+ * @returns the closed outcome; `'allowed-once'` and `'allowed-always'` grant the current request.
  * @throws when no turn is open or either audit event fails before the session
  *   append commit point.
  */
@@ -141,7 +150,7 @@ overrideOf(session: Session): ApprovalPolicy | undefined
 
 Types: [Agent](core.md) · [Session](session.md)
 
-Source: [`packages/interaction/user-approval/src/index.ts:192`](../../packages/interaction/user-approval/src/index.ts)
+Source: [`packages/interaction/user-approval/src/index.ts:202`](../../packages/interaction/user-approval/src/index.ts)
 
 <a id="approval-events"></a>
 
@@ -166,5 +175,5 @@ Ask composed answerers for one decision. Return an outcome to claim the request 
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/interaction/user-approval/src/index.ts:30`](../../packages/interaction/user-approval/src/index.ts)
+Source: [`packages/interaction/user-approval/src/index.ts:31`](../../packages/interaction/user-approval/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -495,6 +495,7 @@ describe('createFixtureApi', () => {
     const requested = seen.find(s => s.frame.type === 'approval/requested')
     if (requested === undefined || requested.frame.type !== 'approval/requested') throw new Error('unreachable')
     const approvalId = requested.frame.approvalId
+    expect(requested.frame.allowAlways).toBe(true)
 
     // Routed but malformed answers.
     expect(await api.respond({ type: 'client-response', rpcId: RpcId(requested.rpcId), result: { ok: false, error: { code: 'internal', message: 'x', details: {} } } }))
@@ -504,10 +505,10 @@ describe('createFixtureApi', () => {
     expect(await api.respond({ type: 'client-response', rpcId: RpcId(requested.rpcId), result: { ok: true, value: { approvalId, outcome: 'maybe' } } }))
       .toEqual({ accepted: false, reason: 'bad-response' })
     // The real answer settles the question and broadcasts resolved.
-    expect(await api.respond({ type: 'client-response', rpcId: RpcId(requested.rpcId), result: { ok: true, value: { sessionId: sid('fx-alpha'), approvalId, outcome: 'allowed-once' } } }))
+    expect(await api.respond({ type: 'client-response', rpcId: RpcId(requested.rpcId), result: { ok: true, value: { sessionId: sid('fx-alpha'), approvalId, outcome: 'allowed-always' } } }))
       .toEqual({ accepted: true })
     await vi.waitFor(() => {
-      expect(seen.some(s => s.frame.type === 'approval/resolved' && s.frame.outcome === 'allowed-once')).toBe(true)
+      expect(seen.some(s => s.frame.type === 'approval/resolved' && s.frame.outcome === 'allowed-always')).toBe(true)
     })
     // Settled: a duplicate answer is late, and a fresh mux open replays nothing.
     expect(await api.respond({ type: 'client-response', rpcId: RpcId(requested.rpcId), result: { ok: true, value: { sessionId: sid('fx-alpha'), approvalId, outcome: 'rejected' } } }))

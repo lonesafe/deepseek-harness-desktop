@@ -138,12 +138,12 @@ describe('web e2e: approval takeover keeps its actions reachable', () => {
             viewport: window.innerHeight,
           }
         })
-        expect(geometry.buttons).toBe(2)
+        expect(geometry.buttons).toBe(3)
         expect(geometry.scrolls).toBe(true)
         // One cap for the seat: the panel's text region stops where the
         // composer draft does (sub-pixel tolerance for the shared padding).
         expect(Math.abs(geometry.capped - composerCap)).toBeLessThan(1)
-        // Both buttons stay inside the card AND inside the viewport — the
+        // All buttons stay inside the card AND inside the viewport — the
         // answerable state the cap exists to guarantee.
         expect(geometry.actionsTop).toBeGreaterThan(0)
         expect(geometry.actionsBottom).toBeLessThanOrEqual(geometry.viewport)
@@ -152,7 +152,7 @@ describe('web e2e: approval takeover keeps its actions reachable', () => {
       await page.setViewportSize(original)
     }
 
-    await panel.getByRole('button', { name: 'Allow once' }).click()
+    await panel.getByRole('button', { name: 'Always allow' }).click()
 
     const sessionId = await settled
     if (MODE === 'record') {
@@ -166,7 +166,7 @@ describe('web e2e: approval takeover keeps its actions reachable', () => {
     // macOS, "Read-only file system" on Linux), so the answered transcript is
     // not a platform-neutral golden surface.
     expect(JSON.stringify(sessionEvents.filter(e => e.type === 'approval/decided').at(-1)))
-      .toContain('allowed-once')
+      .toContain('allowed-always')
     const written = await readFile(join(scaffold.workspaceCwd, 'workspace', 'notes.txt'), 'utf8')
     expect(written).toContain(TOKENS.slice(0, 64))
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 20_000 }).toBeGreaterThanOrEqual(1)

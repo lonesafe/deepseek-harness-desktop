@@ -62,6 +62,17 @@
   box-shadow: var(--dsw-shadow-lv3);
 }
 
+/* The session header clips its action row on narrow screens. The job card is
+   portaled to document.body and fixed to the trigger's measured viewport
+   coordinates so it remains visible in portrait mode and inside dialogs. */
+.menuPortal {
+  position: fixed;
+  top: auto;
+  left: auto;
+  z-index: 1100;
+  visibility: hidden;
+}
+
 .row {
   display: flex;
   align-items: center;

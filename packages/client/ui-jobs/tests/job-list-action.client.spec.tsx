@@ -178,6 +178,32 @@ describe('JobListAction duration', () => {
 })
 
 describe('JobListAction dismissal', () => {
+  it('portals and clamps the list inside a portrait mobile viewport', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(390)
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(844)
+    render(<JobListAction {...props([job()])} />)
+    const trigger = screen.getByRole('button')
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      x: 250,
+      y: 20,
+      top: 20,
+      right: 380,
+      bottom: 48,
+      left: 250,
+      width: 130,
+      height: 28,
+      toJSON: () => ({}),
+    })
+
+    fireEvent.click(trigger)
+    const list = screen.getByRole('list', { name: zh['list.aria'] })
+    expect(list.parentElement).toBe(document.body)
+    expect(list.style.width).toBe('336px')
+    expect(list.style.left).toBe('42px')
+    expect(list.style.top).toBe('53px')
+    expect(list.style.visibility).toBe('visible')
+  })
+
   it('closes on Escape and returns focus to the trigger', () => {
     render(<JobListAction {...props([job()])} />)
     const trigger = screen.getByRole('button')

@@ -82,6 +82,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
 
   it('shows a running background job in the session header without a refresh', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-running'))
+    await page.setViewportSize({ width: 390, height: 844 })
     // Point assertion, not a poll: `expect.poll` retries until a predicate
     // holds, so polling for zero passes at t=0 and proves nothing. The
     // "renders nothing without a task" branch is owned by the component suite.
@@ -105,6 +106,13 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     const row = page.getByRole('list', { name: 'Background jobs' }).getByRole('listitem').first()
     await row.waitFor({ timeout: 10_000 })
     await expect.poll(() => row.textContent()).toContain(COMMAND)
+
+    const menuBox = await page.getByRole('list', { name: 'Background jobs' }).boundingBox()
+    expect(menuBox).not.toBeNull()
+    expect(menuBox?.x).toBeGreaterThanOrEqual(12)
+    expect((menuBox?.x ?? 0) + (menuBox?.width ?? 0)).toBeLessThanOrEqual(378)
+    expect(menuBox?.y).toBeGreaterThanOrEqual(12)
+    expect((menuBox?.y ?? 0) + (menuBox?.height ?? 0)).toBeLessThanOrEqual(832)
 
     const snapshot = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(RUNNING_EXPECTED, snapshot, MODE)

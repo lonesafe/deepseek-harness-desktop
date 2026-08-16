@@ -7,7 +7,7 @@
  * @module dsh-subprocess-local/spawn
  */
 
-import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
+import { type ChildProcess, type SpawnOptions, spawn, spawnSync } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { randomBytes } from 'node:crypto'
 import { closeSync, mkdtempSync, openSync, unlinkSync, writeSync } from 'node:fs'
@@ -50,9 +50,11 @@ export function childEnv(extra?: Readonly<NodeJS.ProcessEnv>): NodeJS.ProcessEnv
 export interface SpawnInternals {
   /** Directory for spill files (defaults to the OS temp dir). */
   spillDir?: string
+  /** Process launcher override for platform-option tests. */
+  spawn?: (program: string, args: readonly string[], options: SpawnOptions) => ChildProcess
   /** Windows tree-termination runner (defaults to `taskkill /PID <pid> /T /F`). */
   taskkill?: (pid: number) => void
-  /** Host platform override for signalling decisions. */
+  /** Host platform override for process creation and signalling decisions. */
   platform?: NodeJS.Platform
   /** Linux process-group member probe (defaults to `/proc` inspection). */
   linuxProcessGroupHasLiveMembers?: (processGroupId: number) => boolean | undefined
@@ -329,6 +331,7 @@ export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInter
   }
   const spillDir = internals.spillDir ?? privateSpillDir()
   const platform = internals.platform ?? process.platform
+  const spawnProcess = internals.spawn ?? spawn
   const taskkill = internals.taskkill ?? taskkillProcessTree
   const linuxGroupHasLiveMembers = internals.linuxProcessGroupHasLiveMembers ?? linuxProcessGroupHasLiveMembers
 
@@ -347,7 +350,7 @@ export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInter
   const stdinMode = spec.stdio.stdin
 
   const env = childEnv(spec.env)
-  const child = spawn(program, args, {
+  const child = spawnProcess(program, args, {
     cwd: spec.cwd,
     env,
     stdio: [
@@ -358,6 +361,12 @@ export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInter
     // `detached` gives teardown a tree root on POSIX (its own process group);
     // Windows terminates by root pid through taskkill /T instead.
     detached: platform !== 'win32',
+    // Electron is a GUI process and owns no visible console. Without this,
+    // Windows creates a transient console window for pwsh.exe/cmd.exe and for
+    // the ACL sandbox runner on every tool call. The confined child itself
+    // keeps its existing creation flags and inherits the runner's hidden
+    // environment, avoiding the restricted-token CREATE_NO_WINDOW failure.
+    windowsHide: platform === 'win32',
   })
 
   const collectStream = (mode: SubprocessOutputMode, stream: Readable | null, label: string): OutputCollector | undefined => {

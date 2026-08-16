@@ -686,6 +686,7 @@ interface PendingApproval {
   toolName: string
   callId?: CallId
   reason?: string
+  allowAlways: boolean
   resolve(outcome: ApprovalOutcome): void
 }
 
@@ -700,6 +701,7 @@ function requestedFrame(pending: PendingApproval): RpcRequest<MuxFrame> {
       toolName: pending.toolName,
       ...pending.callId === undefined ? {} : { callId: pending.callId },
       ...pending.reason === undefined ? {} : { reason: pending.reason },
+      allowAlways: pending.allowAlways,
     },
   }
 }
@@ -1481,6 +1483,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           toolName: req.toolName,
           ...req.callId === undefined ? {} : { callId: req.callId },
           ...req.reason === undefined ? {} : { reason: req.reason },
+          allowAlways: req.alwaysAllowKey !== undefined,
           resolve: settle,
         }
         pendingApprovals.set(pending.rpcId, pending)
@@ -3739,7 +3742,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const parsed = approvalResponsePayloadSchema.safeParse(message.result.value)
         // The payload's audit correlation must match the entry the rpcId routed
         // to — a mismatched answer is malformed, not merely late.
-        if (!parsed.success || parsed.data.approvalId !== approval.approvalId || parsed.data.sessionId !== approval.sessionId) {
+        if (!parsed.success
+          || parsed.data.approvalId !== approval.approvalId
+          || parsed.data.sessionId !== approval.sessionId
+          || (parsed.data.outcome === 'allowed-always' && !approval.allowAlways)) {
           return Promise.resolve({ accepted: false, reason: 'bad-response' })
         }
         approval.resolve(parsed.data.outcome)

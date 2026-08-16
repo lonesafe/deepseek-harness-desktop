@@ -11,7 +11,12 @@ import { spawn, type StdioOptions } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import type { Win32DialogWorkerData } from './win32-dialog-worker.ts'
 
-/** Build the worker environment explicitly, including Electron's Node mode. */
+/**
+ * Build the worker environment explicitly, including Electron's Node mode.
+ * @param title - title forwarded to the native folder dialog worker.
+ * @param base - environment inherited by the worker before dialog-specific values are applied.
+ * @returns a fresh worker environment with the dialog title and Electron Node mode.
+ */
 export function dialogWorkerEnvironment(
   title: string,
   base: NodeJS.ProcessEnv = process.env,

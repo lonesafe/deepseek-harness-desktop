@@ -74,11 +74,14 @@ describe('approveEscalation', () => {
     ...over,
   })
 
-  it('grants: returns the requested mode, asking through the approver with the audit reason', async () => {
-    const seen: { reason?: string }[] = []
-    const granted = await approveEscalation(req(), ingredients({ approver: approver('allowed-once', r => seen.push(r as { reason?: string })) }))
+  it('grants: returns the requested mode, asking through the approver with the audit reason and remembered-rule key', async () => {
+    const seen: Array<{ reason?: string; alwaysAllowKey?: string }> = []
+    const granted = await approveEscalation(req(), ingredients({ approver: approver('allowed-once', r => seen.push(r as { reason?: string; alwaysAllowKey?: string })) }))
     expect(granted).toBe('workspace-write')
     expect(seen[0]?.reason).toBe('escalate sandbox to workspace-write: the user asked to write in the workspace')
+    expect(seen[0]?.alwaysAllowKey).toBe('sandbox:bash:workspace-write')
+    await expect(approveEscalation(req(), ingredients({ approver: approver('allowed-always') })))
+      .resolves.toBe('workspace-write')
   })
 
   it('a non-widening request fails closed with its own text and never asks', async () => {

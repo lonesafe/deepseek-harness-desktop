@@ -6,6 +6,7 @@ import { access, chmod, copyFile, mkdir, open, rm } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 
 export const DESKTOP_UPDATE_ACTION_URL = 'dsh-update://download'
+export const DESKTOP_UPDATE_CANCEL_URL = 'dsh-update://cancel'
 const MAX_UPDATE_SIZE = 3 * 1024 * 1024 * 1024
 
 export interface DesktopClientUpdateOptions {
@@ -125,6 +126,7 @@ export async function downloadDesktopUpdate(
   const destination = await unusedDownloadPath(directories.downloads, asset.fileName)
   const handle = await open(temporaryPath, 'wx', 0o600)
   let complete = false
+  let published = false
   try {
     const hash = createHash('sha256')
     const reader = response.body.getReader()
@@ -138,16 +140,22 @@ export async function downloadDesktopUpdate(
       await handle.write(value)
       onProgress?.(received, asset.size)
     }
+    signal?.throwIfAborted()
     await handle.sync()
+    signal?.throwIfAborted()
     if (received !== asset.size) throw new Error('安装包下载不完整')
     if (hash.digest('hex') !== asset.sha256) throw new Error('安装包 SHA-256 校验失败')
     await handle.close()
+    signal?.throwIfAborted()
     await copyFile(temporaryPath, destination, fsConstants.COPYFILE_EXCL)
+    published = true
     if (asset.kind === 'appimage') await chmod(destination, 0o755)
+    signal?.throwIfAborted()
     complete = true
     return destination
   } finally {
     if (!complete) await handle.close().catch(() => {})
+    if (!complete && published) await rm(destination, { force: true })
     await rm(temporaryPath, { force: true })
   }
 }

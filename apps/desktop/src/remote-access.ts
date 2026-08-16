@@ -7,6 +7,7 @@ import { join } from 'node:path'
 const SETTINGS_FILENAME = 'remote-access.json'
 const SETTINGS_VERSION = 1
 const DEFAULT_PORTAL_URL = 'https://dsh.roubsite.com'
+const DEFAULT_TUNNEL_URL = 'wss://remote.dsh.roubsite.com/api/agent/tunnel'
 
 /** Account-owned device credential returned by the portal authorization flow. */
 export interface RemoteDeviceAuthorization {
@@ -47,7 +48,23 @@ export function validatePortalUrl(raw: string): string {
   return parsed.origin
 }
 
-function parseAuthorization(value: unknown): RemoteDeviceAuthorization {
+/** Validate a portal-issued tunnel on either the portal or its dedicated remote authority. */
+export function validateDeviceTunnelUrl(portalUrl: string, raw: string): string {
+  const portal = new URL(validatePortalUrl(portalUrl))
+  const tunnel = new URL(raw)
+  const expectedProtocol = portal.protocol === 'https:' ? 'wss:' : 'ws:'
+  const sameAuthority = tunnel.host === portal.host
+  const dedicatedAuthority = tunnel.hostname === `remote.${portal.hostname}` && tunnel.port === portal.port
+  if (tunnel.protocol !== expectedProtocol || (!sameAuthority && !dedicatedAuthority)
+    || tunnel.username !== '' || tunnel.password !== '' || tunnel.pathname !== '/api/agent/tunnel'
+    || tunnel.search !== '' || tunnel.hash !== '') {
+    throw new Error('authorization.tunnelUrl must use the portal or its dedicated remote authority')
+  }
+  if (portal.origin === DEFAULT_PORTAL_URL && sameAuthority) return DEFAULT_TUNNEL_URL
+  return tunnel.toString()
+}
+
+function parseAuthorization(value: unknown, portalUrl: string): RemoteDeviceAuthorization {
   if (typeof value !== 'object' || value === null) throw new Error('authorization must be an object')
   const candidate = value as Record<string, unknown>
   if (typeof candidate.deviceId !== 'string' || !/^[a-f0-9]{32}$/u.test(candidate.deviceId)) {
@@ -57,12 +74,7 @@ function parseAuthorization(value: unknown): RemoteDeviceAuthorization {
     throw new Error('authorization.deviceToken is invalid')
   }
   if (typeof candidate.tunnelUrl !== 'string') throw new Error('authorization.tunnelUrl is invalid')
-  const tunnel = new URL(candidate.tunnelUrl)
-  const loopback = tunnel.hostname === 'localhost' || tunnel.hostname === '127.0.0.1' || tunnel.hostname === '::1'
-  if ((tunnel.protocol !== 'wss:' && !(tunnel.protocol === 'ws:' && loopback))
-    || tunnel.username !== '' || tunnel.password !== '') {
-    throw new Error('authorization.tunnelUrl must use WSS')
-  }
+  const tunnelUrl = validateDeviceTunnelUrl(portalUrl, candidate.tunnelUrl)
   if (typeof candidate.accountName !== 'string' || candidate.accountName === '' || candidate.accountName.length > 64) {
     throw new Error('authorization.accountName is invalid')
   }
@@ -72,7 +84,7 @@ function parseAuthorization(value: unknown): RemoteDeviceAuthorization {
   return {
     deviceId: candidate.deviceId,
     deviceToken: candidate.deviceToken,
-    tunnelUrl: tunnel.toString(),
+    tunnelUrl,
     accountName: candidate.accountName,
     authorizedAt: candidate.authorizedAt,
   }
@@ -85,11 +97,8 @@ function parsePreference(value: unknown): RemoteAccessPreference {
   if (typeof candidate.portalUrl !== 'string') throw new Error('portalUrl must be a string')
   if (typeof candidate.enabled !== 'boolean') throw new Error('enabled must be boolean')
   const portalUrl = validatePortalUrl(candidate.portalUrl)
-  const authorization = candidate.authorization === undefined ? undefined : parseAuthorization(candidate.authorization)
+  const authorization = candidate.authorization === undefined ? undefined : parseAuthorization(candidate.authorization, portalUrl)
   if (candidate.enabled && authorization === undefined) throw new Error('enabled remote access requires authorization')
-  if (authorization !== undefined && new URL(authorization.tunnelUrl).host !== new URL(portalUrl).host) {
-    throw new Error('authorization.tunnelUrl must use the portal authority')
-  }
   return {
     version: SETTINGS_VERSION,
     portalUrl,

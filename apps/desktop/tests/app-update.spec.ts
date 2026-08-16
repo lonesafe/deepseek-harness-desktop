@@ -97,4 +97,54 @@ describe('desktop portal updates', () => {
       })
     }
   })
+
+  it('cancels an active download and removes every incomplete file', async () => {
+    const first = Buffer.alloc(16 * 1024, 1)
+    const second = Buffer.alloc(16 * 1024, 2)
+    const content = Buffer.concat([first, second])
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-length': String(content.byteLength) })
+      response.write(first)
+      setTimeout(() => { response.end(second) }, 200)
+    })
+    await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
+    try {
+      const address = server.address()
+      if (address === null || typeof address === 'string') throw new Error('test server did not bind')
+      const root = await mkdtemp(join(tmpdir(), 'dsh-app-update-cancel-'))
+      temporaryRoots.push(root)
+      const temporary = join(root, 'temporary')
+      const downloads = join(root, 'downloads')
+      const controller = new AbortController()
+      const asset: DesktopUpdateAsset = {
+        version: '1.0.0-beta.6',
+        fileName: 'DeepSeek-Harness.dmg',
+        downloadURL: `http://127.0.0.1:${address.port}/downloads/id/DeepSeek-Harness.dmg`,
+        size: content.byteLength,
+        sha256: createHash('sha256').update(content).digest('hex'),
+        kind: 'dmg',
+      }
+      await expect(downloadDesktopUpdate(asset, { temporary, downloads }, () => {
+        controller.abort()
+      }, controller.signal)).rejects.toThrow()
+      expect(await readdir(temporary)).toEqual([])
+      expect(await readdir(downloads)).toEqual([])
+
+      const finalController = new AbortController()
+      const finalTemporary = join(root, 'final-temporary')
+      const finalDownloads = join(root, 'final-downloads')
+      await expect(downloadDesktopUpdate(asset, {
+        temporary: finalTemporary,
+        downloads: finalDownloads,
+      }, (received, total) => {
+        if (received === total) finalController.abort()
+      }, finalController.signal)).rejects.toThrow()
+      expect(await readdir(finalTemporary)).toEqual([])
+      expect(await readdir(finalDownloads)).toEqual([])
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => { if (error) reject(error); else resolve() })
+      })
+    }
+  })
 })

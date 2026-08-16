@@ -28,10 +28,14 @@ function dataHref(preview: WorkspaceFilePreview): string | undefined {
 }
 
 function FilePreview({ preview, t }: Pick<WorkspaceFilesProps, 't'> & { preview: WorkspaceFilePreview }) {
+  const [markdownMode, setMarkdownMode] = useState<'preview' | 'source'>('preview')
+  useEffect(() => { setMarkdownMode('preview') }, [preview.path])
   const href = dataHref(preview)
   let body
   if (preview.kind === 'markdown') {
-    body = <div className={css.markdown}><MarkdownText text={preview.content} /></div>
+    body = markdownMode === 'preview'
+      ? <div className={css.markdown}><MarkdownText text={preview.content} /></div>
+      : <pre className={css.textPreview}>{preview.content}</pre>
   } else if (preview.kind === 'text') {
     body = <pre className={css.textPreview}>{preview.content}</pre>
   } else if (preview.kind === 'image' && href !== undefined) {
@@ -52,12 +56,24 @@ function FilePreview({ preview, t }: Pick<WorkspaceFilesProps, 't'> & { preview:
           <strong title={preview.path}>{preview.name}</strong>
           <span>{formatBytes(preview.size)}</span>
         </div>
-        {href !== undefined && (
-          <a className={css.download} href={href} download={preview.name}>
-            <IconDownloadOutline16 />
-            <span>{t('files.download')}</span>
-          </a>
-        )}
+        <div className={css.previewActions}>
+          {preview.kind === 'markdown' && (
+            <div className={css.viewSwitch} role="group" aria-label={t('files.markdownMode')}>
+              <button type="button" aria-pressed={markdownMode === 'preview'} onClick={() => { setMarkdownMode('preview') }}>
+                {t('files.rendered')}
+              </button>
+              <button type="button" aria-pressed={markdownMode === 'source'} onClick={() => { setMarkdownMode('source') }}>
+                {t('files.source')}
+              </button>
+            </div>
+          )}
+          {href !== undefined && (
+            <a className={css.download} href={href} download={preview.name}>
+              <IconDownloadOutline16 />
+              <span>{t('files.download')}</span>
+            </a>
+          )}
+        </div>
       </div>
       <div className={css.previewBody}>{body}</div>
     </>

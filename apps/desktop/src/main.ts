@@ -28,11 +28,13 @@ import {
 import { isAppNavigation, isSafeExternalUrl } from './security.ts'
 import { offerStartupAccountAuthorization } from './startup-account-onboarding.ts'
 import {
-  DESKTOP_UPDATE_ACTION_URL, desktopClientURL, downloadDesktopUpdate, latestDesktopUpdate,
+  DESKTOP_UPDATE_ACTION_URL, DESKTOP_UPDATE_CANCEL_URL, desktopClientURL,
+  downloadDesktopUpdate, latestDesktopUpdate,
 } from './app-update.ts'
 
 const APP_NAME = 'DeepSeek Harness'
 const DESKTOP_REMOTE_ACTION_URL = 'dsh-remote://manage'
+const DESKTOP_UPDATE_STATE_EVENT = 'dsh-desktop-update-state'
 const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html lang="en">
 <head>
@@ -67,6 +69,50 @@ let quitting = false
 let startupOnboardingComplete = false
 let updateAbort: AbortController | undefined
 
+interface DesktopUpdateTransferState {
+  status: 'downloading' | 'verifying' | 'cancelling'
+  version: string
+  fileName: string
+  received: number
+  total: number
+}
+
+type DesktopUpdateUIState =
+  | { status: 'idle' | 'checking' | 'cancelling' }
+  | DesktopUpdateTransferState
+
+let desktopUpdateState: DesktopUpdateUIState = { status: 'idle' }
+
+/** Send only bounded, non-secret update progress into the existing product renderer. */
+function dispatchDesktopUpdateState(window: BrowserWindow, state: DesktopUpdateUIState): void {
+  if (window.isDestroyed() || window.webContents.isDestroyed()) return
+  const event = JSON.stringify(DESKTOP_UPDATE_STATE_EVENT)
+  const detail = JSON.stringify(state).replaceAll('<', '\\u003c')
+  void window.webContents.executeJavaScript(
+    `window.dispatchEvent(new CustomEvent(${event}, { detail: ${detail} }))`,
+    true,
+  ).catch(() => {})
+}
+
+/** Save the current download state and make it visible in the bottom-right progress card. */
+function publishDesktopUpdateState(state: DesktopUpdateUIState): void {
+  desktopUpdateState = state
+  if (mainWindow !== undefined) dispatchDesktopUpdateState(mainWindow, state)
+}
+
+/** Abort the active check/download; the download layer removes its incomplete .part file. */
+function cancelDesktopUpdate(): void {
+  const controller = updateAbort
+  if (controller === undefined) return
+  const current = desktopUpdateState
+  if ('version' in current) {
+    publishDesktopUpdateState({ ...current, status: 'cancelling' })
+  } else {
+    publishDesktopUpdateState({ status: 'cancelling' })
+  }
+  controller.abort()
+}
+
 /** Local Web URL carrying only the desktop facts needed by the update badge. */
 function productPageURL(localUrl: string): string {
   const preference = remoteAccess
@@ -83,6 +129,10 @@ function productPageURL(localUrl: string): string {
 function openExternal(target: string): void {
   if (target === DESKTOP_UPDATE_ACTION_URL) {
     void showUpdateDialog()
+    return
+  }
+  if (target === DESKTOP_UPDATE_CANCEL_URL) {
+    cancelDesktopUpdate()
     return
   }
   if (target === DESKTOP_REMOTE_ACTION_URL) {
@@ -136,6 +186,9 @@ function createWindow(): BrowserWindow {
     },
   })
   secureWindow(window)
+  window.webContents.on('did-finish-load', () => {
+    dispatchDesktopUpdateState(window, desktopUpdateState)
+  })
   window.once('ready-to-show', () => { window.show() })
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = undefined
@@ -472,6 +525,7 @@ async function showUpdateDialog(): Promise<void> {
   if (preference === undefined || updateAbort !== undefined) return
   const controller = new AbortController()
   updateAbort = controller
+  publishDesktopUpdateState({ status: 'checking' })
   installApplicationMenu()
   try {
     const update = await latestDesktopUpdate({
@@ -481,6 +535,7 @@ async function showUpdateDialog(): Promise<void> {
       portalUrl: preference.portalUrl,
     }, controller.signal)
     if (update === undefined) {
+      publishDesktopUpdateState({ status: 'idle' })
       await showMessageBox({
         type: 'info',
         title: '检查更新',
@@ -488,6 +543,7 @@ async function showUpdateDialog(): Promise<void> {
       })
       return
     }
+    publishDesktopUpdateState({ status: 'idle' })
     const { response } = await showMessageBox({
       type: 'info',
       title: '发现新版本',
@@ -500,13 +556,34 @@ async function showUpdateDialog(): Promise<void> {
     })
     if (response !== 0) return
     mainWindow?.setProgressBar(0)
+    publishDesktopUpdateState({
+      status: 'downloading',
+      version: update.version,
+      fileName: update.fileName,
+      received: 0,
+      total: update.size,
+    })
+    let lastProgressUpdate = 0
     const installerPath = await downloadDesktopUpdate(update, {
       temporary: app.getPath('temp'),
       downloads: app.getPath('downloads'),
     }, (received, total) => {
       mainWindow?.setProgressBar(Math.max(0, Math.min(1, received / total)))
+      const now = Date.now()
+      const complete = received >= total
+      if (complete || now - lastProgressUpdate >= 100) {
+        lastProgressUpdate = now
+        publishDesktopUpdateState({
+          status: complete ? 'verifying' : 'downloading',
+          version: update.version,
+          fileName: update.fileName,
+          received,
+          total,
+        })
+      }
     }, controller.signal)
     mainWindow?.setProgressBar(-1)
+    controller.signal.throwIfAborted()
     const openError = await shell.openPath(installerPath)
     if (openError !== '') {
       throw new Error(`安装包已保存到 ${installerPath}，但系统无法打开：${openError}`)
@@ -522,7 +599,10 @@ async function showUpdateDialog(): Promise<void> {
       })
     }
   } finally {
-    if (updateAbort === controller) updateAbort = undefined
+    if (updateAbort === controller) {
+      updateAbort = undefined
+      publishDesktopUpdateState({ status: 'idle' })
+    }
     installApplicationMenu()
   }
 }
@@ -615,7 +695,7 @@ if (!singleInstance) {
     event.preventDefault()
     quitting = true
     authorizationAbort?.abort()
-    updateAbort?.abort()
+    cancelDesktopUpdate()
     void stopBackend().finally(() => { app.quit() })
   })
   void app.whenReady().then(start)

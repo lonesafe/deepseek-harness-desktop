@@ -2,6 +2,23 @@
 
 export const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000
 
+/** Renderer event carrying desktop-owned update download progress. */
+export const DESKTOP_UPDATE_STATE_EVENT = 'dsh-desktop-update-state'
+
+/** Trusted navigation action used to cancel the active desktop update. */
+export const DESKTOP_UPDATE_CANCEL_URL = 'dsh-update://cancel'
+
+/** Desktop-owned download state delivered without exposing Electron APIs to the renderer. */
+export type DesktopUpdateDownloadState =
+  | { status: 'idle' | 'checking' | 'cancelling' }
+  | {
+    status: 'downloading' | 'verifying' | 'cancelling'
+    version: string
+    fileName: string
+    received: number
+    total: number
+  }
+
 /** Trusted desktop facts injected by the Electron main process. */
 export interface DesktopUpdateConfiguration {
   version: string
@@ -63,6 +80,29 @@ export function isDesktopRenderer(search: string): boolean {
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined
+}
+
+/**
+ * Accept only the finite progress states emitted by the desktop shell.
+ * @param value Untrusted custom-event detail received by the renderer.
+ * @returns A validated progress state, or undefined for malformed input.
+ */
+export function desktopUpdateDownloadState(value: unknown): DesktopUpdateDownloadState | undefined {
+  const state = record(value)
+  if (state?.status === 'idle' || state?.status === 'checking') return { status: state.status }
+  if (state?.status === 'cancelling' && state.version === undefined) return { status: 'cancelling' }
+  if (state?.status !== 'downloading' && state?.status !== 'verifying' && state?.status !== 'cancelling') return undefined
+  if (typeof state.version !== 'string' || typeof state.fileName !== 'string'
+    || typeof state.received !== 'number' || !Number.isSafeInteger(state.received) || state.received < 0
+    || typeof state.total !== 'number' || !Number.isSafeInteger(state.total) || state.total <= 0
+    || state.received > state.total) return undefined
+  return {
+    status: state.status,
+    version: state.version,
+    fileName: state.fileName,
+    received: state.received,
+    total: state.total,
+  }
 }
 
 /**

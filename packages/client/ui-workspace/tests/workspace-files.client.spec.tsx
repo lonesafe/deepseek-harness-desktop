@@ -75,6 +75,15 @@ describe('WorkspaceFilesView', () => {
     expect(await screen.findByRole('heading', { name: 'Project files' })).toBeTruthy()
     expect(view.readFile).toHaveBeenCalledWith(workspaceId, 'README.md', expect.any(AbortSignal))
 
+    fireEvent.click(screen.getByRole('button', { name: '源码' }))
+    expect(screen.queryByRole('heading', { name: 'Project files' })).toBeNull()
+    expect(screen.getByText('# Project files')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '源码' }).getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.click(screen.getByRole('button', { name: '预览' }))
+    expect(screen.getByRole('heading', { name: 'Project files' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '预览' }).getAttribute('aria-pressed')).toBe('true')
+
     fireEvent.click(screen.getByRole('button', { name: 'docs' }))
     await waitFor(() => {
       expect(view.listFiles).toHaveBeenCalledWith(workspaceId, 'docs', expect.any(AbortSignal))

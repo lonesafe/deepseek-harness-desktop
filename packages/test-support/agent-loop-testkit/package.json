@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-agent-loop-testkit",
   "description": "Shared prerequisite mounting for tests that exercise the concrete agent loop",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-beta.8",
   "publishConfig": {
     "access": "public"
   },

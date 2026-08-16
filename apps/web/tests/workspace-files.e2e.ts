@@ -60,6 +60,12 @@ describe('web e2e: Workspace files and previews', () => {
     expect(await view.getByText('Remote-safe Markdown.').count()).toBe(1)
     expect(await view.getByRole('link', { name: 'Download file' }).getAttribute('download')).toBe('README.md')
 
+    await view.getByRole('button', { name: 'Source', exact: true }).click()
+    await view.getByText('# Workspace Preview', { exact: false }).waitFor({ timeout: 10_000 })
+    expect(await view.getByRole('heading', { name: 'Workspace Preview' }).count()).toBe(0)
+    await view.getByRole('button', { name: 'Preview', exact: true }).click()
+    await view.getByRole('heading', { name: 'Workspace Preview' }).waitFor({ timeout: 10_000 })
+
     await view.getByRole('button', { name: 'docs', exact: true }).click()
     await view.getByRole('button', { name: /notes\.txt/ }).waitFor({ timeout: 10_000 })
     await view.getByRole('button', { name: 'Root', exact: true }).click()

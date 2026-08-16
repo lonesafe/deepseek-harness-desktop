@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { DesktopUpdateBadge } from '../src/client/DesktopUpdateBadge.tsx'
 import {
-  desktopUpdateConfiguration, fetchDesktopUpdate, UPDATE_CHECK_INTERVAL_MS,
+  DESKTOP_UPDATE_CANCEL_URL, DESKTOP_UPDATE_STATE_EVENT, desktopUpdateConfiguration,
+  fetchDesktopUpdate, UPDATE_CHECK_INTERVAL_MS,
 } from '../src/client/desktop-update.ts'
 
 const desktopSearch = '?dsh_desktop_version=1.0.0-beta.5&dsh_desktop_platform=darwin&dsh_desktop_arch=arm64&dsh_update_origin=https%3A%2F%2Fdsh.roubsite.com'
@@ -80,5 +81,35 @@ describe('DesktopUpdateBadge', () => {
     render(<DesktopUpdateBadge wide />)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('shows desktop download progress and exposes an explicit cancel action', async () => {
+    window.history.replaceState({}, '', desktopSearch)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      update_available: true,
+      release: {
+        version: '1.0.0-beta.6',
+        asset: { file_name: 'package.dmg', download_url: 'https://dsh.roubsite.com/downloads/a/package.dmg' },
+      },
+    }), { status: 200 })))
+    render(<DesktopUpdateBadge wide />)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(DESKTOP_UPDATE_STATE_EVENT, { detail: {
+        status: 'downloading', version: '1.0.0-beta.6', fileName: 'package.dmg', received: 25, total: 100,
+      } }))
+    })
+
+    expect(screen.getByRole('status').textContent).toContain('正在下载更新')
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25')
+    expect(screen.getByText('25%')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '取消更新下载' }).getAttribute('href')).toBe(DESKTOP_UPDATE_CANCEL_URL)
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(DESKTOP_UPDATE_STATE_EVENT, { detail: { status: 'idle' } }))
+    })
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(screen.getByRole('link', { name: /有新版本/u })).toBeTruthy()
   })
 })

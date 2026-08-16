@@ -1,7 +1,7 @@
 /** Browser-based portal device authorization for the Electron shell. */
 
 import { setTimeout as delay } from 'node:timers/promises'
-import type { RemoteDeviceAuthorization } from './remote-access.ts'
+import { validateDeviceTunnelUrl, type RemoteDeviceAuthorization } from './remote-access.ts'
 
 interface DeviceAuthorizationStart {
   device_code: string
@@ -101,17 +101,16 @@ export async function pollDeviceAuthorization(
       || typeof body.account_name !== 'string') {
       throw new Error('Portal returned an invalid device credential.')
     }
-    const tunnel = new URL(body.tunnel_url)
-    const portal = new URL(portalUrl)
-    const expectedProtocol = portal.protocol === 'https:' ? 'wss:' : 'ws:'
-    if (tunnel.protocol !== expectedProtocol || tunnel.host !== portal.host
-      || tunnel.username !== '' || tunnel.password !== '' || tunnel.pathname !== '/api/agent/tunnel') {
+    let tunnelUrl: string
+    try {
+      tunnelUrl = validateDeviceTunnelUrl(portalUrl, body.tunnel_url)
+    } catch {
       throw new Error('Portal returned a device tunnel on an invalid authority.')
     }
     return {
       deviceId: body.device_id,
       deviceToken: body.device_token,
-      tunnelUrl: tunnel.toString(),
+      tunnelUrl,
       accountName: body.account_name,
       authorizedAt: new Date().toISOString(),
     }

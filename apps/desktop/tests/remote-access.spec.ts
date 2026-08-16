@@ -7,6 +7,7 @@ import {
   loadRemoteAccessPreference,
   remoteAccessPreferencePath,
   saveRemoteAccessPreference,
+  validateDeviceTunnelUrl,
   validatePortalUrl,
 } from '../src/remote-access.ts'
 
@@ -60,5 +61,30 @@ describe('desktop remote access preference', () => {
     expect(validatePortalUrl('http://127.0.0.1:8080')).toBe('http://127.0.0.1:8080')
     expect(() => validatePortalUrl('http://portal.example.test')).toThrow(/HTTPS origin/u)
     expect(() => validatePortalUrl('https://portal.example.test/path')).toThrow(/HTTPS origin/u)
+  })
+
+  it('accepts the dedicated remote authority and migrates the official legacy tunnel', () => {
+    expect(validateDeviceTunnelUrl('https://portal.example.test', 'wss://remote.portal.example.test/api/agent/tunnel'))
+      .toBe('wss://remote.portal.example.test/api/agent/tunnel')
+    expect(validateDeviceTunnelUrl('https://dsh.roubsite.com', 'wss://dsh.roubsite.com/api/agent/tunnel'))
+      .toBe('wss://remote.dsh.roubsite.com/api/agent/tunnel')
+    expect(() => validateDeviceTunnelUrl('https://portal.example.test', 'wss://attacker.example/api/agent/tunnel'))
+      .toThrow(/dedicated remote authority/u)
+  })
+
+  it('loads an existing official authorization through the dedicated tunnel without another login', () => {
+    const userData = join(tempRoot(), 'user-data')
+    mkdirSync(userData)
+    writeFileSync(remoteAccessPreferencePath(userData), JSON.stringify({
+      version: 1,
+      portalUrl: 'https://dsh.roubsite.com',
+      enabled: true,
+      authorization: {
+        ...authorization(),
+        tunnelUrl: 'wss://dsh.roubsite.com/api/agent/tunnel',
+      },
+    }))
+    expect(loadRemoteAccessPreference(userData).authorization?.tunnelUrl)
+      .toBe('wss://remote.dsh.roubsite.com/api/agent/tunnel')
   })
 })

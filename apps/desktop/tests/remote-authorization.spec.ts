@@ -46,4 +46,18 @@ describe('portal device authorization', () => {
     expect(credential).toMatchObject({ deviceId: 'a'.repeat(32), accountName: 'tester' })
     expect(fetch).toHaveBeenCalledTimes(2)
   })
+
+  it('accepts a device tunnel on the portal dedicated remote authority', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      status: 'authorized', device_id: 'a'.repeat(32),
+      device_token: 'token-with-at-least-thirty-two-characters',
+      tunnel_url: 'wss://remote.portal.example.test/api/agent/tunnel', account_name: 'tester',
+    }), { status: 200 })))
+    const credential = await pollDeviceAuthorization('https://portal.example.test', {
+      deviceCode: 'd'.repeat(43), userCode: 'ABCD-EFGH',
+      verificationUrl: 'https://portal.example.test/device/authorize',
+      expiresAt: Date.now() + 2_000, intervalMs: 1,
+    })
+    expect(credential.tunnelUrl).toBe('wss://remote.portal.example.test/api/agent/tunnel')
+  })
 })

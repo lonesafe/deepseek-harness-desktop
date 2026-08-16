@@ -24,7 +24,7 @@ const ToolCall = memo(function ToolCall({
     callId,
     toolName,
     block,
-    openFile,
+    ...(openFile === undefined ? {} : { openFile }),
     cwd,
     inspect: () => { inspectCall(callId) },
   }), [callId, toolName, block, openFile, cwd, inspectCall])
@@ -55,7 +55,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
       callId={block.callId}
       toolName={callName(block)}
       block={block}
-      openFile={openFile}
+      {...openFile === undefined ? {} : { openFile }}
       selected={block.callId === selectedCallId}
       cwd={cwd}
       inspectCall={inspectCall}
@@ -70,7 +70,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
               block={child}
               selectedCallId={selectedCallId}
               cwd={cwd}
-              openFile={openFile}
+              {...openFile === undefined ? {} : { openFile }}
               inspectCall={inspectCall}
               t={t}
             />
@@ -97,7 +97,7 @@ export function ToolCallTree({
       block={block}
       selectedCallId={selectedCallId}
       cwd={cwd}
-      openFile={openFile}
+      {...openFile === undefined ? {} : { openFile }}
       inspectCall={inspectCall}
       t={t}
     />

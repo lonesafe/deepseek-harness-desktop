@@ -43,7 +43,7 @@ Platform adapters open the dialog without a shell — spawned native tools on PO
 
 The current GUI opens one local folder through a native picker on macOS, Windows, and Linux. Cancelling changes no state, failures remain retryable, duplicate paths are idempotent, and distinct same-basename paths coexist as separate Workspaces. The selected workspace and its displayed name refresh before a new blank session starts. This picker is now the only route to a workspace ([one-route Note](../simplification/2026-07-31-one-route-to-add-a-workspace.md)): the operator picks an existing directory, or creates one inside the chooser.
 
-The added host, runtime, component, and GUI tests cover the native boundary, request trust checks, cancellation and failure handling, existing-path reuse, same-basename adoption, and the immediate visible-name update. The privileged RPC remains specific to the local desktop carrier; a remote Web directory browser is outside this decision.
+The added host, runtime, component, and GUI tests cover the native boundary, request trust checks, cancellation and failure handling, existing-path reuse, same-basename adoption, and the immediate visible-name update. The privileged `host.pickDirectory` RPC remains loopback-only. A later adaptive-seam decision lets a remote page use the separate listing and creation primitives without crossing this native boundary.
 
 ## Risks
 

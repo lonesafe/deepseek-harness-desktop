@@ -45,9 +45,9 @@ function sessionFakeFor() {
   } satisfies SessionBehaviorOverrides
 }
 
-async function bench() {
+async function bench(isLoopback = true) {
   const runtime = await SlotTestRuntime.create()
-  runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
+  runtime.provide('connection', { api: { settings: {} }, isLoopback })
   // The plugin injects both; these specs exercise no settings path.
   runtime.provide('remote', { $on: () => () => {} })
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
@@ -233,10 +233,17 @@ describe('conversation slot inject API', () => {
   it('openFile (chat view face) resolves against session cwd and calls workspaces.openPath', async () => {
     const b = await bench()
     const { injected } = b.chatViewApi(ROOT)
-    injected.openFile('src/a.ts')
+    injected.openFile?.('src/a.ts')
     await vi.waitFor(() => {
       expect(b.runtime.workspaces.calls).toContainEqual({ method: 'openPath', args: ['/proj/src/a.ts'] })
     })
+    await b.runtime.dispose()
+  })
+
+  it('omits Host-open actions from a remote chat view', async () => {
+    const b = await bench(false)
+    const { injected } = b.chatViewApi(ROOT)
+    expect(injected.openFile).toBeUndefined()
     await b.runtime.dispose()
   })
 

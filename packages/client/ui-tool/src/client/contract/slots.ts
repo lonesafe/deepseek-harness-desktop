@@ -35,7 +35,7 @@ export interface ToolCallOwnerProps {
   /** Session workspace root for relative summaries. */
   cwd?: string | undefined
   /** Open a Tool argument path through the Host. */
-  openFile: (path: string) => void
+  openFile?: ((path: string) => void) | undefined
   /** Inspect this call in the trajectory view when available. */
   inspect?: (() => void) | undefined
 }

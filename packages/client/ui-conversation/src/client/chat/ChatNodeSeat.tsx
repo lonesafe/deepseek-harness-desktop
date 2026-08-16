@@ -27,7 +27,7 @@ export const ChatNodeSeat = memo(function ChatNodeSeat({
     : {
       selectedCallId,
       cwd,
-      openFile,
+      ...(openFile === undefined ? {} : { openFile }),
       inspectCall,
       forkAt,
       loadImage,

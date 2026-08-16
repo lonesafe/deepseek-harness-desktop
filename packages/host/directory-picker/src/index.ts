@@ -87,6 +87,23 @@ export interface DirectoryPickerBrowseCapability {
 }
 
 /**
+ * A desktop Host serves two kinds of operator at once: its loopback window
+ * can reach an OS chooser, while an authenticated remote browser cannot.
+ * The adaptive interaction exposes both primitives so the client surface can
+ * select the reachable one from the page authority without changing the
+ * Host service mounted for the process.
+ */
+export interface DirectoryPickerAdaptiveCapability {
+  kind: 'adaptive'
+  /** Native chooser used only by a loopback client surface. */
+  pick(signal: AbortSignal): Promise<string | null>
+  /** Browser listing used by remote client surfaces. */
+  list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>
+  /** Browser directory creation used by remote client surfaces. */
+  createDirectory(path: string, name: string): Promise<string>
+}
+
+/**
  * Merge-extensible registry of interaction shapes keyed by capability kind: a
  * new backend declaration-merges its shape here (the entry's `kind` literal
  * must equal its key) instead of editing this package.
@@ -94,6 +111,7 @@ export interface DirectoryPickerBrowseCapability {
 export interface DirectoryPickerCapabilities {
   native: DirectoryPickerNativeCapability
   browse: DirectoryPickerBrowseCapability
+  adaptive: DirectoryPickerAdaptiveCapability
 }
 
 /** Union of interaction shapes a backend can provide, derived from the merge-extensible {@link DirectoryPickerCapabilities} map. */

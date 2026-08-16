@@ -2,6 +2,7 @@
 
 import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket, { type RawData } from 'ws'
+import type { RpcMethodMap } from '@deepseek-ai/dsh-client-connection'
 import type { RemoteDeviceAuthorization } from './remote-access.ts'
 
 const MAX_TUNNEL_REQUEST_BODY_BYTES = 24 << 20
@@ -9,25 +10,82 @@ const MAX_TUNNEL_RESPONSE_BODY_BYTES = 128 << 20
 const MAX_LEGACY_RESPONSE_BODY_BYTES = 1 << 20
 const TUNNEL_RESPONSE_CHUNK_BYTES = 512 << 10
 const MAX_TUNNEL_MESSAGE_BYTES = MAX_TUNNEL_REQUEST_BODY_BYTES * 2
-const READ_ONLY_REMOTE_METHODS = new Set([
-  'settings.describe',
-  'credentials.describe',
-])
-const PRIVILEGED_REMOTE_METHODS = new Set([
-  'agentPreset.read',
-  'agentPreset.copy',
-  'agentPreset.openDocument',
-  'agentPreset.remove',
-  'host.pickDirectory',
-  'host.openPath',
-  'settings.openDocument',
-  'settings.update',
-  'settings.replace',
-  'settings.mutate',
-  'credentials.set',
-  'credentials.unset',
-  'llm.discoverModels',
-])
+/** Remote tunnel treatment of one logical RPC endpoint. */
+export type RemoteRpcDisposition = 'forward' | 'read-only' | 'blocked'
+
+/**
+ * Exhaustive portal policy for every payload-direct RPC in IApiClient. A new
+ * method added to RpcMethodMap cannot compile until its remote treatment is
+ * reviewed here. Typert extension endpoints are outside RpcMethodMap and keep
+ * their own service-level policy, so unknown names still fall through.
+ */
+export const REMOTE_RPC_POLICY: Readonly<{ [K in keyof RpcMethodMap]: RemoteRpcDisposition }> = {
+  'session.list': 'forward',
+  'session.search': 'forward',
+  'session.create': 'forward',
+  'session.history': 'forward',
+  'session.models': 'forward',
+  'session.selectModel': 'forward',
+  'session.rename': 'forward',
+  'session.fork': 'forward',
+  'session.prompt': 'forward',
+  'session.attachment': 'forward',
+  'session.updateQueue': 'forward',
+  'session.cancel': 'forward',
+  'subagent.list': 'forward',
+  'subagent.history': 'forward',
+  'subagent.prompt': 'forward',
+  'subagent.interrupt': 'forward',
+  'host.describe': 'forward',
+  'host.pickDirectory': 'blocked',
+  'host.listDirectory': 'forward',
+  'host.createDirectory': 'forward',
+  'host.openPath': 'blocked',
+  'workspace.list': 'forward',
+  'workspace.listFiles': 'forward',
+  'workspace.readFile': 'forward',
+  'workspace.create': 'forward',
+  'workspace.rename': 'forward',
+  'workspace.delete': 'forward',
+  'workspace.insertBefore': 'forward',
+  'workspace.insertSessionBefore': 'forward',
+  'workspace.archiveSession': 'forward',
+  'skill.list': 'forward',
+  'agentPreset.list': 'forward',
+  'agentPreset.select': 'forward',
+  'agentPreset.read': 'blocked',
+  'agentPreset.copy': 'blocked',
+  'agentPreset.openDocument': 'blocked',
+  'agentPreset.remove': 'blocked',
+  'goal.create': 'forward',
+  'goal.edit': 'forward',
+  'goal.pause': 'forward',
+  'goal.resume': 'forward',
+  'goal.complete': 'forward',
+  'goal.clear': 'forward',
+  'settings.describe': 'read-only',
+  'settings.openDocument': 'blocked',
+  'settings.update': 'blocked',
+  'settings.replace': 'blocked',
+  'settings.mutate': 'blocked',
+  'credentials.describe': 'read-only',
+  'credentials.set': 'blocked',
+  'credentials.unset': 'blocked',
+  'llm.providers': 'forward',
+  'llm.models': 'forward',
+  'llm.discoverModels': 'blocked',
+}
+
+/**
+ * Classify one logical RPC method at the desktop trust boundary. Exported so
+ * the interface audit can prove the portal policy remains aligned with the
+ * browser carrier's loopback-only registry.
+ */
+export function remoteRpcDisposition(method: string): RemoteRpcDisposition {
+  return Object.hasOwn(REMOTE_RPC_POLICY, method)
+    ? REMOTE_RPC_POLICY[method as keyof RpcMethodMap]
+    : 'forward'
+}
 
 interface TunnelFrame {
   type: string
@@ -297,13 +355,13 @@ function isApiPath(path: string): boolean {
 function isPrivilegedRequest(target: URL, method: string): boolean {
   if (method.toUpperCase() !== 'POST') return false
   const rpcMethod = rpcMethodFrom(target)
-  return rpcMethod !== undefined && PRIVILEGED_REMOTE_METHODS.has(rpcMethod)
+  return rpcMethod !== undefined && remoteRpcDisposition(rpcMethod) === 'blocked'
 }
 
 function projectReadOnlyResponse(target: URL, method: string, body: Buffer): Buffer {
   if (method.toUpperCase() !== 'POST') return body
   const rpcMethod = rpcMethodFrom(target)
-  if (rpcMethod === undefined || !READ_ONLY_REMOTE_METHODS.has(rpcMethod)) return body
+  if (rpcMethod === undefined || remoteRpcDisposition(rpcMethod) !== 'read-only') return body
   let envelope: unknown
   try {
     envelope = JSON.parse(body.toString('utf8')) as unknown

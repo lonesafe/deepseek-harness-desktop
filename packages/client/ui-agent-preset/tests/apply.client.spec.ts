@@ -69,7 +69,7 @@ const ROSTER_MOVED = {
   },
 }
 
-async function bench() {
+async function bench(isLoopback = true) {
   const ctx = new Context()
   // The host's answer, mutable so a spec can move the default the way the
   // settings surface does and watch who re-reads it.
@@ -83,6 +83,7 @@ async function bench() {
   new TestRemote(ctx)
   const calls: string[] = []
   ctx.provide('connection', {
+    isLoopback,
     api: {
       agentPresets: {
         list: () => { calls.push('list'); return Promise.resolve(ROSTER) },
@@ -195,6 +196,16 @@ describe('ui-agent-preset apply', () => {
     expect(section.options).toMatchObject({ id: 'agent-presets', order: 20 })
     // The nav label is a locale-following thunk; owners resolve it at read time.
     expect(resolveSlotLabel(section.options.label)).toBe('Agent 预设')
+  })
+
+  it('keeps loopback-only preset management out of a remote settings page', async () => {
+    const { ctx, slots } = await bench(false)
+    declareRoot(slots)
+
+    await ctx.plugin({ inject: [...inject], apply }).await()
+
+    expect(slots.entries('settings.general.item')).toHaveLength(1)
+    expect(slots.entries('settings.section')).toHaveLength(0)
   })
 
   it('registers into a declaration that arrives after apply', async () => {

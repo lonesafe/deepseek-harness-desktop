@@ -48,7 +48,7 @@ export const BACKEND_PACKAGES: Record<DirectoryPickerBackendKind, string> = {
  * workspace.
  */
 export const SURFACE_PACKAGES: Record<DirectoryPickerBackendKind, string> = {
-  native: '@deepseek-ai/dsh-client-ui-directory-picker-native',
+  native: '@deepseek-ai/dsh-client-ui-directory-picker-browse',
   browse: '@deepseek-ai/dsh-client-ui-directory-picker-browse',
 }
 
@@ -83,8 +83,15 @@ export async function apply(ctx: Context): Promise<void> {
       }
     }
     try {
-      for (const name of [BACKEND_PACKAGES[backend], SURFACE_PACKAGES[backend]]) {
-        ids.push(await ctx.loader.create({ name }))
+      const entries = [
+        { name: BACKEND_PACKAGES[backend] },
+        {
+          name: SURFACE_PACKAGES[backend],
+          ...(backend === 'native' ? { config: { nativeOnLoopback: true } } : {}),
+        },
+      ]
+      for (const options of entries) {
+        ids.push(await ctx.loader.create(options))
       }
     } catch (cause) {
       // Setup owns the entries it created until it returns the disposer: leaving

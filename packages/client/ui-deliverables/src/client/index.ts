@@ -58,7 +58,7 @@ export function apply(ctx: ClientContext): void {
       // Same claim test the turn-tail chain entry runs: no produced files,
       // no vocabulary — the two surfaces agree by construction.
       const paths = selectProducedFiles(owner)
-      if (paths === null) return undefined
+      if (!connection.isLoopback || paths === null || owner.openFile === undefined) return undefined
       return producedFileMentions(paths, owner.openFile, path => t('produced.open', { name: path }))
     },
   }

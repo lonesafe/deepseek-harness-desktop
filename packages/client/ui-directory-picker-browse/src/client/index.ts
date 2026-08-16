@@ -7,17 +7,24 @@
  * cordis.yml row; no client code branches on a capability kind. The dialog's
  * copy is locale-registered here — the flow package owns its own strings.
  */
+import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the SlotMap merge declaring the directory-flow holes.
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { BrowseFlowInjected } from './flow.ts'
 import { BrowseDirectoryFlow } from './flow.ts'
 
+/** Client-side interaction selection supplied by the auto host chooser. */
+export interface Config {
+  /** Use the OS chooser for loopback pages; remote pages always browse in-app. */
+  nativeOnLoopback?: boolean
+}
+
 /** Locale namespace owning the browser dialog's copy. */
 const LOCALE_NS = 'directory-browser'
 
 /** Required services (cordis fiber inject): the slot registry, the wire-facing workspace service, and locale. */
-export const inject = ['slots', 'workspaces', 'locale']
+export const inject = ['slots', 'workspaces', 'locale', 'connection']
 
 /**
  * Client plugin body: register the dialog's dictionaries and the browse flow
@@ -25,7 +32,8 @@ export const inject = ['slots', 'workspaces', 'locale']
  * ui-workspace entries may activate later or replace their declarations.
  * @param ctx - client root context.
  */
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: ClientContext, config: Config = {}): void {
+  const connection = ctx.get('connection') as ConnectionHandle
   ctx.effect(() => {
     // The two dictionaries land as a unit: if the second registration hits a
     // rival owner of the namespace, the first rolls back before the throw —
@@ -75,6 +83,9 @@ export function apply(ctx: ClientContext): void {
   const injected = (): BrowseFlowInjected => ({
     listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
     createDirectory: (path, name) => ctx.workspaces.createDirectory(path, name),
+    pick: () => ctx.workspaces.pickDirectory(),
+    isLoopback: connection.isLoopback,
+    nativeOnLoopback: config.nativeOnLoopback === true,
     t: ctx.locale.bind(LOCALE_NS),
   })
   // Both declaration lifetimes must be live before the pair installs; the

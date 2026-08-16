@@ -48,7 +48,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 const AUTO = '@deepseek-ai/dsh-host-directory-picker-auto'
 const NATIVE = '@deepseek-ai/dsh-host-directory-picker-native'
 const BROWSE = '@deepseek-ai/dsh-host-directory-picker-browse'
-const NATIVE_SURFACE = '@deepseek-ai/dsh-client-ui-directory-picker-native'
 const BROWSE_SURFACE = '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 
 /**
@@ -113,13 +112,12 @@ async function loadComposition(
     [AUTO, DirectoryPickerAuto],
     [NATIVE, NativeDirectoryPicker],
     [BROWSE, BrowseDirectoryPicker],
-    [NATIVE_SURFACE, surfaceModule(NATIVE_SURFACE)],
     [BROWSE_SURFACE, surfaceModule(BROWSE_SURFACE)],
   ])
   context.loader.internal = {
     version: 'v2',
     async import(specifier: string) {
-      if (options.failSurface === true && (specifier === NATIVE_SURFACE || specifier === BROWSE_SURFACE)) {
+      if (options.failSurface === true && specifier === BROWSE_SURFACE) {
         throw new Error(`surface import failed: ${specifier}`)
       }
       if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
@@ -168,11 +166,12 @@ describe('real Loader composition', () => {
       .map(entry => entry.options.name)
     expect(unloaded).toEqual([])
     expect(entryNames(ctx)).toContain(NATIVE)
-    expect(entryNames(ctx)).toContain(NATIVE_SURFACE)
+    expect(entryNames(ctx)).toContain(BROWSE_SURFACE)
     expect(entryNames(ctx)).not.toContain(BROWSE)
-    expect(entryNames(ctx)).not.toContain(BROWSE_SURFACE)
     const picker = ctx.get('directoryPicker') as DirectoryPicker
-    expect(picker.capability().kind).toBe('native')
+    expect(picker.capability().kind).toBe('adaptive')
+    const surface = [...ctx.loader.entries()].find(entry => entry.options.name === BROWSE_SURFACE)!
+    expect(surface.options.config).toEqual({ nativeOnLoopback: true })
     // The mounted row lives in the Loader's in-memory root tree only — the
     // booted config file must never gain the resolved backend row.
     expect(await readFile(configPath, 'utf8')).not.toContain(NATIVE)
@@ -183,7 +182,7 @@ describe('real Loader composition', () => {
     const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.name === AUTO)!
     await autoEntry.fiber!.dispose()
     expect(entryNames(ctx)).not.toContain(NATIVE)
-    expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
+    expect(entryNames(ctx)).not.toContain(BROWSE_SURFACE)
     expect(ctx.get('directoryPicker')).toBeUndefined()
     // Self-disposing an include-tree entry persists `disabled: true` (loader
     // behavior, not the chooser's); await that debounced write so it cannot
@@ -201,7 +200,6 @@ describe('real Loader composition', () => {
     expect(entryNames(ctx)).toContain(BROWSE)
     expect(entryNames(ctx)).toContain(BROWSE_SURFACE)
     expect(entryNames(ctx)).not.toContain(NATIVE)
-    expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
     const picker = ctx.get('directoryPicker') as DirectoryPicker
     expect(picker.capability().kind).toBe('browse')
   })
@@ -213,7 +211,6 @@ describe('real Loader composition', () => {
     expect(entryNames(ctx)).toContain(BROWSE)
     expect(entryNames(ctx)).toContain(BROWSE_SURFACE)
     expect(entryNames(ctx)).not.toContain(NATIVE)
-    expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
   })
 
   it('unmounts the backend when the surface entry fails to load', { timeout: 60_000 }, async () => {
@@ -237,7 +234,7 @@ describe('real Loader composition', () => {
     renameControl.remainingFailures = 1
     await expect(autoEntry.fiber!.dispose()).resolves.not.toThrow()
     expect(entryNames(ctx)).not.toContain(NATIVE)
-    expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
+    expect(entryNames(ctx)).not.toContain(BROWSE_SURFACE)
     // Same self-dispose persistence as above: let the write land before teardown.
     await expect.poll(async () => await readFile(configPath, 'utf8')).toContain('disabled: true')
     expect(renameControl.injectedFailures).toBe(1)

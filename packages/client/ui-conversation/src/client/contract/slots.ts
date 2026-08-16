@@ -327,7 +327,7 @@ export interface TurnTailOwnerProps {
    * Open a filesystem path through the Host (tool-row semantics; the chat
    * view resolves relative paths against the session cwd).
    */
-  openFile: (path: string) => void
+  openFile?: ((path: string) => void) | undefined
 }
 
 /**
@@ -358,7 +358,7 @@ export interface ChatNodeOwnerProps {
   selectedCallId?: CallId | undefined
   /** Session workspace root; Tool summaries display paths relative to it. */
   cwd?: string | undefined
-  openFile: (path: string) => void
+  openFile?: ((path: string) => void) | undefined
   inspectCall: (callId: CallId) => void
   forkAt: (seq: number) => void
   /** Resolve a session-authorized historical image for inline display. */
@@ -684,7 +684,7 @@ export interface ChatViewInjected {
    * Open a tool-arg filesystem path with the host OS default application
    * (relative paths resolve against the session cwd).
    */
-  openFile: (path: string) => void
+  openFile?: ((path: string) => void) | undefined
   loadOlder: () => void
   /** Resolve a session-authorized historical image for inline display. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>

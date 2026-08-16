@@ -2,7 +2,10 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket, { type RawData, WebSocketServer } from 'ws'
-import { startRemoteTunnel, type RemoteTunnel } from '../src/remote-tunnel.ts'
+import { loopbackOnlyMethods } from '@deepseek-ai/dsh-client-connection'
+import {
+  REMOTE_RPC_POLICY, remoteRpcDisposition, startRemoteTunnel, type RemoteTunnel,
+} from '../src/remote-tunnel.ts'
 
 const closers: (() => Promise<void>)[] = []
 
@@ -74,6 +77,24 @@ function collectChunkedResponse(socket: WebSocket, id: string): Promise<{
 }
 
 describe('desktop remote tunnel', () => {
+  it('classifies every loopback-only RPC and keeps remote workspace browsing available', () => {
+    const loopbackOnly = loopbackOnlyMethods()
+    const projected = new Set(['settings.describe', 'credentials.describe'])
+    for (const method of loopbackOnly) {
+      expect(remoteRpcDisposition(method)).toBe(projected.has(method) ? 'read-only' : 'blocked')
+    }
+    expect(Object.entries(REMOTE_RPC_POLICY)
+      .filter(([, disposition]) => disposition !== 'forward')
+      .map(([method]) => method)
+      .sort())
+      .toEqual([...loopbackOnly].sort())
+    expect(remoteRpcDisposition('host.listDirectory')).toBe('forward')
+    expect(remoteRpcDisposition('host.createDirectory')).toBe('forward')
+    expect(remoteRpcDisposition('workspace.create')).toBe('forward')
+    expect(remoteRpcDisposition('workspace.listFiles')).toBe('forward')
+    expect(remoteRpcDisposition('workspace.readFile')).toBe('forward')
+  })
+
   it('proxies only the fixed loopback origin and exposes configuration as read-only', async () => {
     const local = createServer((request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' })
@@ -241,6 +262,20 @@ describe('desktop remote tunnel', () => {
     }))
     const encodedWriteForbidden = await nextFrame(socket)
     expect(encodedWriteForbidden).toMatchObject({ type: 'http_response', id: '6'.repeat(32), status: 403 })
+
+    socket.send(JSON.stringify({
+      type: 'http_request', id: '9'.repeat(32), method: 'POST', path: '/api/host.pickDirectory', body: '',
+    }))
+    const nativePickerForbidden = await nextFrame(socket)
+    expect(nativePickerForbidden).toMatchObject({ type: 'http_response', id: '9'.repeat(32), status: 403 })
+
+    socket.send(JSON.stringify({
+      type: 'http_request', id: 'a'.repeat(32), method: 'POST', path: '/api/host.listDirectory', body: '',
+    }))
+    const browsePickerForwarded = await nextFrame(socket)
+    expect(browsePickerForwarded).toMatchObject({ type: 'http_response', id: 'a'.repeat(32), status: 200 })
+    expect(JSON.parse(Buffer.from(browsePickerForwarded.body as string, 'base64').toString()))
+      .toEqual({ path: '/api/host.listDirectory', forwardedCookie: null })
 
     socket.send(JSON.stringify({
       type: 'http_request', id: '7'.repeat(32), method: 'POST', path: '/api/settings.describe?malformed=true', body: '',

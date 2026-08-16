@@ -74,16 +74,20 @@ export interface WebSearchCardFace extends CardActions {
 export class WebSearchCardController {
   private readonly form: CardForm<WebSearchSettings>
   private readonly store: SnapshotStore<WebSearchCardState>
-  private credential: CredentialState = { ref: '', configured: false, writable: true }
+  private credential: CredentialState
 
   /**
    * @param scope - the bound settings scope for the `web-search-deepseek` namespace.
    * @param api - wire face used for the credential the section references.
+   * @param allowCredentialWrites - false for a remote browser, whose tunnel
+   * blocks credential mutation even if a failed describe cannot report that fact.
    */
   constructor(
     private readonly scope: SettingsScope<WebSearchSettings>,
     private readonly api: Pick<IApiClient, 'credentials'>,
+    private readonly allowCredentialWrites = true,
   ) {
+    this.credential = { ref: '', configured: false, writable: allowCredentialWrites }
     this.form = new CardForm(
       scope,
       [textField('baseURL'), numberField('maxUses')],
@@ -118,7 +122,7 @@ export class WebSearchCardController {
     if (ref !== this.credential.ref) {
       // A new reference knows nothing yet; keeping the old answer would claim
       // the key is configured under a name nobody has checked.
-      this.credential = { ref, configured: false, writable: true }
+      this.credential = { ref, configured: false, writable: this.allowCredentialWrites }
       this.store.set(this.projection())
     }
     let response: Awaited<ReturnType<IApiClient['credentials']['describe']>>
@@ -136,7 +140,7 @@ export class WebSearchCardController {
       configured: view?.configured ?? false,
       // An unknown reference is treated as writable: the control stays usable
       // and the Host is what refuses, rather than the card guessing a refusal.
-      writable: view?.writable ?? true,
+      writable: this.allowCredentialWrites && (view?.writable ?? true),
     }
     if (next.configured === this.credential.configured && next.writable === this.credential.writable) return
     this.credential = next
@@ -170,6 +174,7 @@ export class WebSearchCardController {
    * @returns whether the Host reports a configured credential afterwards.
    */
   private async writeKey(value: string): Promise<boolean> {
+    if (!this.allowCredentialWrites) return false
     try {
       await this.api.credentials.set({ ref: refOf(this.scope.getSnapshot()), value })
     } catch (_credentialWriteFailure) {

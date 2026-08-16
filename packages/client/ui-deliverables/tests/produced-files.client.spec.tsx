@@ -387,10 +387,14 @@ describe('ProducedFiles row', () => {
       <ProducedFiles matched={['a.md']} openFile={openFile} {...capability(true)} t={t} />,
     )
     const overflowing = ['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md']
+    const row = view.container.querySelector('[data-produced-files-row]')
+    if (!(row instanceof HTMLElement)) throw new Error('produced row missing')
     expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
     for (const unavailable of [capability(false), capability(true, false), capability(undefined)]) {
       view.rerender(<ProducedFiles matched={overflowing} openFile={openFile} {...unavailable} t={t} />)
       expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
+      expect(view.queryByRole('button', { name: '打开 a.md' })).toBeNull()
+      expect(within(row).getByText('a.md').tagName).toBe('SPAN')
     }
   })
 
@@ -463,7 +467,7 @@ describe('plugin registration', () => {
     const hostDescription = { getSnapshot: () => undefined, subscribe: () => () => {} }
     ctx.provide('connection', {
       api: { settings: {} },
-      isLoopback: false,
+      isLoopback: true,
       hostDescription,
     } as never)
     // ui-theme's Appearance row binds a durable scope through these two.
@@ -475,7 +479,7 @@ describe('plugin registration', () => {
     await fiber.await()
     const [entry] = ctx.slots.entries('conversation.chat.turnTail')
     expect(entry).toBeDefined()
-    expect(entry?.inject?.()).toEqual({ isLoopback: false, hooks: { hostDescription } })
+    expect(entry?.inject?.()).toEqual({ isLoopback: true, hooks: { hostDescription } })
 
     // The prose face is live while the plugin is: a produced turn yields a
     // resolver whose matches open through the owner-supplied opener.
@@ -496,5 +500,31 @@ describe('plugin registration', () => {
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
     // Fiber teardown retracts the service: the consumer's ctx.get sees the off state.
     expect((ctx as unknown as { get(name: string): unknown }).get('chatFileMentions')).toBeUndefined()
+  })
+
+  it('keeps produced-file prose inert for a remote browser', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SlotRegistry).await()
+    await ctx.plugin(ConversationEventRegistry).await()
+    ctx.slots.register({
+      name: 'root',
+      children: { 'conversation.chat.turnTail': { kind: 'chain', scope: 'session' } },
+    } as never, () => null)
+    const hostDescription = { getSnapshot: () => undefined, subscribe: () => () => {} }
+    ctx.provide('connection', {
+      api: { settings: {} },
+      isLoopback: false,
+      hostDescription,
+    } as never)
+    ctx.provide('remote', { $on: () => () => {} } as never)
+    ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+    await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+
+    const service = (ctx as unknown as { get(name: string): ChatFileMentions | undefined }).get('chatFileMentions')
+    expect(service?.forClosing(tailOwner(produced([2, 'site/report.html']), 3, vi.fn()))).toBeUndefined()
+
+    await fiber.dispose()
   })
 })

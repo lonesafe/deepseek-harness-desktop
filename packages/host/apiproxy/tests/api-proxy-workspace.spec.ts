@@ -218,6 +218,22 @@ describe('host.listDirectory / host.createDirectory', () => {
     expect(created.result).toEqual({ ok: true, value: { path: '/home/user/fresh' } })
   })
 
+  it('serves native and browse calls through one adaptive desktop capability', async () => {
+    const adaptive: DirectoryPickerCapability = {
+      kind: 'adaptive',
+      pick: async () => '/tmp/native',
+      list: (path, signal) => BROWSE_STUB.list(path, signal),
+      createDirectory: (path, name) => BROWSE_STUB.createDirectory(path, name),
+    }
+    const { api } = await harness(undefined, adaptive)
+    expect((await api.host.pickDirectory(request({}), new AbortController().signal)).result)
+      .toEqual({ ok: true, value: { path: '/tmp/native' } })
+    expect((await api.host.listDirectory(request({}), new AbortController().signal)).result)
+      .toMatchObject({ ok: true, value: { path: '/home/user' } })
+    expect((await api.host.createDirectory(request({ path: '/home/user', name: 'fresh' }))).result)
+      .toEqual({ ok: true, value: { path: '/home/user/fresh' } })
+  })
+
   it('maps typed picker failures onto the wire error codes and folds unknown throws to internal', async () => {
     const { api } = await harness(undefined, BROWSE_STUB)
     expect((await api.host.listDirectory(request({ path: '/denied' }), new AbortController().signal)).result).toMatchObject({

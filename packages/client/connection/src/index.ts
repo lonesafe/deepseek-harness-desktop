@@ -20,6 +20,7 @@ export type {
   HostConnectionRpc,
 } from './rpc.ts'
 export { HostConnectionService } from './rpc-host.ts'
+export type { RpcMethodMap } from '@deepseek-ai/dsh-host-apiproxy/api'
 
 export { API_PATH, HOST_EVENTS_PATH, MUX_EVENTS_PATH, RPC_SOCKET_PATH } from './api-path.ts'
 
@@ -86,7 +87,7 @@ export const Config: z<ConnectionConfig> = z.object({
  * it carries provider ids, display names, and model lists — no endpoints,
  * keys, or key state — and a LAN client's model picker legitimately needs it.
  */
-const PRIVILEGED_METHODS = new Set([
+const LOOPBACK_ONLY_METHODS = [
   // A preset composition names the plugins a session runs, so reading one is
   // reconnaissance; copy and remove rearrange what the deployment offers, and
   // openDocument drives the host desktop — all more than the roster beside
@@ -116,7 +117,20 @@ const PRIVILEGED_METHODS = new Set([
   'credentials.set',
   'credentials.unset',
   'llm.discoverModels',
-])
+] as const
+
+/**
+ * Return the complete payload-direct RPC registry pinned to loopback. The
+ * function form stays present in the built package and gives external trust
+ * boundaries one stable audit input without exposing the mutable Set used by
+ * this route.
+ * @returns the immutable loopback-only method tuple.
+ */
+export function loopbackOnlyMethods(): readonly (typeof LOOPBACK_ONLY_METHODS)[number][] {
+  return LOOPBACK_ONLY_METHODS
+}
+
+const PRIVILEGED_METHODS = new Set<string>(LOOPBACK_ONLY_METHODS)
 
 /**
  * Mounts the API gateway under the browser transport prefix. Every request on

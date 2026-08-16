@@ -396,7 +396,7 @@ export function ChatView({
               useSession={useSession}
               selectedCallId={selectedCallId}
               cwd={cwd}
-              openFile={openFile}
+              {...openFile === undefined ? {} : { openFile }}
               inspectCall={inspectCall}
               forkAt={forkAt}
               loadImage={loadImage}

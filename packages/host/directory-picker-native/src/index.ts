@@ -11,24 +11,28 @@
 
 import { DirectoryPicker } from '@deepseek-ai/dsh-host-directory-picker'
 import type { DirectoryPickerCapability } from '@deepseek-ai/dsh-host-directory-picker'
+import { createBrowseDirectoryCapability } from '@deepseek-ai/dsh-host-directory-picker-browse'
 import { pickNativeDirectory } from './native-picker.ts'
 
 export type { DirectoryPickerInternals, DirectoryPickerRunner } from './native-picker.ts'
 export { pickNativeDirectory } from './native-picker.ts'
 
-/** The `ctx.directoryPicker` native implementation (stable capability object per service life). */
+/** Desktop implementation serving native loopback and browser-based remote selection together. */
 export default class NativeDirectoryPicker extends DirectoryPicker {
-  private readonly nativeCapability: DirectoryPickerCapability = {
-    kind: 'native',
+  private readonly browseCapability = createBrowseDirectoryCapability()
+  private readonly adaptiveCapability: DirectoryPickerCapability = {
+    kind: 'adaptive',
     /* v8 ignore next -- pure forward to pickNativeDirectory (its spec owns behavior); invoking here opens a real chooser. */
     pick: signal => pickNativeDirectory(signal),
+    list: (path, signal) => this.browseCapability.list(path, signal),
+    createDirectory: (path, name) => this.browseCapability.createDirectory(path, name),
   }
 
   /**
-   * The native interaction capability.
-   * @returns the stable `native` capability object.
+   * The desktop interaction capability.
+   * @returns the stable `adaptive` capability object.
    */
   capability(): DirectoryPickerCapability {
-    return this.nativeCapability
+    return this.adaptiveCapability
   }
 }

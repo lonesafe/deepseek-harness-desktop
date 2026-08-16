@@ -53,7 +53,8 @@ export const inject = ['slots', 'locale', 'connection', 'remote']
  * @param ctx - the browser plugin context.
  */
 export function apply(ctx: ClientContext): void {
-  const { api } = ctx.get('connection') as ConnectionHandle
+  const connection = ctx.get('connection') as ConnectionHandle
+  const { api } = connection
   const controller = new AgentPresetSettingsController(api)
   // One roster, four surfaces. The chip is registered in a later scope, so it
   // subscribes here rather than being reached from this one.
@@ -213,12 +214,18 @@ export function apply(ctx: ClientContext): void {
   }, AgentPresetRow))
   // Ordered after Models: choosing a model is routine, and composing an
   // agent is the deployment-shaping act behind it.
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'agent-presets',
-    order: 20,
-    label: () => ctx.locale.bind('settings.agentPreset')('nav'),
-    locale: 'settings.agentPreset',
-    inject: sectionInjected,
-  }, AgentPresetSection))
+  // Preset authoring reads composition files and manages the local roster.
+  // Keep the entire section out of a remote page instead of leaving visible
+  // controls whose corresponding RPCs are intentionally loopback-only. The
+  // ordinary preset picker and read-only running-session label remain remote.
+  if (connection.isLoopback) {
+    ctx.slots.inject('settings.section', () => ctx.slots.register({
+      name: 'settings.section',
+      id: 'agent-presets',
+      order: 20,
+      label: () => ctx.locale.bind('settings.agentPreset')('nav'),
+      locale: 'settings.agentPreset',
+      inject: sectionInjected,
+    }, AgentPresetSection))
+  }
 }

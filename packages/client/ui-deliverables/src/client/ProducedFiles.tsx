@@ -116,23 +116,25 @@ export function ProducedFiles({
     <div className={css.root}>
       <span className={css.label}>{t('produced.label')}</span>
       <div ref={rowRef} className={css.row} data-produced-files-row>
-        {shown.map(path => (
-          <button
-            key={path}
-            type="button"
-            className={css.file}
-            // The full path is the disambiguator when two turns produce files
-            // that share a basename; the chip itself stays short.
-            title={path}
-            aria-label={t('produced.open', { name: path })}
-            onClick={() => { openFile(path) }}
-          >
-            {basename(path)}
-          </button>
-        ))}
+        {shown.map(path => canOpenPath && openFile !== undefined
+          ? (
+            <button
+              key={path}
+              type="button"
+              className={css.file}
+              // The full path is the disambiguator when two turns produce files
+              // that share a basename; the chip itself stays short.
+              title={path}
+              aria-label={t('produced.open', { name: path })}
+              onClick={() => { openFile(path) }}
+            >
+              {basename(path)}
+            </button>
+          )
+          : <span key={path} className={css.file} title={path}>{basename(path)}</span>)}
         {hidden > 0 && <span className={css.more}>{moreLabel(t, hidden)}</span>}
       </div>
-      {hidden > 0 && canOpenPath && (
+      {hidden > 0 && canOpenPath && openFile !== undefined && (
         <button type="button" className={css.showFolder} onClick={() => { openFile('.') }}>
           {t('produced.showInFolder')}
         </button>

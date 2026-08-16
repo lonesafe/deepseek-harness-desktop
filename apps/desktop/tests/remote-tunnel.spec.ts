@@ -155,11 +155,36 @@ describe('desktop remote tunnel', () => {
     expect(response).toMatchObject({ type: 'http_response', id: '1'.repeat(32), status: 200 })
     expect(JSON.parse(Buffer.from(response.body as string, 'base64').toString())).toEqual({ path: '/api/hello?from=relay', forwardedCookie: null })
 
-    const largeResponse = collectChunkedResponse(socket, '8'.repeat(32))
-    socket.send(JSON.stringify({
-      type: 'http_request', id: '8'.repeat(32), method: 'POST', path: '/api/session.history', body: '',
-    }))
-    const chunked = await largeResponse
+    // The native ws implementation may report a successful send with null
+    // instead of undefined. Reproduce that production callback shape so a
+    // successful response-start frame cannot become an `error: null` reply.
+    type LooseSend = (this: WebSocket, ...args: unknown[]) => void
+    const prototype = WebSocket.prototype as unknown as { send: LooseSend }
+    const originalSend = prototype.send
+    prototype.send = function (...args: unknown[]): void {
+      const callbackIndex = typeof args[1] === 'function' ? 1 : 2
+      const callback = args[callbackIndex]
+      if (typeof callback === 'function') {
+        const forwarded = [...args]
+        forwarded[callbackIndex] = (error: unknown): void => {
+          Reflect.apply(callback, undefined, [error ?? null])
+        }
+        Reflect.apply(originalSend, this, forwarded)
+        return
+      }
+      Reflect.apply(originalSend, this, args)
+    }
+    const chunked = await (async () => {
+      try {
+        const largeResponse = collectChunkedResponse(socket, '8'.repeat(32))
+        socket.send(JSON.stringify({
+          type: 'http_request', id: '8'.repeat(32), method: 'POST', path: '/api/session.history', body: '',
+        }))
+        return await largeResponse
+      } finally {
+        prototype.send = originalSend
+      }
+    })()
     expect(chunked.start).toMatchObject({ type: 'http_response_start', id: '8'.repeat(32), status: 200 })
     expect(chunked.chunks.length).toBeGreaterThan(1)
     expect(chunked.chunks.every(chunk => chunk.byteLength <= 512 << 10)).toBe(true)

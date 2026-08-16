@@ -8,7 +8,7 @@
 
 Download, install, and open. There is no need to install Node.js, pnpm, Electron, run terminal commands, or start a browser manually. The desktop client includes everything required to run DeepSeek Harness; model-provider credentials can be entered inside the application when needed.
 
-[Download DeepSeek Harness Desktop 1.0 Beta 4](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.4)
+[Download DeepSeek Harness Desktop 1.0 Beta 5](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.5)
 
 DeepSeek Harness Desktop packages the official open-source [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web experience as a self-contained desktop application for macOS, Linux, and Windows. Electron, Node.js, the production plugin graph, and the Web assets travel inside the installer, so users do not need to install Node.js, pnpm, or launch a browser.
 
@@ -20,7 +20,7 @@ This is a community-maintained desktop distribution. It is not an official DeepS
 
 ## Download and start
 
-1. Open the [v1.0.0-beta.4 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.4).
+1. Open the [v1.0.0-beta.5 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.5).
 2. Download the package for your system.
 3. Install and open the application.
 
@@ -63,7 +63,7 @@ The conversation now includes a **Files** view for browsing the current conversa
 
 ## Beta status
 
-`v1.0.0-beta.4` is the current desktop beta. It adds in-conversation Workspace browsing and common-file previews, fixes HTTP 502 responses when large histories are loaded through portal remote access, and improves the mobile sidebar, conversation area, settings page, and bottom composer layout. The native build matrix produces separate macOS Apple Silicon, macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
+`v1.0.0-beta.5` is the current desktop beta hotfix. It fixes an HTTP 502 that could occur when a platform reports a successful WebSocket send with `null`, causing a large remote-history chunk to be mistaken for a failed send. It also includes Beta 4's in-conversation Workspace browser and common-file previews, plus the mobile sidebar, conversation, settings, and composer layout improvements. The native build matrix produces separate macOS Apple Silicon, macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
 
 <a id="run"></a><a id="run-from-source"></a>
 

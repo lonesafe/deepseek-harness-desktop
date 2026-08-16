@@ -8,7 +8,7 @@
 
 下载安装后直接打开，无需安装 Node.js、pnpm、Electron，无需执行终端命令，也无需手动启动浏览器。桌面客户端已经包含运行 DeepSeek Harness 所需的完整环境；需要调用模型时，可直接在应用内填写服务商要求的凭据。
 
-[下载 DeepSeek Harness Desktop 1.0 Beta 4](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.4)
+[下载 DeepSeek Harness Desktop 1.0 Beta 5](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.5)
 
 DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 体验打包成适用于 macOS、Linux 和 Windows 的自包含桌面应用。安装包内含 Electron、Node.js、生产插件图和 Web 资源，用户无需安装 Node.js、pnpm，也无需手动打开浏览器。
 
@@ -20,7 +20,7 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 
 ## 下载并开始使用
 
-1. 打开 [v1.0.0-beta.4 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.4)。
+1. 打开 [v1.0.0-beta.5 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.5)。
 2. 下载适合当前系统的安装包。
 3. 安装并打开应用。
 
@@ -63,7 +63,7 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 
 ## Beta 状态
 
-`v1.0.0-beta.4` 是当前桌面 Beta，新增对话内工作区文件浏览与常见文件预览，修复了官网远程使用时大体积历史记录返回 HTTP 502 的问题，并改善了手机端侧栏、会话区域、设置页与底部输入框的布局。原生构建矩阵会分别生成 macOS Apple Silicon、macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
+`v1.0.0-beta.5` 是当前桌面 Beta 热修复版，修复了部分系统中 WebSocket 成功回调返回 `null` 时，大体积远程历史分片被误判失败并返回 HTTP 502 的问题。它同时包含 Beta 4 的对话内工作区文件浏览与常见文件预览，以及手机端侧栏、会话区域、设置页与底部输入框布局优化。原生构建矩阵会分别生成 macOS Apple Silicon、macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
 
 <a id="run"></a><a id="run-from-source"></a>
 

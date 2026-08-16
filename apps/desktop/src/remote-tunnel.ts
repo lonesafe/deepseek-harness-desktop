@@ -395,8 +395,8 @@ function sendFrame(socket: WebSocket, frame: TunnelFrame): Promise<void> {
       return
     }
     socket.send(JSON.stringify(frame), (error) => {
-      if (error === undefined) resolve()
-      else reject(error)
+      if (error) reject(error)
+      else resolve()
     })
   })
 }

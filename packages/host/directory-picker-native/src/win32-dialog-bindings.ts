@@ -16,29 +16,31 @@ import type { Win32DialogBindings, Win32FolderDialog } from './win32-dialog-logi
 
 interface KoffiFunction { (...args: unknown[]): unknown }
 interface KoffiLibrary { func(convention: string, name: string, result: string, args: string[]): KoffiFunction }
+interface KoffiDecode {
+  (value: unknown, offsetOrType: unknown, type?: unknown): unknown
+  string16(value: unknown): string | null
+}
 interface Koffi {
   load(path: string): KoffiLibrary
   proto(declaration: string): unknown
   pointer(type: unknown): unknown
   call(pointer: unknown, proto: unknown, ...args: unknown[]): unknown
-  decode(value: unknown, offsetOrType: unknown, type?: unknown): unknown
+  decode: KoffiDecode
   register(fn: (...args: unknown[]) => unknown, type: unknown): unknown
   unregister(callback: unknown): void
   sizeof(type: string): number
-  view(ref: unknown, len: number): ArrayBuffer
 }
 
 /**
- * Read a NUL-terminated UTF-16 string at a native address. koffi's
- * `_Out_ void **` out-params surface a raw address, and
- * `koffi.decode(addr, 'str16')` would dereference it as a pointer — crash
- * on real Windows — so view the memory directly instead.
+ * Read a NUL-terminated UTF-16 string at a native address. Use Koffi's
+ * dedicated pointer decoder so it stops at the terminator. Copying a fixed
+ * 32 KiB view from COM-owned memory can cross an unreadable page and terminate
+ * the worker process before it can report the selected directory.
  */
 function readUtf16(koffi: Koffi, address: unknown): string {
-  const bytes = Buffer.from(koffi.view(address, 32768))
-  let end = 0
-  while (end + 1 < bytes.length && bytes[end] !== 0) end += 2
-  return bytes.toString('utf16le', 0, end)
+  const decoded = koffi.decode.string16(address)
+  if (decoded === null) throw new Error('GetDisplayName returned a null filesystem path')
+  return decoded
 }
 
 const COINIT_APARTMENTTHREADED = 0x2

@@ -19,6 +19,7 @@ import {
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
 import css from './SettingsRoot.module.css'
 import { DesktopUpdateBadge } from './DesktopUpdateBadge.tsx'
+import { DesktopVersionLabel } from './DesktopVersionLabel.tsx'
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
 function navIcon(id: string) {
@@ -152,6 +153,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         >
           {renderSlot('settings.trigger', { wide })}
         </button>
+        <DesktopVersionLabel wide={wide} />
         <DesktopUpdateBadge wide={wide} />
       </div>
       {open && (

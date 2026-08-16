@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { DesktopUpdateBadge } from '../src/client/DesktopUpdateBadge.tsx'
+import { DesktopVersionLabel } from '../src/client/DesktopVersionLabel.tsx'
 import {
   DESKTOP_UPDATE_CANCEL_URL, DESKTOP_UPDATE_STATE_EVENT, desktopUpdateConfiguration,
   fetchDesktopUpdate, UPDATE_CHECK_INTERVAL_MS,
@@ -52,6 +53,18 @@ describe('desktop update configuration', () => {
 })
 
 describe('DesktopUpdateBadge', () => {
+  it('shows the current version beside Settings only in the wide desktop sidebar', () => {
+    window.history.replaceState({}, '', desktopSearch)
+    const { rerender } = render(<DesktopVersionLabel wide />)
+    expect(screen.getByText('v1.0.0-beta.5')).toBeTruthy()
+    rerender(<DesktopVersionLabel wide={false} />)
+    expect(screen.queryByText('v1.0.0-beta.5')).toBeNull()
+    cleanup()
+    window.history.replaceState({}, '', '/')
+    render(<DesktopVersionLabel wide />)
+    expect(screen.queryByText('v1.0.0-beta.5')).toBeNull()
+  })
+
   it('checks immediately, then exactly every 10 minutes, and renders beside Settings only for a new version', async () => {
     vi.useFakeTimers()
     window.history.replaceState({}, '', desktopSearch)

@@ -11,6 +11,14 @@ import { spawn, type StdioOptions } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import type { Win32DialogWorkerData } from './win32-dialog-worker.ts'
 
+/** Build the worker environment explicitly, including Electron's Node mode. */
+export function dialogWorkerEnvironment(
+  title: string,
+  base: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return { ...base, DSH_DIALOG_TITLE: title, ELECTRON_RUN_AS_NODE: '1' }
+}
+
 /**
  * Spawn the dialog child process. Built consumers launch the bundled CJS
  * entry next to this module under plain node; unbuilt (source) consumers
@@ -21,7 +29,11 @@ import type { Win32DialogWorkerData } from './win32-dialog-worker.ts'
  * @returns the spawned child process.
  */
 export function spawnDialogWorker(data: Win32DialogWorkerData): ReturnType<typeof spawn> {
-  const env = { ...process.env, DSH_DIALOG_TITLE: data.title }
+  // Packaged desktop hosts run `dsh web` through Electron's executable in
+  // Node mode. Keep that mode explicit for this nested child as well: relying
+  // on an inherited flag makes the folder worker launch a second Electron app
+  // (and exit without an IPC result) when an embedding host sanitizes env.
+  const env = dialogWorkerEnvironment(data.title)
   const stdio: StdioOptions = ['ignore', 'inherit', 'inherit', 'ipc']
   /* v8 ignore next 3 -- the built-output arm: tests always run unbuilt (src/) */
   if (!import.meta.url.endsWith('.ts')) {

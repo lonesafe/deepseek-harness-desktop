@@ -8,7 +8,7 @@
 
 Download, install, and open. There is no need to install Node.js, pnpm, Electron, run terminal commands, or start a browser manually. The desktop client includes everything required to run DeepSeek Harness; model-provider credentials can be entered inside the application when needed.
 
-[Download DeepSeek Harness Desktop 1.0 Beta 5](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.5)
+[Download DeepSeek Harness Desktop from the portal](https://dsh.roubsite.com/downloads)
 
 DeepSeek Harness Desktop packages the official open-source [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web experience as a self-contained desktop application for macOS, Linux, and Windows. Electron, Node.js, the production plugin graph, and the Web assets travel inside the installer, so users do not need to install Node.js, pnpm, or launch a browser.
 
@@ -20,7 +20,7 @@ This is a community-maintained desktop distribution. It is not an official DeepS
 
 ## Download and start
 
-1. Open the [v1.0.0-beta.5 release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.5).
+1. Open the [official client downloads page](https://dsh.roubsite.com/downloads). Packages are also listed in [GitHub Releases](https://github.com/lonesafe/deepseek-harness-desktop/releases).
 2. Download the package for your system.
 3. Install and open the application.
 
@@ -45,10 +45,10 @@ The release workflow automatically signs, notarizes, and verifies the macOS appl
 To use DSH on your computer from a phone or another browser outside its network:
 
 1. On the first launch, or whenever no account has been authorized, the desktop client offers sign-in or registration and explains that signing in lets you use this computer remotely from a phone or another device. You can skip sign-in and continue using the application locally. Sign-in and registration happen on the portal in the system browser, and the desktop client never reads the portal password.
-2. After the Web page approves the device, return to the desktop client and choose whether to **开启远程控制**. This setting is off by default. When enabled, the computer creates an encrypted outbound connection without requiring a public IP, port forwarding, or router changes. You can later change the setting or authorize another account from **远程访问…** in the **DeepSeek Harness** or **应用** menu. If a signed-out user tries to enable remote control, the application asks for login and authorization again; remote control remains unavailable until authorization succeeds.
+2. After the Web page approves the device, return to the desktop client and choose whether to **Enable remote control**. This setting is off by default. When enabled, the computer creates an encrypted outbound connection without requiring a public IP, port forwarding, or router changes. You can later manage it from **Settings → General → Remote control**, or change the setting and authorize another account from **Remote Access…** in the **DeepSeek Harness** or **Application** menu. If a signed-out user tries to enable remote control, the application asks for login and authorization again; remote control remains unavailable until authorization succeeds.
 3. Sign in to the portal's device center, choose an online computer owned by the current account, and select **连接**.
 
-Remote connections use one-time short-lived tickets and a separate device credential. The portal directly serves and caches the Web shell, plugin scripts, styles, and fonts; only `/api` requests and application WebSockets cross the device tunnel. Large session histories are transported as bounded WebSocket chunks so one oversized response does not become an HTTP 502. Disabling remote control stops the outbound connection immediately, and the device center can revoke the device. A remote browser can operate sessions and agents and can read a redacted, forcibly read-only projection of the settings catalog and credential status so the Models, General, Plugins, and Agent Presets pages render correctly. Credential values never cross the tunnel; settings or credential writes, native file selection, and path opening remain available only in the desktop window. On phones, the conversation uses the full screen width, the sidebar becomes a floating entry point, and the composer follows the dynamic viewport and safe area. The Go, MySQL, and Vue 3 portal and relay service is deployed independently and is not part of this repository.
+Remote connections use one-time short-lived tickets and a separate device credential. The portal directly serves and caches the Web shell, plugin scripts, styles, and fonts; only `/api` requests and application WebSockets cross the device tunnel. Large session histories use bounded, compressed WebSocket chunks so one oversized response does not become an HTTP 502 while public bandwidth and wait time stay controlled. Disabling remote control stops the outbound connection immediately, and the device center can revoke the device. A remote browser can operate sessions and agents and can read a redacted, forcibly read-only projection of the settings catalog and credential status so the Models, General, Plugins, and Agent Presets pages render correctly. Credential values never cross the tunnel; settings or credential writes, native file selection, and path opening remain available only in the desktop window. On phones, the conversation uses the full screen width, the sidebar becomes a floating entry point, and the composer follows the dynamic viewport and safe area. The Go, MySQL, and Vue 3 portal and relay service is deployed independently and is not part of this repository.
 
 ## Why it is zero setup
 
@@ -61,9 +61,13 @@ Remote connections use one-time short-lived tickets and a separate device creden
 
 The conversation now includes a **Files** view for browsing the current conversation's Workspace and previewing Markdown, common source and configuration text, images, and PDFs. The file manager is entirely read-only and never changes project files; on phones, it switches to separate full-width directory and preview pages. The same controlled API relay carries listings and previews during portal remote use, without relaying the complete Web shell.
 
+## Version updates
+
+The desktop client checks the portal's version center immediately after startup and every 10 minutes afterward. When a new version is available, an **Update** badge appears to the right of **Settings** in the lower-left corner. Selecting it downloads the installer from the portal, verifies its declared size and SHA-256 digest, and only then asks the operating system to open it. The [official downloads page](https://dsh.roubsite.com/downloads) also lists packages by platform and architecture together with their size and SHA-256 digest. Client updates do not use GitHub as their download source.
+
 ## Beta status
 
-`v1.0.0-beta.5` is the current desktop beta hotfix. It fixes an HTTP 502 that could occur when a platform reports a successful WebSocket send with `null`, causing a large remote-history chunk to be mistaken for a failed send. It also includes Beta 4's in-conversation Workspace browser and common-file previews, plus the mobile sidebar, conversation, settings, and composer layout improvements. The native build matrix produces separate macOS Apple Silicon, macOS Intel, Linux x64, and Windows x64 artifacts. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
+The current desktop beta provides installers for macOS Apple Silicon, macOS Intel, Linux x64, and Windows x64. It includes the desktop runtime, remote access, mobile layouts, Workspace file previews, and portal-hosted version updates. DeepSeek Harness itself remains under rapid development, so configuration, plugins, and persisted data may change before a stable desktop release.
 
 <a id="run"></a><a id="run-from-source"></a>
 

@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-07-19-gui-layering-and-rpc-protocol.md) | 中文
 
-> 分工线：本篇 = 分层模型 + 通道无关的 RPC 协议；协议的 Web 实现由 HTTP 上行加 [WebSocket 下行载体](2026-08-04-websocket-downlink-carrier.md)组成，浏览器对象层见 [Web 客户端架构笔记](2026-07-19-gui-web-client-architecture.md)。
+> 分工线：本篇 = 分层模型 + 通道无关的 RPC 协议；协议的直连 Web 实现由 HTTP 上行加 [WebSocket 下行载体](2026-08-04-websocket-downlink-carrier.md)组成，远程官网可选择[复用 WebSocket RPC 载体](2026-08-16-remote-websocket-rpc-carrier.md)，浏览器对象层见 [Web 客户端架构笔记](2026-07-19-gui-web-client-architecture.md)。
 
 ## Problem
 
@@ -199,10 +199,10 @@ export type ResponseValue<K> =
 
 | 路径 | 内容 |
 |---|---|
-| `callUnary` | mint → tap → POST 全形 → `serverResponseSchema` parse → **rpcId 回显校验**（不符即 throw）→ tap → 吐窄形 |
+| `callUnary` | mint → tap → 通过已选择 JSON 载体发送全形 → `serverResponseSchema` parse → **rpcId 回显校验**（不符即 throw）→ tap → 吐窄形 |
 | `readSse` | streaming fetch（非 EventSource）、`\n\n` 分帧、`data:` 拼接、ServerRequest 全形 parse、tap、吐窄形 `RpcRequest<帧>` |
-| `respond` | client-response 透传（rpcId 是回填，此处不 mint）；应答体 `rpcReceiptSchema` parse |
-| unary 时限 | 普通 unary 调用使用 `AbortSignal.timeout`（默认 30s，构造参数可调）；由用户掌控节奏的 `host.pickDirectory` 和 `command.execute` 不设该时限，但保留调用方／连接取消；流不设时限 |
+| `respond` | 通过已选择 JSON 载体透传 client-response（rpcId 是回填，此处不 mint）；应答体 `rpcReceiptSchema` parse |
+| unary 时限 | 普通 unary 调用使用 `AbortSignal.timeout`（默认 30s，构造参数可调）；history 使用 150s；由用户掌控节奏的 `host.pickDirectory` 和 `command.execute` 不设该时限，但保留调用方／连接取消；流不设时限 |
 | `resolveBase` | 浏览器=同源 origin；无 location 环境（Node）=`http://dsh.internal` 假 authority |
 
 ### 实例级 envelope 观测切面
@@ -214,7 +214,7 @@ export type ResponseValue<K> =
 | 子类 | 所在包 | doFetch | 用途 |
 |---|---|---|---|
 | `InProcessApiClient` | apiproxy 本包 | 注入的 `{ fetch }` handler | **同构点**：`new InProcessApiClient(toFetchHandler(api))` 全程不过网络但真跑 wire 序列化/zod/SSE 帧；载体测试与调用方可以在不打开端口的情况下运行这套协议，而产品 `dsh --profile headless` 直接驱动 core |
-| `WebApiClient` | dsh-client-connection | `globalThis.fetch` 上行 + 每逻辑流一条同源 WebSocket 下行 | 浏览器客户端；物理边界见 [WebSocket 下行载体](2026-08-04-websocket-downlink-carrier.md) |
+| `WebApiClient` | dsh-client-connection | 直连 `globalThis.fetch` 或官网选择的复用 `/api/rpc` 上行 + 每逻辑流一条同源 WebSocket 下行 | 浏览器客户端；物理边界见 [WebSocket 下行](2026-08-04-websocket-downlink-carrier.md)与[远程 RPC 载体](2026-08-16-remote-websocket-rpc-carrier.md)决策 |
 | `FixtureApiClient` | dsh-client-connection | 不用（协议层覆写） | 无 server 的 UI 开发（`?fixture`）：覆写 `callUnary`/`openMux`/`openHost`/`respond` 虚方法，自己就是假 server（帧 rpcId 由它 mint，语义自洽） |
 | IPC 桥子类（未来备选，不是已发布的桌面载体） | Electron 壳 | IPC 序列化往返 | 只需换 doFetch，约定/基类零改 |
 
@@ -226,13 +226,13 @@ export type ResponseValue<K> =
 
 **加一个错误码（2 步）**：①`RpcErrorDetailsMap` 加一行（details 必填）；②`rpcErrorSchema` discriminatedUnion 加一支。
 
-**接一种新载体**：继承 `AbstractApiClient` 只实现 `doFetch`；需要拦截协议层（如 fixture（测试前置数据））再覆写 `callUnary`/`openMux`/`openHost` 虚方法。约定与基类零改。
+**接一种新载体**：继承 `AbstractApiClient` 并实现 `doFetch`；仅物理 unary/respond 交换方式不同就覆写 `postJsonTransport`，协议层 fixture（测试前置数据）则覆写 `callUnary`/`openMux`/`openHost`/`respond` 协议方法。除非替换协议方法本身，否则约定校验与信封所有权仍在基类中。
 
 **升格一个预留方法**：把预留签名抄进域接口 → map 加行 → schema 加对 → UNARY_ROUTES 加行 → impl 实现。
 
 ## Consequences
 
-所有 client 使用同一约定：加一个 unary 方法是从单一签名出发的五步机械改动，换载体只动一个 `doFetch` 子类，wire 上每条消息可 zod 校验、可经 envelope tap 观测、可按 rpcId 对账。普通 unary 调用仍受时限约束，而 `host.pickDirectory` 与 `command.execute` 可保持挂起，直到操作完成或调用方／连接取消到来；若由用户掌控节奏的操作不自行结束，请求可能一直挂起，这是为避免把合理的操作时长视为传输失败而接受的代价。其余接受的代价：两组包需要显式 tsconfig paths 条目；预留方法（fork/inject/task.list/listModels/hostInstanceId）在真实消费方出现前保持休眠。
+所有 client 使用同一约定：加一个 unary 方法是从单一签名出发的五步机械改动，替换物理 JSON 交换只需改 `doFetch` 或 `postJsonTransport`，wire 上每条消息可 zod 校验、可经 envelope tap 观测、可按 rpcId 对账。普通 unary 调用与 history 各自使用不同的有界时限，而 `host.pickDirectory` 与 `command.execute` 可保持挂起，直到操作完成或调用方／连接取消到来；若由用户掌控节奏的操作不自行结束，请求可能一直挂起，这是为避免把合理的操作时长视为传输失败而接受的代价。其余接受的代价：两组包需要显式 tsconfig paths 条目；预留方法（fork/inject/task.list/listModels/hostInstanceId）在真实消费方出现前保持休眠。
 
 ## Alternatives considered
 

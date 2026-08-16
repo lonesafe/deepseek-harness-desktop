@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md
-2026-08-15-electron-desktop-launcher.md: 916f0a4964723f783cbf5689caf2dceaaf3fa7bd
-2026-08-15-electron-desktop-launcher.zh.md: 529277746ffc9fbab916e2cfa641c1d6d57396f3
+2026-08-15-electron-desktop-launcher.md: a40d5b02ceaf064c36948a39667398a1ca4e819c
+2026-08-15-electron-desktop-launcher.zh.md: f5cc85f3b9090f85abae60e236da826807967d94

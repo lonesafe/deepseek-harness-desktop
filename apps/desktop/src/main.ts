@@ -27,8 +27,12 @@ import {
 } from './remote-tunnel.ts'
 import { isAppNavigation, isSafeExternalUrl } from './security.ts'
 import { offerStartupAccountAuthorization } from './startup-account-onboarding.ts'
+import {
+  DESKTOP_UPDATE_ACTION_URL, desktopClientURL, downloadDesktopUpdate, latestDesktopUpdate,
+} from './app-update.ts'
 
 const APP_NAME = 'DeepSeek Harness'
+const DESKTOP_REMOTE_ACTION_URL = 'dsh-remote://manage'
 const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html lang="en">
 <head>
@@ -61,9 +65,30 @@ let authorizationAbort: AbortController | undefined
 let reconfiguring = false
 let quitting = false
 let startupOnboardingComplete = false
+let updateAbort: AbortController | undefined
+
+/** Local Web URL carrying only the desktop facts needed by the update badge. */
+function productPageURL(localUrl: string): string {
+  const preference = remoteAccess
+  if (preference === undefined) throw new Error('Desktop remote access preference was not loaded.')
+  return desktopClientURL(localUrl, {
+    version: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    portalUrl: preference.portalUrl,
+  })
+}
 
 /** Open an HTTPS target outside the privileged app window. */
 function openExternal(target: string): void {
+  if (target === DESKTOP_UPDATE_ACTION_URL) {
+    void showUpdateDialog()
+    return
+  }
+  if (target === DESKTOP_REMOTE_ACTION_URL) {
+    void showRemoteAccessDialog()
+    return
+  }
   if (!isSafeExternalUrl(target)) return
   void shell.openExternal(target)
 }
@@ -115,7 +140,7 @@ function createWindow(): BrowserWindow {
   window.on('closed', () => {
     if (mainWindow === window) mainWindow = undefined
   })
-  void window.loadURL(appOrigin === undefined ? STARTING_PAGE : appOrigin)
+  void window.loadURL(harnessReady === undefined ? STARTING_PAGE : productPageURL(harnessReady.localUrl))
   return window
 }
 
@@ -148,7 +173,7 @@ async function launchBackend(window: BrowserWindow): Promise<void> {
   })
   harnessReady = await backend.ready
   appOrigin = new URL(harnessReady.localUrl).origin
-  if (!window.isDestroyed()) await window.loadURL(harnessReady.localUrl)
+  if (!window.isDestroyed()) await window.loadURL(productPageURL(harnessReady.localUrl))
   startRemoteAccessTunnel()
 }
 
@@ -436,6 +461,72 @@ async function showRemoteAccessDialog(): Promise<void> {
   if (response === 2) await authorizeRemoteDevice()
 }
 
+/** Human-readable installer size used by the desktop confirmation dialog. */
+function updateSizeText(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
+}
+
+/** Recheck, download, verify, and open the latest installer from the official portal. */
+async function showUpdateDialog(): Promise<void> {
+  const preference = remoteAccess
+  if (preference === undefined || updateAbort !== undefined) return
+  const controller = new AbortController()
+  updateAbort = controller
+  installApplicationMenu()
+  try {
+    const update = await latestDesktopUpdate({
+      version: app.getVersion(),
+      platform: process.platform,
+      arch: process.arch,
+      portalUrl: preference.portalUrl,
+    }, controller.signal)
+    if (update === undefined) {
+      await showMessageBox({
+        type: 'info',
+        title: '检查更新',
+        message: `当前已是最新版本（${app.getVersion()}）`,
+      })
+      return
+    }
+    const { response } = await showMessageBox({
+      type: 'info',
+      title: '发现新版本',
+      message: `DeepSeek Harness ${update.version} 可以下载`,
+      detail: `${update.fileName}\n${updateSizeText(update.size)}\n\n安装包将从 ${new URL(preference.portalUrl).host} 下载，并在打开前校验 SHA-256。`,
+      buttons: ['下载并打开安装包', '取消'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    })
+    if (response !== 0) return
+    mainWindow?.setProgressBar(0)
+    const installerPath = await downloadDesktopUpdate(update, {
+      temporary: app.getPath('temp'),
+      downloads: app.getPath('downloads'),
+    }, (received, total) => {
+      mainWindow?.setProgressBar(Math.max(0, Math.min(1, received / total)))
+    }, controller.signal)
+    mainWindow?.setProgressBar(-1)
+    const openError = await shell.openPath(installerPath)
+    if (openError !== '') {
+      throw new Error(`安装包已保存到 ${installerPath}，但系统无法打开：${openError}`)
+    }
+  } catch (error) {
+    mainWindow?.setProgressBar(-1)
+    if (!controller.signal.aborted) {
+      await showMessageBox({
+        type: 'error',
+        title: '更新失败',
+        message: error instanceof Error ? error.message : String(error),
+        detail: '未校验通过的安装包不会被打开。你也可以前往官网的“客户端下载”页面手动下载。',
+      })
+    }
+  } finally {
+    if (updateAbort === controller) updateAbort = undefined
+    installApplicationMenu()
+  }
+}
+
 /** Install the cross-platform application menu containing network access controls. */
 function installApplicationMenu(): void {
   const lanItem: Electron.MenuItemConstructorOptions = {
@@ -448,6 +539,11 @@ function installApplicationMenu(): void {
     enabled: remoteAccess !== undefined && authorizationAbort === undefined && !reconfiguring,
     click: () => { void showRemoteAccessDialog() },
   }
+  const updateItem: Electron.MenuItemConstructorOptions = {
+    label: updateAbort === undefined ? '检查更新…' : '正在检查或下载更新…',
+    enabled: remoteAccess !== undefined && updateAbort === undefined && !reconfiguring,
+    click: () => { void showUpdateDialog() },
+  }
   const template: Electron.MenuItemConstructorOptions[] = process.platform === 'darwin'
     ? [
       {
@@ -457,6 +553,7 @@ function installApplicationMenu(): void {
           { type: 'separator' },
           lanItem,
           remoteItem,
+          updateItem,
           { type: 'separator' },
           { role: 'quit' },
         ],
@@ -468,7 +565,7 @@ function installApplicationMenu(): void {
     : [
       {
         label: '应用',
-        submenu: [lanItem, remoteItem, { type: 'separator' }, { role: 'quit' }],
+        submenu: [lanItem, remoteItem, updateItem, { type: 'separator' }, { role: 'quit' }],
       },
       { role: 'editMenu' },
       { role: 'viewMenu' },
@@ -512,10 +609,13 @@ if (!singleInstance) {
     if (process.platform !== 'darwin') app.quit()
   })
   app.on('before-quit', (event) => {
-    if (quitting || (backend === undefined && remoteTunnel === undefined && authorizationAbort === undefined)) return
+    const inactive = backend === undefined && remoteTunnel === undefined
+      && authorizationAbort === undefined && updateAbort === undefined
+    if (quitting || inactive) return
     event.preventDefault()
     quitting = true
     authorizationAbort?.abort()
+    updateAbort?.abort()
     void stopBackend().finally(() => { app.quit() })
   })
   void app.whenReady().then(start)

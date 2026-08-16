@@ -8,7 +8,7 @@
 
 下载安装后直接打开，无需安装 Node.js、pnpm、Electron，无需执行终端命令，也无需手动启动浏览器。桌面客户端已经包含运行 DeepSeek Harness 所需的完整环境；需要调用模型时，可直接在应用内填写服务商要求的凭据。
 
-[下载 DeepSeek Harness Desktop 1.0 Beta 5](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.5)
+[从官网下载 DeepSeek Harness Desktop](https://dsh.roubsite.com/downloads)
 
 DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web 体验打包成适用于 macOS、Linux 和 Windows 的自包含桌面应用。安装包内含 Electron、Node.js、生产插件图和 Web 资源，用户无需安装 Node.js、pnpm，也无需手动打开浏览器。
 
@@ -20,7 +20,7 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 
 ## 下载并开始使用
 
-1. 打开 [v1.0.0-beta.5 Release](https://github.com/lonesafe/deepseek-harness-desktop/releases/tag/v1.0.0-beta.5)。
+1. 打开[官网客户端下载页](https://dsh.roubsite.com/downloads)；也可以查看 [GitHub Releases](https://github.com/lonesafe/deepseek-harness-desktop/releases)。
 2. 下载适合当前系统的安装包。
 3. 安装并打开应用。
 
@@ -45,10 +45,10 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 需要从外网手机或其他浏览器使用自己的电脑的dsh时：
 
 1. 首次启动或尚未授权账号时，桌面客户端会提示登录或注册，并说明登录后可以从手机或其他设备远程使用这台电脑。用户可以暂不登录并继续在本机使用。登录和注册在系统浏览器打开的官网中完成，桌面客户端不会读取官网密码。
-2. 网页确认设备授权后返回桌面客户端，程序会询问是否**开启远程控制**。该功能默认关闭；开启后电脑主动建立加密出站连接，无需公网 IP、端口映射或路由器设置。之后也可以通过 **DeepSeek Harness**／**应用**菜单中的**远程访问…**修改设置或重新授权。未登录用户开启远程控制时会再次看到登录授权提示，授权完成前无法使用远程控制。
+2. 网页确认设备授权后返回桌面客户端，程序会询问是否**开启远程控制**。该功能默认关闭；开启后电脑主动建立加密出站连接，无需公网 IP、端口映射或路由器设置。之后也可以在**设置 → 通用设置 → 远程控制**中管理，或通过 **DeepSeek Harness**／**应用**菜单中的**远程访问…**修改设置和重新授权。未登录用户开启远程控制时会再次看到登录授权提示，授权完成前无法使用远程控制。
 3. 登录官网的**设备中心**，选择属于当前账号的在线电脑并点击**连接**。
 
-远程连接使用一次性短期票据和独立设备凭据。网页壳、插件脚本、样式和字体由官网直接提供并长期缓存，只有 `/api` 请求和业务 WebSocket 经过设备隧道；大体积会话历史会拆成有上限的 WebSocket 分片传输，避免单条响应过大导致 HTTP 502。关闭桌面端远程控制会立即停止出站连接，也可以在设备中心撤销设备。远程浏览器可以运行会话和 Agent，也能读取经过脱敏且强制只读的设置目录和凭据状态，以便模型、通用设置、插件与 Agent 预设页面正常显示；凭据值不会传输，设置或凭据写入、原生文件选择、打开路径等本机专属操作仍只允许桌面窗口调用。手机宽度下，对话区使用完整屏幕宽度，侧栏变为浮动入口，底部输入框会适配浏览器动态视口和安全区。官网和中转服务是独立部署的 Go、MySQL 与 Vue 3 项目，不包含在本仓库中。
+远程连接使用一次性短期票据和独立设备凭据。网页壳、插件脚本、样式和字体由官网直接提供并长期缓存，只有 `/api` 请求和业务 WebSocket 经过设备隧道；大体积会话历史会拆成有上限且启用压缩的 WebSocket 分片传输，避免单条响应过大导致 HTTP 502，并降低公网带宽和等待时间。关闭桌面端远程控制会立即停止出站连接，也可以在设备中心撤销设备。远程浏览器可以运行会话和 Agent，也能读取经过脱敏且强制只读的设置目录和凭据状态，以便模型、通用设置、插件与 Agent 预设页面正常显示；凭据值不会传输，设置或凭据写入、原生文件选择、打开路径等本机专属操作仍只允许桌面窗口调用。手机宽度下，对话区使用完整屏幕宽度，侧栏变为浮动入口，底部输入框会适配浏览器动态视口和安全区。官网和中转服务是独立部署的 Go、MySQL 与 Vue 3 项目，不包含在本仓库中。
 
 ## 为什么能够零配置使用
 
@@ -61,9 +61,13 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 
 对话页新增**文件**视图，可直接浏览当前对话所属工作区，并预览 Markdown、常见源码与配置文本、图片和 PDF。整个文件管理器保持只读，不会修改项目文件；手机端会自动切换为目录与预览分开的全宽页面。通过官网远程使用时，文件列表与预览也走既有的受控接口中转，无需传输整套 Web 页面。
 
+## 版本更新
+
+桌面客户端启动后会立即向官网版本中心检查新版本，之后每隔 10 分钟检查一次。发现新版本时，左下角**设置**右侧会显示**更新**标识；点击后由桌面客户端从官网下载安装包，校验文件大小和 SHA-256 完整性后再交给系统打开。官网的[客户端下载页](https://dsh.roubsite.com/downloads)也会列出各平台、架构、文件大小和 SHA-256。客户端更新下载不依赖 GitHub。
+
 ## Beta 状态
 
-`v1.0.0-beta.5` 是当前桌面 Beta 热修复版，修复了部分系统中 WebSocket 成功回调返回 `null` 时，大体积远程历史分片被误判失败并返回 HTTP 502 的问题。它同时包含 Beta 4 的对话内工作区文件浏览与常见文件预览，以及手机端侧栏、会话区域、设置页与底部输入框布局优化。原生构建矩阵会分别生成 macOS Apple Silicon、macOS Intel、Linux x64 和 Windows x64 产物。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
+当前为桌面 Beta 版本，提供 macOS Apple Silicon、macOS Intel、Linux x64 和 Windows x64 安装包，并包含桌面运行环境、远程访问、移动端适配、工作区文件预览和官网版本更新能力。DeepSeek Harness 本身仍在快速开发，稳定桌面版发布前，配置、插件和持久化数据都可能发生变化。
 
 <a id="run"></a><a id="run-from-source"></a>
 

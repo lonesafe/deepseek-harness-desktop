@@ -233,8 +233,16 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
 /** Default timeout for bounded unary calls (rpc-compare 2026-07-19: a hung host must not leave callers pending forever). */
 const DEFAULT_TIMEOUT_MS = 30_000
 
+/**
+ * History may need to inspect a cold session, compute presenter projections, serialize a large
+ * page, and cross the remote device relay. Keep it bounded, but leave the relay's two-minute
+ * server deadline enough time to return its own explicit failure instead of aborting the browser
+ * first (WebKit reports that client-side abort as "The user aborted a request").
+ */
+const HISTORY_TIMEOUT_MS = 150_000
+
 /** Whether a unary call uses the transport health deadline or only caller/connection cancellation. */
-type UnaryTimeoutPolicy = 'default' | 'caller-signal-only'
+type UnaryTimeoutPolicy = 'default' | 'history' | 'caller-signal-only'
 
 /** URL base for in-process handler injection (fake authority, opencode precedent). */
 const INTERNAL_BASE = 'http://dsh.internal'
@@ -258,6 +266,28 @@ export abstract class AbstractApiClient implements IApiClient {
 
   /** Transport aspect: browser fetch, injected handler.fetch, IPC bridge, ... */
   protected abstract doFetch(input: URL, init?: RequestInit): Promise<Response>
+
+  /**
+   * Execute one JSON request after the base class has applied its timeout and caller signal.
+   * Browser carriers may replace only this physical exchange while retaining envelope minting,
+   * response validation, rpcId checks, and observation in {@link callUnary} and {@link respond}.
+   * @param path - Same-origin API path selected by the logical message.
+   * @param body - Complete client-initiated wire message.
+   * @param signal - Merged transport deadline and caller cancellation, when present.
+   * @returns A fetch-compatible response containing the logical response body.
+   */
+  protected postJsonTransport(
+    path: string,
+    body: ClientRequest | ClientResponse,
+    signal: AbortSignal | undefined,
+  ): Promise<Response> {
+    return this.doFetch(new URL(path, this.resolveBase()), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      ...signal === undefined ? {} : { signal },
+    })
+  }
 
   /**
    * Subscribe to batched envelope observation (diagnostics/logging consumers).
@@ -316,17 +346,13 @@ export abstract class AbstractApiClient implements IApiClient {
     signal: AbortSignal | undefined,
     timeoutPolicy: UnaryTimeoutPolicy = 'default',
   ): Promise<Response> {
-    const requestSignal = timeoutPolicy === 'default'
-      ? signal === undefined
-        ? AbortSignal.timeout(this.timeoutMs)
-        : AbortSignal.any([AbortSignal.timeout(this.timeoutMs), signal])
-      : signal
-    const response = await this.doFetch(new URL(path, this.resolveBase()), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      ...requestSignal === undefined ? {} : { signal: requestSignal },
-    })
+    const timeoutMs = timeoutPolicy === 'history' ? HISTORY_TIMEOUT_MS : this.timeoutMs
+    const requestSignal = timeoutPolicy === 'caller-signal-only'
+      ? signal
+      : signal === undefined
+        ? AbortSignal.timeout(timeoutMs)
+        : AbortSignal.any([AbortSignal.timeout(timeoutMs), signal])
+    const response = await this.postJsonTransport(path, body, requestSignal)
     if (!response.ok) throw new Error(`transport failure for ${path}: HTTP ${response.status}`)
     return response
   }
@@ -419,7 +445,7 @@ export abstract class AbstractApiClient implements IApiClient {
     list: (payload, signal) => this.callUnary('session.list', payload, signal),
     search: (payload, signal) => this.callUnary('session.search', payload, signal),
     create: (payload, signal) => this.callUnary('session.create', payload, signal),
-    history: (payload, signal) => this.callUnary('session.history', payload, signal),
+    history: (payload, signal) => this.callUnary('session.history', payload, signal, 'history'),
     models: (payload, signal) => this.callUnary('session.models', payload, signal),
     selectModel: (payload, signal) => this.callUnary('session.selectModel', payload, signal),
     rename: (payload, signal) => this.callUnary('session.rename', payload, signal),
@@ -432,7 +458,7 @@ export abstract class AbstractApiClient implements IApiClient {
 
   readonly subagents: IApiClient['subagents'] = {
     list: (payload, signal) => this.callUnary('subagent.list', payload, signal),
-    history: (payload, signal) => this.callUnary('subagent.history', payload, signal),
+    history: (payload, signal) => this.callUnary('subagent.history', payload, signal, 'history'),
     prompt: (payload, signal) => this.callUnary('subagent.prompt', payload, signal),
     interrupt: (payload, signal) => this.callUnary('subagent.interrupt', payload, signal),
   }

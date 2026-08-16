@@ -1,23 +1,36 @@
-/** Browser API carrier: HTTP upstream plus one WebSocket per downstream event stream. */
+/** Browser API carrier: local HTTP or portal WebSocket upstream plus one socket per downstream event stream. */
 
-import type { ApiProxy, HostFrame, MuxFrame, RpcRequest, ServerRequest } from './api.ts'
+import type { ApiProxy, ClientRequest, ClientResponse, HostFrame, MuxFrame, RpcRequest, ServerRequest } from './api.ts'
 import { AbstractApiClient, RpcId } from './api.ts'
 import { randomUuid } from './random-uuid.ts'
+import { WebSocketRpcTransport } from './websocket-rpc.ts'
 import { hostFrameSchema, muxFrameSchema } from '@deepseek-ai/dsh-host-apiproxy/api/events.schema'
 import { serverRequestSchema } from '@deepseek-ai/dsh-host-apiproxy/api/rpc.schema'
-import { HOST_EVENTS_PATH, MUX_EVENTS_PATH } from '../api-path.ts'
+import { HOST_EVENTS_PATH, MUX_EVENTS_PATH, RPC_SOCKET_PATH } from '../api-path.ts'
 
 type SocketItem<F> = { kind: 'frame'; envelope: RpcRequest<F> } | { kind: 'end' }
 type Parser<F> = { parse(value: unknown): F }
 
-/** Browser platform subclass: unary/respond use fetch; mux/host use downlink-only WebSockets. */
+/** Browser platform subclass: portal-selected unary/respond use multiplexed WS; mux/host remain downlink sockets. */
 export class WebApiClient extends AbstractApiClient {
+  private readonly remoteRpc = (globalThis as { __DSH_REMOTE_RPC__?: unknown }).__DSH_REMOTE_RPC__ === RPC_SOCKET_PATH
+    ? new WebSocketRpcTransport(RPC_SOCKET_PATH)
+    : undefined
+
   protected override mintRpcId(): RpcId {
     return RpcId(randomUuid())
   }
 
   protected doFetch(input: URL, init?: RequestInit): Promise<Response> {
     return globalThis.fetch(input, init)
+  }
+
+  protected override postJsonTransport(
+    path: string,
+    body: ClientRequest | ClientResponse,
+    signal: AbortSignal | undefined,
+  ): Promise<Response> {
+    return this.remoteRpc?.request(path, body, signal) ?? super.postJsonTransport(path, body, signal)
   }
 
   protected override openMux(

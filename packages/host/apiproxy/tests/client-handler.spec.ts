@@ -373,6 +373,30 @@ describe('unary round trip', () => {
     await expect(never.sessions.list({})).rejects.toThrow()
   })
 
+  it('does not apply the short unary deadline to session or subagent history', async () => {
+    const delayed = scriptedApi({
+      sessions: {
+        history: async request => new Promise((resolve) => {
+          setTimeout(() => { resolve({ rpcId: request.rpcId, result: { ok: true, value: { events: [], hasMore: false } } }) }, 50)
+        }),
+      },
+      subagents: {
+        history: async request => new Promise((resolve) => {
+          setTimeout(() => { resolve({ rpcId: request.rpcId, result: { ok: true, value: { events: [], hasMore: false } } }) }, 50)
+        }),
+      },
+    })
+    const c = client(delayed, 25)
+
+    await expect(c.sessions.history({ sessionId: sid('slow-session') }))
+      .resolves.toMatchObject({ result: { ok: true } })
+    await expect(c.subagents.history({
+      parentSessionId: sid('slow-parent'),
+      childSessionId: sid('slow-child'),
+      mode: 'one-shot',
+    })).resolves.toMatchObject({ result: { ok: true } })
+  })
+
   it('aborts a unary call through the caller-supplied external signal', async () => {
     // Real-fetch semantics: on abort the rejection is the signal's reason, and the abort
     // works even when the transport ignores the signal entirely (hung impl).

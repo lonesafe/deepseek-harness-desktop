@@ -7,6 +7,9 @@
 /** Route prefix owning every api request (`/api` and `/api/<anything>`). */
 export const API_PATH = '/api'
 
+/** Remote-portal WebSocket pathname for multiplexed client-initiated RPCs. */
+export const RPC_SOCKET_PATH = `${API_PATH}/rpc`
+
 /** Browser mux-frame WebSocket pathname. */
 export const MUX_EVENTS_PATH = `${API_PATH}/events.mux`
 

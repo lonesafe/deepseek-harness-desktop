@@ -1,5 +1,5 @@
 /**
- * Browser wire client. The plugin selects fixture or HTTP transport, provides
+ * Browser wire client. The plugin selects fixture, local HTTP, or remote WebSocket transport, provides
  * the shared API client, and lets the runtime object layer start the stream
  * controller with its sinks.
  */

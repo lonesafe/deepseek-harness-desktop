@@ -12,7 +12,7 @@ DeepSeek Harness 已有完整的浏览器应用，但要求用户安装 Node.js�
 
 `apps/desktop` 是 Electron 主进程应用。它设置 `ELECTRON_RUN_AS_NODE=1`，复用 Electron 内嵌可执行文件，以 `node --expose-internals <dsh-entry> web --port 0` 启动已打包的 `@deepseek-ai/dsh` 入口；该 Node 标志提供已发布 HMR 插件所需的 loader internals。Web 组合默认只绑定 `127.0.0.1`；用户在桌面端明确操作后，经过认证的[局域网访问决策](../feature/2026-08-15-authenticated-lan-web-access.md)可以添加全接口 host 与访问 token。独立的[账号设备中转](../feature/2026-08-15-account-device-remote-relay.md)保持本地绑定不变，并且只有用户开启远程控制后，才由主进程把经过认证的出站隧道流量代理到这个精确回环 origin。启动器等待就绪输出，始终加载精确的随机回环 origin，并在应用退出时终止自己拥有的进程树与隧道。Harness 状态使用 Electron 逐用户应用数据目录下的 `runtime` 子目录，使 Electron socket 与缓存永远不会进入 Harness 文件监视范围；初始 workspace 位置则使用用户主目录。
 
-BrowserWindow 开启 context isolation 与 renderer sandbox，关闭 Node integration、webview、权限授予和不安全内容，只允许在受管 origin 内导航。无凭据的 HTTPS 链接可以交给系统浏览器打开，其他外部目标一律拒绝。启动器不暴露 preload API。
+BrowserWindow 开启 context isolation 与 renderer sandbox，关闭 Node integration、webview、权限授予和不安全内容，只允许在受管 origin 内导航。无凭据的 HTTPS 链接可以交给系统浏览器打开；除由[官网托管的桌面更新通道](2026-08-16-portal-hosted-desktop-update-channel.md)拥有的精确内部动作 `dsh-update://download` 外，其他外部目标一律拒绝。启动器不暴露 preload API。
 
 electron-builder 运行前，pnpm 会先部署桌面包。因为自动 peer 安装已关闭，其 manifest 显式提供可达生产图中的全部必需 workspace peer；`verify-runtime-closure.ts --manifest apps/desktop/package.json` 保证这个仅依赖闭包保持完整。打包不使用 asar，使内嵌 Node 进程可以直接执行 ESM CLI 并加载其运行时资源；它也不会重新构建已暂存的 pnpm 依赖树。
 

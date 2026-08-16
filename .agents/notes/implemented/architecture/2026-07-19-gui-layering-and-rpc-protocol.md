@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-07-19-gui-layering-and-rpc-protocol.zh.md)
 
-> Division of labor: this document = the layering model + the channel-independent RPC protocol; the protocol's Web implementation combines HTTP uplink with the [WebSocket downlink carrier](2026-08-04-websocket-downlink-carrier.md), while the browser object layer is in the [web client architecture note](2026-07-19-gui-web-client-architecture.md).
+> Division of labor: this document = the layering model + the channel-independent RPC protocol; the protocol's direct Web implementation combines HTTP uplink with the [WebSocket downlink carrier](2026-08-04-websocket-downlink-carrier.md), the remote portal may select the [multiplexed WebSocket RPC carrier](2026-08-16-remote-websocket-rpc-carrier.md), and the browser object layer is in the [web client architecture note](2026-07-19-gui-web-client-architecture.md).
 
 ## Problem
 
@@ -201,10 +201,10 @@ The same domain tree as `ApiProxy`, but unary methods **take the business payloa
 
 | Path | Content |
 |---|---|
-| `callUnary` | mint → tap → POST full form → `serverResponseSchema` parse → **rpcId echo check** (mismatch throws) → tap → emit narrow form |
+| `callUnary` | mint → tap → send full form through the selected JSON carrier → `serverResponseSchema` parse → **rpcId echo check** (mismatch throws) → tap → emit narrow form |
 | `readSse` | streaming fetch (not EventSource), `\n\n` framing, `data:` concatenation, ServerRequest full-form parse, tap, emit narrow `RpcRequest<frame>` |
-| `respond` | client-response passthrough (rpcId is an echo — never minted here); response body parsed by `rpcReceiptSchema` |
-| unary deadline | Ordinary unary calls use `AbortSignal.timeout` (default 30s, constructor-tunable); user-paced `host.pickDirectory` and `command.execute` omit that deadline but keep caller/connection cancellation; streams have no deadline |
+| `respond` | client-response passthrough through the selected JSON carrier (rpcId is an echo — never minted here); response body parsed by `rpcReceiptSchema` |
+| unary deadline | Ordinary unary calls use `AbortSignal.timeout` (default 30s, constructor-tunable); history uses 150s; user-paced `host.pickDirectory` and `command.execute` omit that deadline but keep caller/connection cancellation; streams have no deadline |
 | `resolveBase` | browser = same-origin origin; no-location environment (Node) = the `http://dsh.internal` fake authority |
 
 ### The instance-level envelope observation aspect
@@ -216,7 +216,7 @@ All four quadrant full forms pass through `onEnvelope`; the base implementation 
 | Subclass | Package | doFetch | Purpose |
 |---|---|---|---|
 | `InProcessApiClient` | apiproxy itself | the injected `{ fetch }` handler | **The isomorphic point**: `new InProcessApiClient(toFetchHandler(api))` never touches the network yet runs the real wire serialization/zod/SSE framing; carrier tests and callers can exercise the protocol without opening a port, while product `dsh --profile headless` drives core directly |
-| `WebApiClient` | dsh-client-connection | `globalThis.fetch` uplink + one same-origin WebSocket downlink per logical stream | the browser client; physical boundary in the [WebSocket downlink carrier](2026-08-04-websocket-downlink-carrier.md) |
+| `WebApiClient` | dsh-client-connection | direct `globalThis.fetch` or portal-selected multiplexed `/api/rpc` uplink + one same-origin WebSocket downlink per logical stream | the browser client; physical boundaries in the [WebSocket downlink](2026-08-04-websocket-downlink-carrier.md) and [remote RPC carrier](2026-08-16-remote-websocket-rpc-carrier.md) decisions |
 | `FixtureApiClient` | dsh-client-connection | unused (protocol-layer override) | serverless UI development (`?fixture`): overrides the `callUnary`/`openMux`/`openHost`/`respond` virtuals and is itself the fake server (frame rpcIds minted by it, semantics self-consistent) |
 | IPC bridge subclass (future alternative, not the shipped desktop carrier) | an Electron shell | IPC serialization round trip | would swap only doFetch; contract and base class unchanged |
 
@@ -228,13 +228,13 @@ All four quadrant full forms pass through `onEnvelope`; the base implementation 
 
 **Add an error code (2 steps)**: ① add one `RpcErrorDetailsMap` row (details required); ② add one `rpcErrorSchema` discriminatedUnion branch.
 
-**Plug in a new carrier**: subclass `AbstractApiClient` implementing only `doFetch`; to intercept at the protocol layer (like the fixture), override the `callUnary`/`openMux`/`openHost` virtuals instead. Contract and base class stay unchanged.
+**Plug in a new carrier**: subclass `AbstractApiClient` and implement `doFetch`; override `postJsonTransport` when only the physical unary/respond exchange differs, or override the protocol methods `callUnary`/`openMux`/`openHost`/`respond` for a protocol-layer fixture. Contract validation and envelope ownership stay in the base class unless the protocol method itself is replaced.
 
 **Promote a reserved method**: copy the reserved signature into the domain interface → add the map row → add the schema pair → add the UNARY_ROUTES row → implement.
 
 ## Consequences
 
-Every client consumes one contract: adding a unary method is a five-step mechanical change from a single signature, swapping a carrier touches only a `doFetch` subclass, and every wire message is zod-validated, observable through the envelope tap, and reconcilable by rpcId. Ordinary unary calls remain bounded, while `host.pickDirectory` and `command.execute` may stay pending until the operation finishes or caller/connection cancellation arrives; this accepts that a non-cooperative user-paced operation can hang its request rather than treating valid operation duration as transport failure. The other accepted costs: two groups of packages need explicit tsconfig paths entries, and the reserved methods (fork/inject/task.list/listModels/hostInstanceId) stay dormant until a real consumer arrives.
+Every client consumes one contract: adding a unary method is a five-step mechanical change from a single signature, swapping the physical JSON exchange touches `doFetch` or `postJsonTransport`, and every wire message is zod-validated, observable through the envelope tap, and reconcilable by rpcId. Ordinary unary calls and history remain bounded at their distinct deadlines, while `host.pickDirectory` and `command.execute` may stay pending until the operation finishes or caller/connection cancellation arrives; this accepts that a non-cooperative user-paced operation can hang its request rather than treating valid operation duration as transport failure. The other accepted costs: two groups of packages need explicit tsconfig paths entries, and the reserved methods (fork/inject/task.list/listModels/hostInstanceId) stay dormant until a real consumer arrives.
 
 ## Alternatives considered
 

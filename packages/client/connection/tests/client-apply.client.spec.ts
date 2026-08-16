@@ -12,6 +12,7 @@ import { WebApiClient } from '../src/client/web-api-client.ts'
 
 type Win = { location?: { hostname: string; search: string; origin?: string } }
 type WebSocketGlobal = { WebSocket?: typeof WebSocket }
+type RemoteRpcGlobal = { __DSH_REMOTE_RPC__?: string }
 
 const originalWebSocket = globalThis.WebSocket
 const sockets: FakeWebSocket[] = []
@@ -24,6 +25,9 @@ class FakeWebSocket extends EventTarget {
 
   readonly url: string
   readyState = FakeWebSocket.CONNECTING
+  binaryType: BinaryType = 'blob'
+  bufferedAmount = 0
+  readonly sent: Array<string | ArrayBufferLike | Blob | ArrayBufferView> = []
 
   constructor(url: string | URL) {
     super()
@@ -36,10 +40,15 @@ class FakeWebSocket extends EventTarget {
     })
   }
 
-  close(): void {
+  close(_code?: number, _reason?: string): void {
     if (this.readyState === FakeWebSocket.CLOSED) return
     this.readyState = FakeWebSocket.CLOSED
     this.dispatchEvent(new Event('close'))
+  }
+
+  send(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+    if (this.readyState !== FakeWebSocket.OPEN) throw new DOMException('WebSocket is not open', 'InvalidStateError')
+    this.sent.push(data)
   }
 
   receive(data: unknown): void {
@@ -49,11 +58,30 @@ class FakeWebSocket extends EventTarget {
 
 afterEach(() => {
   delete (globalThis as Win).location
+  delete (globalThis as RemoteRpcGlobal).__DSH_REMOTE_RPC__
   sockets.length = 0
   if (originalWebSocket === undefined) delete (globalThis as WebSocketGlobal).WebSocket
   else globalThis.WebSocket = originalWebSocket
   vi.unstubAllGlobals()
 })
+
+function rpcBinaryFrame(id: string, body: string): ArrayBuffer {
+  const idBytes = new TextEncoder().encode(id)
+  const bodyBytes = new TextEncoder().encode(body)
+  const frame = new Uint8Array(2 + idBytes.byteLength + bodyBytes.byteLength)
+  new DataView(frame.buffer).setUint16(0, idBytes.byteLength)
+  frame.set(idBytes, 2)
+  frame.set(bodyBytes, 2 + idBytes.byteLength)
+  return frame.buffer
+}
+
+function decodeRpcRequest(frame: ArrayBufferLike | ArrayBufferView): { rpcId: string; method: string } {
+  const bytes = ArrayBuffer.isView(frame)
+    ? new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength)
+    : new Uint8Array(frame)
+  const idLength = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint16(0)
+  return JSON.parse(new TextDecoder().decode(bytes.subarray(2 + idLength))) as { rpcId: string; method: string }
+}
 
 async function mount(): Promise<ConnectionHandle> {
   const ctx = new Context()
@@ -196,6 +224,54 @@ describe('connection client apply', () => {
     }
     expect(seen.some(u => u.includes('/api/host.describe'))).toBe(true)
     expect(seen.some(u => u.includes('/api/respond'))).toBe(true)
+  })
+
+  it('uses one multiplexed WebSocket for remote-portal RPC and never falls back to fetch', async () => {
+    ;(globalThis as Win).location = {
+      hostname: 'remote.example', search: '', origin: 'https://remote.example',
+    }
+    ;(globalThis as RemoteRpcGlobal).__DSH_REMOTE_RPC__ = '/api/rpc'
+    ;(globalThis as WebSocketGlobal).WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    vi.stubGlobal('crypto', {
+      getRandomValues(bytes: Uint8Array) { return bytes.fill(0) },
+    })
+    const fetch = vi.spyOn(globalThis, 'fetch')
+    const client = new WebApiClient()
+    const pending = client.host.describe({})
+    await vi.waitFor(() => { expect(sockets[0]?.sent).toHaveLength(3) })
+    expect(sockets).toHaveLength(1)
+    expect(sockets[0]?.url).toBe('wss://remote.example/api/rpc')
+    const socket = sockets[0] as FakeWebSocket
+    const start = JSON.parse(socket.sent[0] as string) as { type: string; id: string; path: string; bytes: number }
+    expect(start).toMatchObject({ type: 'rpc_request_start', path: '/api/host.describe' })
+    const logical = decodeRpcRequest(socket.sent[1] as ArrayBuffer)
+    expect(logical.method).toBe('host.describe')
+    expect(JSON.parse(socket.sent[2] as string)).toEqual({ type: 'rpc_request_end', id: start.id })
+
+    socket.receive(JSON.stringify({
+      type: 'rpc_response_start', id: start.id, status: 200,
+      headers: { 'Content-Type': ['application/json'] },
+    }))
+    socket.receive(rpcBinaryFrame(start.id, JSON.stringify({
+      type: 'server-response', rpcId: logical.rpcId,
+      result: { ok: true, value: { version: 'remote', cwd: '/workspace', attachedSessions: 1, canOpenPath: false } },
+    })))
+    socket.receive(JSON.stringify({ type: 'rpc_response_end', id: start.id }))
+
+    await expect(pending).resolves.toMatchObject({
+      result: { ok: true, value: { version: 'remote', cwd: '/workspace', canOpenPath: false } },
+    })
+    expect(fetch).not.toHaveBeenCalled()
+
+    const abort = new AbortController()
+    const cancelled = client.host.describe({}, abort.signal)
+    await vi.waitFor(() => { expect(socket.sent).toHaveLength(6) })
+    const secondStart = JSON.parse(socket.sent[3] as string) as { id: string }
+    abort.abort(new Error('cancel remote request'))
+    await expect(cancelled).rejects.toThrow('cancel remote request')
+    expect(JSON.parse(socket.sent[6] as string)).toEqual({ type: 'rpc_cancel', id: secondStart.id })
+    expect(sockets).toHaveLength(1)
+    fetch.mockRestore()
   })
 
   it('opens one WebSocket per downlink, parses frames, and aborts both without using fetch', async () => {

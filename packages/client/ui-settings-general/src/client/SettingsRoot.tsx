@@ -18,6 +18,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-contract.ts'
 import css from './SettingsRoot.module.css'
+import { DesktopUpdateBadge } from './DesktopUpdateBadge.tsx'
 
 /** Nav glyph by section id; unknown ids fall back to the settings gear. */
 function navIcon(id: string) {
@@ -141,15 +142,18 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
 
   return (
     <>
-      <button
-        type="button"
-        className={clsx(css.trigger, !wide && css.rail)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => { setOpen(true) }}
-      >
-        {renderSlot('settings.trigger', { wide })}
-      </button>
+      <div className={clsx(css.triggerRow, !wide && css.railRow)}>
+        <button
+          type="button"
+          className={clsx(css.trigger, !wide && css.rail)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => { setOpen(true) }}
+        >
+          {renderSlot('settings.trigger', { wide })}
+        </button>
+        <DesktopUpdateBadge wide={wide} />
+      </div>
       {open && (
         <SettingsPanel
           rows={rows}

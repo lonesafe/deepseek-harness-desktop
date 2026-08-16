@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-协议消费层：客户端插件的 apply 会挂载 `ctx.connection`（共享 API 客户端 + 当前页面的 loopback 状态 + 可观察且按 generation 生效的 `hostDescription` + 单消费方流循环启动器）；导出表层携带协议约定类型、`AbstractApiClient` 抽象，以及循环的 sink／配置类型。每次就绪握手成功后，都会在 `onConnected` 之前发布完整的 `host.describe` 值；generation 失效或显式 stop 会清空它，因此原生能力消费者不会保留已经断线的判断。浏览器载体以 HTTP POST 发送 unary／respond，并为 `events.mux` 与 `events.host` 各开一条只下行的 WebSocket；进程内载体满足同一双流抽象。Host half 持有唯一 `/api` route 及其 Fetch bridge；已注册的 Typert interceptor 会先认领自己的 Remote endpoint，未认领请求再回退 API Proxy。Loopback hostname 判定逻辑留在包内部：`/api` Host fence 与 WebSocket upgrade 会直接使用它，其他客户端插件则消费派生的 `ctx.connection.isLoopback` 状态。node 半侧的 `/api` 路由让特权方法集（`host.pickDirectory`、`host.openPath`，以及整个配置面——`settings.describe`/`openDocument`/`update`/`replace`/`mutate` 与 `credentials.describe`/`set`/`unset`；读取与原生操作也在内，因为 describe 会返回已暴露的配置、打开操作会作用于 Host 桌面，而探测任意引用会报出某条凭据来自何处——以及 agent（智能体） preset 的创作面 `agentPreset.read`/`copy`/`openDocument`/`remove`，因为组装指明了一个会话所运行的插件，读取它是侦察，而 copy/remove/openDocument 管理名单并驱动宿主桌面（创作只有复制一种写入，因此这些方法都不接收组装文本或路径）；`agentPreset.list` 与 `agentPreset.select` 不在其中——名单只携带 id 与信任级别，而选择一个 preset 并不比 `session.create` 自带的 `agentPreset` 多给任何能力，何况默认 preset 本就带着 bash）以空信任表通过信任 fence，从而钉在回环——已声明的 `trustedHosts` authority 可达其余全部方法，但即使组合 Web 载体已经认证局域网用户，这些方法仍只限回环本机。平台载体与 ConnectionController 循环属于包内部；apply 负责选择并驱动它们。下行边界见 [WebSocket 下行载体 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-04-websocket-downlink-carrier.md)。
+协议消费层：客户端插件的 apply 会挂载 `ctx.connection`（共享 API 客户端 + 当前页面的 loopback 状态 + 可观察且按 generation 生效的 `hostDescription` + 单消费方流循环启动器）；导出表层携带协议约定类型、`AbstractApiClient` 抽象，以及循环的 sink／配置类型。每次就绪握手成功后，都会在 `onConnected` 之前发布完整的 `host.describe` 值；generation 失效或显式 stop 会清空它，因此原生能力消费者不会保留已经断线的判断。直连浏览器载体以 HTTP POST 发送 unary／respond；可信的远程官网壳也可改用一条复用的 `/api/rpc` WebSocket 承载这些操作。两种模式都会为 `events.mux` 与 `events.host` 各开一条只下行的 WebSocket，进程内载体也满足同一双流抽象。Host half 持有唯一 `/api` route 及其 Fetch bridge；已注册的 Typert interceptor 会先认领自己的 Remote endpoint，未认领请求再回退 API Proxy。Loopback hostname 判定逻辑留在包内部：`/api` Host fence 与 WebSocket upgrade 会直接使用它，其他客户端插件则消费派生的 `ctx.connection.isLoopback` 状态。node 半侧的 `/api` 路由让特权方法集（`host.pickDirectory`、`host.openPath`，以及整个配置面——`settings.describe`/`openDocument`/`update`/`replace`/`mutate` 与 `credentials.describe`/`set`/`unset`；读取与原生操作也在内，因为 describe 会返回已暴露的配置、打开操作会作用于 Host 桌面，而探测任意引用会报出某条凭据来自何处——以及 agent（智能体） preset 的创作面 `agentPreset.read`/`copy`/`openDocument`/`remove`，因为组装指明了一个会话所运行的插件，读取它是侦察，而 copy/remove/openDocument 管理名单并驱动宿主桌面（创作只有复制一种写入，因此这些方法都不接收组装文本或路径）；`agentPreset.list` 与 `agentPreset.select` 不在其中——名单只携带 id 与信任级别，而选择一个 preset 并不比 `session.create` 自带的 `agentPreset` 多给任何能力，何况默认 preset 本就带着 bash）以空信任表通过信任 fence，从而钉在回环——已声明的 `trustedHosts` authority 可达其余全部方法，但即使组合 Web 载体已经认证局域网用户，这些方法仍只限回环本机。平台载体与 ConnectionController 循环属于包内部；apply 负责选择并驱动它们。物理边界见 [WebSocket 下行载体](../../../.agents/notes/implemented/architecture/2026-08-04-websocket-downlink-carrier.md)与[远程 WebSocket RPC 载体](../../../.agents/notes/implemented/architecture/2026-08-16-remote-websocket-rpc-carrier.md) Agent Note。
 
 ## /api 浏览器信任栅栏
 
@@ -10,7 +10,13 @@ node 半侧在桥接或 upgrade 前守卫 `/api` 下的每个入口（`src/api-r
 
 ## `/api` WebSocket 下行
 
-`/api/events.mux` 与 `/api/events.host` 各接受一条 WebSocket upgrade，并只向浏览器发送对应的 `ServerRequest` 文本消息；客户端不会在这些 socket 上发送业务数据。任一 socket 结束都会使当前 connection generation 失败并重建两条流，连接就绪仍要求两条 socket 均已打开且 `host.describe` HTTP 调用成功。Host teardown 会终止两条 socket、中止各自的 source，并等待 source 清理完成后再返回。普通网络 GET 这些路径会返回 426，不保留 SSE（Server-Sent Events）回退；`toFetchHandler` 的 SSE 编解码只服务进程内同构载体。浏览器侧 RPC 标识使用 `crypto.getRandomValues()`，而不依赖只在安全上下文中提供的 `crypto.randomUUID()`，因此明文 HTTP 局域网表层仍能使用随机性不打折的 UUID v4 关联标识。
+`/api/events.mux` 与 `/api/events.host` 各接受一条 WebSocket upgrade，并只向浏览器发送对应的 `ServerRequest` 文本消息；客户端不会在这些 socket 上发送业务数据。任一 socket 结束都会使当前 connection generation 失败并重建两条流，连接就绪仍要求两条 socket 均已打开且 `host.describe` unary 调用成功。Host teardown 会终止两条 socket、中止各自的 source，并等待 source 清理完成后再返回。普通网络 GET 这些路径会返回 426，不保留 SSE（Server-Sent Events）回退；`toFetchHandler` 的 SSE 编解码只服务进程内同构载体。浏览器侧 RPC 标识使用 `crypto.getRandomValues()`，而不依赖只在安全上下文中提供的 `crypto.randomUUID()`，因此明文 HTTP 局域网表层仍能使用随机性不打折的 UUID v4 关联标识。
+
+## 远程官网 RPC WebSocket
+
+远程官网会在其提供的壳中插入精确的 `window.__DSH_REMOTE_RPC__ = "/api/rpc"` 标记。`WebApiClient` 只接受这一个内置路径，并通过一条随页面存续的 WebSocket 承载 unary 与 respond JSON 信封；标记缺失或不同的桌面直连页和局域网页仍使用 HTTP。带标记的页面在 socket 失败后不会静默回退到 HTTP，因此认证、取消与传输失败仍然可见，不会在请求中途改变载体语义。
+
+文本控制消息负责开始、结束或取消一项传输请求，以及开始、结束或报告其响应失败。二进制消息在每个正文分片前放置传输 id 的长度和 UTF-8 传输 id，让并发逻辑 RPC 可以交错传输，且不会与信封中独立的 `rpcId` 混淆。请求上限为 24 MiB，响应上限为 128 MiB，分片大小为 512 KiB；调用方 abort 会发送 `rpc_cancel`，socket 断开会拒绝全部在途操作，畸形帧会关闭共享 socket。基类仍持有信封 mint、schema 校验、rpcId 回显校验与时限：普通 unary 调用使用 30 秒，history 使用 150 秒，使官网两分钟的服务端时限可以先返回明确结果。
 
 ## 模型体验
 

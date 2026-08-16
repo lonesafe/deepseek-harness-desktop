@@ -67,6 +67,18 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      - name: Verify the Windows workspace picker and desktop chrome
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: >-
+          pnpm exec vitest run --config vitest.config.ts
+          packages/host/directory-picker-native/tests/win32-dialog.spec.ts
+          packages/host/directory-picker-native/tests/win32-dialog-host.spec.ts
+          packages/host/directory-picker-native/tests/win32-dialog-bindings.spec.ts
+          packages/host/directory-picker-native/tests/native-picker.spec.ts
+          packages/client/ui-settings-general/tests/desktop-update.client.spec.tsx
+          apps/desktop/tests/product.spec.ts
+
       - name: Build and stage the desktop runtime
         run: pnpm run desktop:prepare
 

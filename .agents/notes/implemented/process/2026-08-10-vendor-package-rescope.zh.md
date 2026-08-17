@@ -26,6 +26,8 @@ Status: implemented
 
 改写只落在**带定界符的完整包名 token** 上：引号或反引号包裹的 specifier（可带 `/子路径`）、`package.json` 的 `name` 与依赖键、`cordis.yml` 的 `name:` 值、`tsconfig.base.json` 的 `paths` 键。因此以下同形串一律未改，它们不是包名：`cordis.yml` 及其家族文件名、Loader 的 `cordis:` 内建前缀（`cordis:include`、`cordis:group`，见 `vendor/loader/src/config/tree.ts`）、`cordis-config-entry` 这类 kind 串、`@deepseek-ai/dsh-tool-cordis`、Schemastery 上游的 `Symbol.for('schemastery')` 与 `vendor:` 元数据、`scripts/gen-module-graph.ts` 与 `gen-doc-graphs.ts` 里 `GROUP_ORDER` 的 `packages/<group>/` 目录名，以及 `vendor/*/README.md` 里的上游安装指引。
 
+harness 自有的 `cordis/*` 事件族同样是稳定的产品协议，而不是包子路径。token pass 对这些事件名及其 `cordis/`、`cordis/*` 目录形式采用封闭豁免。UI locale namespace、`@cordis` 输入触发器名和事件目录 scope 使用裸 `cordis`，其所属文件是显式的通用改写豁免。`scripts/rescope-vendor.spec.ts` 证明相邻的 `from 'cordis'` import 仍会被改名，而事件标识符保持不变。
+
 Token 规则看不见两类点位，它们按名字逐处改：一是属性访问 `manifest.peerDependencies?.cordis`——TypeScript 抓不到过期的 `Record<string, string>` 键；二是把名字当数据的常量（`check-workspace-constraints.ts` 的 vendored 集合、`verify-cordis-config.ts` 的 group/include 名、`cordis-walk.ts` 与 `gen-scoped-events.ts` 与 typert `analyzer.ts` 里识别 `declare module` 目标的字符串、`app-boot/tsdown.config.ts` 的 `alwaysBundle`）。
 
 Markdown 按「读者拿它做什么」一分为二。围栏一律跟着改，不看 info string——围栏里是读者要照抄的代码或要挂载的配置，包括写着 Loader 插件名的 `yaml` 围栏和紧邻编译围栏的 `ts ignore-check` 围栏。散文只在 `docs/` 下跟着改：教程里引用某个名字的句子，教的是本仓已不解析的东西。`docs/` 之外的散文——`vendor/*/README.md`、各包 README、`.agents/notes/`——保留写作当时的名字：既因为它记录的是当时的事实，也因为同一个拼写可能指别的东西，比如 Python SDK 的 `cordis` 选项、我们没 vendor 的 `@cordisjs/plugin-http`，或某个 agent-preset 的 id。
@@ -38,7 +40,7 @@ Markdown 按「读者拿它做什么」一分为二。围栏一律跟着改，�
 - 上游 sync 照 `vendor/README.md` 的流程走，第 3 步多一项：对拷进来的源码重跑 `pnpm run rescope-vendor --apply`，脚本里的映射与清单表两列名字必须一致。
 - **要回到官方上游包**时反着跑这份映射——`pnpm run rescope-vendor --apply --reverse`——再补回 `minimumReleaseAgeExclude` 两条、放开发布集对 `@deepseek-ai/*` 的断言。改写量约 1300 个文件，用脚本重放而不是手改。
 
-改名这件事由 `scripts/rescope-vendor.ts` 承载：映射、带定界符的 token 规则、名字其实是目录而非包时的逐文件豁免、上面那批精确改写，以及一个断言「零残留、每条精确改写都落上、幂等」的 `--check` 模式——它由 `hygiene` 门在每次 CI 上执行。rebase 时重放它，而不是去解一个 1300 文件的冲突；上游动了任一被钉住的点位，脚本会响亮失败而不是静默漏改。
+改名这件事由 `scripts/rescope-vendor.ts` 承载：映射、带定界符的 token 规则、token 属于产品数据而非包时的协议与逐文件豁免、上面那批精确改写，以及一个断言「零残留、每条精确改写都落上、幂等」的 `--check` 模式——它由 `hygiene` 门在每次 CI 上执行。rebase 时重放它，而不是去解一个 1300 文件的冲突；上游动了任一被钉住的点位，脚本会响亮失败而不是静默漏改。
 
 ## 考虑过的替代方案
 

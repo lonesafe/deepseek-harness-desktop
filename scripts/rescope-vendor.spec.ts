@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { exactEditState } from './rescope-vendor.ts'
+import { exactEditState, rewriteGenericText } from './rescope-vendor.ts'
 
 const ANCHOR = '\n## Sync procedure'
 const INSERTED = `\n15. **rescope**: one log entry.\n${ANCHOR}`
@@ -37,5 +37,30 @@ describe('exactEditState', () => {
     // A moved or partially applied site: neither state is complete.
     expect(exactEditState('a = 1\nb = 2\n', 'a = 1', 'b = 2', 1)).toBe('invalid')
     expect(exactEditState('x\n', 'a = 1', 'b = 2', 1)).toBe('invalid')
+  })
+})
+
+describe('generic token mapping', () => {
+  it('rescopes package imports without renaming Cordis event identifiers', () => {
+    const source = [
+      "import type { Context } from 'cordis'",
+      "ctx.emit('cordis/request-run', request)",
+      "const family = 'cordis/*'",
+      "events.filter(event => event.startsWith('cordis/'))",
+      "const signature = '\\'cordis/request-run\\'(request: Request): void'",
+    ].join('\n')
+
+    expect(rewriteGenericText(source, 'packages/example/src/index.ts').text).toBe([
+      "import type { Context } from '@deepseek-ai/cordis'",
+      "ctx.emit('cordis/request-run', request)",
+      "const family = 'cordis/*'",
+      "events.filter(event => event.startsWith('cordis/'))",
+      "const signature = '\\'cordis/request-run\\'(request: Request): void'",
+    ].join('\n'))
+  })
+
+  it('keeps the Cordis locale namespace in registered UI files', () => {
+    const source = "export const NS = 'cordis'"
+    expect(rewriteGenericText(source, 'packages/extensions/ui-cordis/src/client/locales.ts').text).toBe(source)
   })
 })

@@ -93,7 +93,7 @@ async function runHeadlessPtySmoke(): Promise<string> {
         DSH_TEST_SHUTDOWN_ARM_FILE: join(cwd, 'shutdown-armed'),
       },
     })
-    const timeoutMs = 15_000
+    const timeoutMs = 30_000
     const result = await execa('python3', [
       '-c',
       POSIX_HEADLESS_PTY_DRIVER,

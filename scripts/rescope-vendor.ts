@@ -104,7 +104,30 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   // GROUP_ORDER holds `packages/<group>/` directory names, not package names.
   { file: 'scripts/gen-module-graph.ts', upstream: ['cordis'] },
   { file: 'scripts/gen-doc-graphs.ts', upstream: ['cordis'] },
+  // The bare `cordis` token is a locale namespace, input-trigger name, or
+  // event-catalog scope in these files, not the framework package.
+  { file: 'packages/client/ui-settings-plugin-inventory/src/client/PluginInventorySettingsTab.tsx', upstream: ['cordis'] },
+  { file: 'packages/extensions/ui-cordis/src/client/CordisActionRow.tsx', upstream: ['cordis'] },
+  { file: 'packages/extensions/ui-cordis/src/client/CordisDefineRow.tsx', upstream: ['cordis'] },
+  { file: 'packages/extensions/ui-cordis/src/client/CordisPanel.tsx', upstream: ['cordis'] },
+  { file: 'packages/extensions/ui-cordis/src/client/CordisRunRow.tsx', upstream: ['cordis'] },
+  { file: 'packages/extensions/ui-cordis/src/client/index.ts', upstream: ['cordis'] },
+  { file: 'packages/extensions/ui-cordis/src/client/locales.ts', upstream: ['cordis'] },
+  { file: 'scripts/gen-cordis-catalog.ts', upstream: ['cordis'] },
 ]
+
+// Harness event identifiers share the `cordis/` spelling with package
+// subpaths, but remain stable when the framework npm package is rescoped.
+const CORDIS_EVENT_SUBPATHS = new Set([
+  '/',
+  '/*',
+  '/dynamic-package',
+  '/dynamic-retract',
+  '/inspect-query',
+  '/inspect-query-resolved',
+  '/request-run',
+  '/request-run-resolved',
+])
 
 /** A string that must appear exactly `count` times once the rescope has run. */
 interface PostCondition {
@@ -463,6 +486,7 @@ const VENDORED_LIBRARY = /^@deepseek-ai\\/(cosmokit|schemastery)(\\/|$)/
 /** Files the rescope must never rewrite. */
 function excluded(file: string): boolean {
   if (file === 'scripts/rescope-vendor.ts') return true // the mapping itself
+  if (file === 'scripts/rescope-vendor.spec.ts') return true // fixtures exercise both name states
   if (file.startsWith('.agents/notes/')) return true // notes record what was true when written
   // Recorded model payloads quote documentation verbatim, so they must mirror the
   // sources on disk — including the notes this rescope leaves alone.
@@ -511,7 +535,11 @@ function rewriteLine(line: string, file: string, all: readonly Pattern[]): strin
   let out = line
   for (const pattern of all) {
     if (skipped(file, pattern)) continue
-    out = out.replace(pattern.token, (_match, quote: string, subpath: string) => `${quote}${pattern.to}${subpath}${quote}`)
+    out = out.replace(pattern.token, (match, quote: string, subpath: string) => {
+      const semanticSubpath = subpath.endsWith('\\') ? subpath.slice(0, -1) : subpath
+      if (pattern.from === 'cordis' && CORDIS_EVENT_SUBPATHS.has(semanticSubpath)) return match
+      return `${quote}${pattern.to}${subpath}${quote}`
+    })
     out = out.replace(pattern.yamlName, (_match, prefix: string, suffix: string) => `${prefix}${pattern.to}${suffix}`)
   }
   return out
@@ -546,6 +574,17 @@ function rewrite(text: string, file: string, all: readonly Pattern[]): { text: s
     return next
   })
   return { text: out.join('\n'), lines }
+}
+
+/**
+ * Apply only the generic token mapping to an in-memory source for tests.
+ * @param text - Source text to rewrite.
+ * @param file - Repository-relative path used by the exemption table.
+ * @param reverse - Whether to map scoped package names back upstream.
+ * @returns Rewritten text and the number of changed lines.
+ */
+export function rewriteGenericText(text: string, file: string, reverse = false): { text: string; lines: number } {
+  return rewrite(text, file, patterns(reverse))
 }
 
 function classify(file: string): string {

@@ -338,12 +338,16 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     await input.press('Enter')
     const dock = page.locator('[data-queue-dock]')
     // Both messages queued: the two-row dock shows a collapsed count header,
-    // and Playwright text matching skips the hidden rows — expand the list,
-    // then assert each row's content.
+    // and Playwright text matching skips the hidden rows. Replay frames can
+    // replace the dock while the question call is still arriving, so converge
+    // on an expanded instance before asserting each row's content.
     await dock.getByText('2 queued messages').waitFor({ timeout: 10_000 })
-    await dock.getByRole('button').click()
-    await dock.getByText(STEER_ONE, { exact: true }).waitFor({ timeout: 10_000 })
-    await dock.getByText(STEER_TWO, { exact: true }).waitFor({ timeout: 10_000 })
+    await expect.poll(async () => {
+      const firstVisible = await dock.getByText(STEER_ONE, { exact: true }).isVisible()
+      const secondVisible = await dock.getByText(STEER_TWO, { exact: true }).isVisible()
+      if (!firstVisible || !secondVisible) await dock.getByRole('button').first().click()
+      return firstVisible && secondVisible
+    }, { timeout: 30_000 }).toBe(true)
     expect(await page.locator('[data-pending-steering]').count()).toBe(0)
 
     // Empty draft + Cmd+Enter: both queued rows steer in FIFO order, the dock
@@ -355,16 +359,16 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     ).toBe(2)
     expect(await page.locator('[data-queue-dock]').count()).toBe(0)
     // The reasoning row streams independently of the steering handoff. Wait
-    // for the block to settle so the mid snapshot does not race its transient
-    // visually-hidden Running label while the question keeps the turn open.
+    // for both the settled block and the pending question so the mid snapshot
+    // has one explicit lifecycle state on every machine.
     await page.locator('[data-variant="think"][data-state="ok"]').first().waitFor({ timeout: 10_000 })
+    const composer = page.locator('[data-question-key]')
+    await composer.waitFor({ timeout: 30_000 })
     const mid = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(STEER_ALL_MID, mid, MODE)
 
     // Answer the question; the step closes, the loop drains both steerings
     // into one next-step request, and the final reply obeys both markers.
-    const composer = page.locator('[data-question-key]')
-    await composer.waitFor({ timeout: 30_000 })
     await composer.getByRole('radio', { name: 'Yes' }).click()
     await composer.getByRole('radio', { name: 'Yes' }).press('Enter')
     await settled

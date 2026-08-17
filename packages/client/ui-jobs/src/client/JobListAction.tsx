@@ -4,7 +4,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import type { JobView } from '@deepseek-ai/dsh-client-runtime/client'
-import { IconChevronDownOutline14, StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutline14, StateDot, useDismissOnOutsidePointer, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -113,20 +113,7 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
   const rows = useMemo(() => ordered(jobs), [jobs])
   const liveCount = useMemo(() => jobs.filter(isLive).length, [jobs])
 
-  useEffect(() => {
-    if (!open) return
-    const closeOutside = (event: PointerEvent): void => {
-      if (
-        event.target instanceof Node
-        && !rootRef.current?.contains(event.target)
-        && !menuRef.current?.contains(event.target)
-      ) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('pointerdown', closeOutside)
-    return () => { document.removeEventListener('pointerdown', closeOutside) }
-  }, [open])
+  useDismissOnOutsidePointer(rootRef, open, setOpen, menuRef)
 
   // The mobile header deliberately clips its action row to keep long titles
   // and utilities from widening the page. Render the list at document level

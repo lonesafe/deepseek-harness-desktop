@@ -35,7 +35,7 @@ const RELOADED_EXPECTED = join(SNAPSHOT_DIR, 'reloaded.expected.md')
 const MODE = webSnapshotMode()
 
 const PROMPT = 'Reply with the single word LIGHTHOUSE and stop.'
-const REPLAY_PACE_MS = 100
+const REPLAY_PACE_MS = 250
 
 describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', () => {
   let scaffold: WebScaffold

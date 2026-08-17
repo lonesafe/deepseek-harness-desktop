@@ -8,7 +8,6 @@ import { existsSync } from 'node:fs'
  */
 export function apply(ctx) {
   const keepAlive = setInterval(() => {}, 60_000)
-  process.stderr.write('dsh-test: never-dispose ready\n')
   ctx.effect(() => async () => {
     clearInterval(keepAlive)
     const armFile = process.env.DSH_TEST_SHUTDOWN_ARM_FILE
@@ -16,4 +15,5 @@ export function apply(ctx) {
     process.stderr.write('dsh-test: never-dispose started\n')
     await new Promise(() => {})
   })
+  process.stderr.write('dsh-test: never-dispose ready\n')
 }

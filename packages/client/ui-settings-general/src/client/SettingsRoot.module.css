@@ -1,10 +1,11 @@
 /* Settings shell (figma 501:29904 mask context / 501:29947 panel): sidebar
    foot trigger row + centered 1080x700 modal panel. The trigger uses the
-   sidebar's 34px compact row / 36px rail circle rhythm; the
+   sidebar foot's 42px row / 36px rail circle rhythm; the
    panel is a two-column layout — 188px nav rail + content column with a
    54px header and the 24px-padded options area. */
 
-/* Trigger row: match the other wide sidebar controls' compact vertical rhythm. */
+/* Trigger row: preserve room for desktop version and update controls while the
+   settings action follows the sidebar footer's 42px vertical rhythm. */
 .triggerRow {
   position: relative;
   display: flex;
@@ -19,13 +20,14 @@
 
 .trigger {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   width: auto;
-  height: 34px;
-  margin: 4px -4px 4px;
-  padding: 6px 2px 6px 10px;
+  height: 42px;
+  margin: 4px 0;
+  padding: 0 10px 0 8px;
   box-sizing: border-box;
   border: none;
   border-radius: 12px;

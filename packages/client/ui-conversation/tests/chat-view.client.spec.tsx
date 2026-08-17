@@ -416,6 +416,8 @@ describe('ChatView', () => {
     nextTop = 560
     act(() => { h.set({ nodes: [assistant(2, 'older'), user(9, 'first visible'), user(10, 'next visible')] }) })
     expect(scroller.scrollTop).toBe(590) // latest 90 + the anchored row's 500px prepend shift
+    expect(h.chatScroll.read()).toMatchObject({ scrollTop: 590 })
+    expect(view.getByLabelText('回到底部')).toBeTruthy()
   })
 
   it('renders the fixture main line as independently keyed business nodes', () => {

@@ -241,6 +241,12 @@ export function ChatView({
       const row = anchorElement(local, anchor.key)
       if (row !== null) el.scrollTop += flowTop(row, el) - anchor.top
       observedTopRef.current = el.scrollTop
+      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
+      atBottomRef.current = isAtBottom
+      setAtBottom(isAtBottom)
+      const position = isAtBottom ? null : scrollPosition(local, el)
+      if (isAtBottom) chatScroll.save(null)
+      else if (position !== null) chatScroll.save(position)
       firstSeqRef.current = firstSeq
       /* v8 ignore next -- ?? arm: a prepend adds nodes, so the flow list here is never empty. */
       lastKeyRef.current = lastKey

@@ -3,6 +3,7 @@
     - 'button "Using ONE run_code program: run" [disabled]'
   - img
   - text: Standard mode
+  - 'button "Balance: --. Click to refresh"': Balance --
   - button "Session log":
     - text: Session log
     - img

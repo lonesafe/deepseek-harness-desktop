@@ -14,7 +14,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import LlmRuntime, { LlmAdapter } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmAccountBalance, LlmModelInfo, LlmProviderInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SettingsProvider, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { CredentialProvider } from '@deepseek-ai/dsh-credentials'
@@ -141,6 +141,13 @@ class CatalogAdapter extends LlmAdapter {
 
   override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
     return Promise.resolve(this.models.map(id => ({ provider, id, name: id })))
+  }
+
+  override accountBalance(): Promise<LlmAccountBalance> {
+    return Promise.resolve({
+      isAvailable: true,
+      balances: [{ currency: 'CNY', totalBalance: '88.00', grantedBalance: '8.00', toppedUpBalance: '80.00' }],
+    })
   }
 
 
@@ -655,6 +662,17 @@ describe('llm domain', () => {
       ],
     }])
     expect(value.failures).toEqual([{ id: 'broken', name: 'Broken', message: 'catalog backend down' }])
+  })
+
+  it('serves an exact read-only balance for one registered provider', async () => {
+    const ctx = await harness()
+    ctx.llm.registerAdapter(['deepseek-official'], new CatalogAdapter('DeepSeek', []))
+    const api = createApiProxy(ctx, DEFAULTS)
+    const value = expectOk(await api.llm.balance(request({ provider: 'deepseek-official' })))
+    expect(value).toEqual({
+      isAvailable: true,
+      balances: [{ currency: 'CNY', totalBalance: '88.00', grantedBalance: '8.00', toppedUpBalance: '80.00' }],
+    })
   })
 
   it('forwards llm/adapters-updated at every topology commit point', async () => {

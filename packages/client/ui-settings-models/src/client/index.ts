@@ -11,6 +11,8 @@ import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 // Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+// Type-only: pulls the conversation header utility SlotMap merge.
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the ctx.remote merge and the forwarded-event key face
@@ -26,6 +28,9 @@ import { refreshWelcomeIfLoaded, WelcomeNoticeStore } from './welcome-store.ts'
 import { ModelsSettingsStore } from './store.ts'
 import { en, zh, type ModelsKey } from './locales.ts'
 import { WELCOME_NOTICE_SETTINGS_NAMESPACE } from '../onboarding-copy.ts'
+import { BalanceIndicator } from './BalanceIndicator.tsx'
+import type { BalanceIndicatorInjected } from './BalanceIndicator.tsx'
+import { BalanceStore } from './balance-store.ts'
 
 export type { ModelsSectionInjected, ModelsSectionProps } from './ModelsSection.tsx'
 export type { ModelsKey } from './locales.ts'
@@ -94,6 +99,12 @@ export function apply(ctx: ClientContext): void {
     hooks: { welcome: welcomeController.store },
     t,
   })
+  const balanceController = new BalanceStore(connection.api)
+  const balanceInjected = (): BalanceIndicatorInjected => ({
+    hooks: { balance: balanceController.store },
+    refresh: () => { void balanceController.load() },
+  })
+  void balanceController.load()
 
   // Pushed invalidations converge every open surface without polling: any
   // settings/credentials/topology change refetches once the page loaded.
@@ -106,11 +117,18 @@ export function apply(ctx: ClientContext): void {
     const disposers = [
       ctx.remote.$on('settings/document-updated', (ns) => {
         refreshModels()
+        if (ns === 'llm-deepseek') void balanceController.load()
         if (ns === WELCOME_NOTICE_SETTINGS_NAMESPACE) refreshWelcomeIfLoaded(welcomeController)
       }),
-      ctx.remote.$on('credentials/updated', refreshModels),
+      ctx.remote.$on('credentials/updated', (ref) => {
+        refreshModels()
+        if (ref === 'DEEPSEEK_API_KEY') void balanceController.load()
+      }),
       ctx.remote.$on('llm/adapters-updated', refreshModels),
-      ctx.on('connection/reset', refreshAll),
+      ctx.on('connection/reset', () => {
+        refreshAll()
+        void balanceController.load()
+      }),
     ]
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-settings-models: pushed invalidations')
@@ -134,4 +152,11 @@ export function apply(ctx: ClientContext): void {
     order: 0,
     inject: deepSeekOnboardingInjected,
   }, DeepSeekOnboardingDialog))
+  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
+    name: 'conversation.session.header.utilities',
+    id: 'deepseek-balance',
+    order: -10,
+    locale: NS,
+    inject: balanceInjected,
+  }, BalanceIndicator))
 }

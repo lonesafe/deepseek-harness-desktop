@@ -73,6 +73,7 @@ export const REMOTE_RPC_POLICY: Readonly<{ [K in keyof RpcMethodMap]: RemoteRpcD
   'credentials.unset': 'blocked',
   'llm.providers': 'forward',
   'llm.models': 'forward',
+  'llm.balance': 'forward',
   'llm.discoverModels': 'blocked',
 }
 

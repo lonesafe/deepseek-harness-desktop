@@ -148,6 +148,26 @@ export interface LlmProviderInfo {
   name: string
 }
 
+/** One currency row returned by a provider's account-balance endpoint. */
+export interface LlmBalanceInfo {
+  /** ISO-style currency code reported by the provider (for example CNY or USD). */
+  currency: string
+  /** Total spendable balance, preserved as a decimal string. */
+  totalBalance: string
+  /** Promotional or granted portion of the total balance. */
+  grantedBalance: string
+  /** User-funded portion of the total balance. */
+  toppedUpBalance: string
+}
+
+/** Provider account availability and its per-currency balances. */
+export interface LlmAccountBalance {
+  /** Whether the provider currently considers the account usable. */
+  isAvailable: boolean
+  /** Detached balance rows in provider order. */
+  balances: readonly LlmBalanceInfo[]
+}
+
 /** Merge-extensible provider model modality vocabulary. */
 export interface ModelModalityMap {
   text: 'text'

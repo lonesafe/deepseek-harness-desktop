@@ -1,6 +1,7 @@
 - banner:
   - navigation "Session hierarchy":
     - button "CJK strong emphasis" [disabled]
+  - 'button "Balance: --. Click to refresh"': Balance --
   - button "Session log":
     - text: Session log
     - img

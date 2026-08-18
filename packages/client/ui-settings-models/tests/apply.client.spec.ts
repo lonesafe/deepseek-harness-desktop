@@ -9,6 +9,7 @@ import { apply, inject, refreshIfLoaded } from '@deepseek-ai/dsh-client-ui-setti
 import { ModelsSection } from '../src/client/ModelsSection.tsx'
 import { DeepSeekOnboardingDialog } from '../src/client/DeepSeekOnboardingDialog.tsx'
 import { WelcomeNotice } from '../src/client/WelcomeNotice.tsx'
+import { BalanceIndicator } from '../src/client/BalanceIndicator.tsx'
 
 // The service reads its initial locale from the browser; these specs assert
 // the shipped Chinese copy, so they state the browser they assume.
@@ -35,6 +36,7 @@ function declare(slots: SlotRegistry): () => void {
       children: {
         'settings.section': { kind: 'list', scope: 'root' },
         'settings.onboarding': { kind: 'list', scope: 'root' },
+        'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
       },
     } as never,
     () => null,
@@ -63,6 +65,9 @@ describe('ui-settings-models apply', () => {
     expect(injected.api).toBeDefined()
     const onboarding = before.slots.entries('settings.onboarding')
     expect(onboarding).toHaveLength(2)
+    const utility = before.slots.entries('conversation.session.header.utilities')[0]!
+    expect(utility.component).toBe(BalanceIndicator)
+    expect(utility.options).toMatchObject({ id: 'deepseek-balance', order: -10 })
     expect(onboarding.find(entry => entry.options.id === 'welcome-notice')).toMatchObject({
       component: WelcomeNotice,
       options: { id: 'welcome-notice', order: -100 },
@@ -84,6 +89,7 @@ describe('ui-settings-models apply', () => {
     await Promise.resolve()
     expect(after.slots.entries('settings.section')[0]!.component).toBe(ModelsSection)
     expect(after.slots.entries('settings.onboarding')).toHaveLength(2)
+    expect(after.slots.entries('conversation.session.header.utilities')).toHaveLength(1)
     // The self-inflicted ledger notifications hit the duplicate guard.
     expect(after.slots.entries('settings.section')).toHaveLength(1)
   })
@@ -119,10 +125,12 @@ describe('ui-settings-models apply', () => {
     redeclare()
     expect(b.slots.entries('settings.section')).toHaveLength(0)
     expect(b.slots.entries('settings.onboarding')).toHaveLength(0)
+    expect(b.slots.entries('conversation.session.header.utilities')).toHaveLength(0)
     declare(b.slots)
     await Promise.resolve()
     expect(b.slots.entries('settings.section')[0]!.component).toBe(ModelsSection)
     expect(b.slots.entries('settings.onboarding')).toHaveLength(2)
+    expect(b.slots.entries('conversation.session.header.utilities')).toHaveLength(1)
     // The locale path also recovers through the same ledger re-check.
     b.locale.setLocale('en')
     expect(resolveSlotLabel(b.slots.entries('settings.section')[0]!.options.label)).toBe('Models')
@@ -138,6 +146,7 @@ describe('ui-settings-models apply', () => {
     await fiber.dispose()
     expect(b.slots.entries('settings.section')).toHaveLength(0)
     expect(b.slots.entries('settings.onboarding')).toHaveLength(0)
+    expect(b.slots.entries('conversation.session.header.utilities')).toHaveLength(0)
     // The (ns, locale) seats are free again — the dictionary disposers ran.
     expect(() => b.locale.register('settings.models', 'zh', {})).not.toThrow()
     expect(() => b.locale.register('settings.models', 'en', {})).not.toThrow()

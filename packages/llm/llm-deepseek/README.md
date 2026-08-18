@@ -8,6 +8,8 @@ A second, library-backed implementation of the same seam exists in `@deepseek-ai
 
 The package root exposes the Cordis plugin contract and `DeepSeekAdapter`; wire serialization, SSE parsing, and chunk translation helpers are not part of that root contract.
 
+The adapter also implements `accountBalance()` for the route's current credential. It sends an attributed bearer-authenticated `GET /user/balance` to the resolved `baseURL`, validates the provider response at the boundary, and preserves total, granted, and topped-up amounts as decimal strings so account money is never rounded by JavaScript numbers.
+
 ## Config
 
 ```yaml

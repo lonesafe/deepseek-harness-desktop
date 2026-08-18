@@ -11,6 +11,14 @@
 import type { RpcRequest, RpcResponse } from './rpc.ts'
 import type { ModelCatalogFailure, ModelProviderGroup } from './sessions.ts'
 
+/** One provider account balance row, with monetary precision preserved. */
+export interface BalanceView {
+  currency: string
+  totalBalance: string
+  grantedBalance: string
+  toppedUpBalance: string
+}
+
 /** Wire view of one configurable provider. */
 export interface ConfigurableProviderView {
   /** Provider route key (`deepseek-official`, `openai`, …). */
@@ -47,6 +55,12 @@ export interface LlmApi {
    * failures ride `failures` without failing the sound groups.
    */
   models(request: RpcRequest<{}>): Promise<RpcResponse<{ groups: ModelProviderGroup[]; failures: ModelCatalogFailure[] }>>
+
+  /** Read the current account balance for a registered provider route. */
+  balance(
+    request: RpcRequest<{ provider: string }>,
+    signal?: AbortSignal,
+  ): Promise<RpcResponse<{ isAvailable: boolean; balances: BalanceView[] }>>
 
   /**
    * Interrogate a provider endpoint the configuration surface is still

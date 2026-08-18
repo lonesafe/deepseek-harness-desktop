@@ -390,6 +390,32 @@ interface LlmProviderInfo {
 }
 ```
 
+提供账户计费能力的适配器返回精确十进制字符串，而不是 JavaScript 数值，因此每一层传输都能保留提供方精度。
+
+```ts type-equiv
+/** One currency row returned by a provider's account-balance endpoint. */
+interface LlmBalanceInfo {
+  /** ISO-style currency code reported by the provider (for example CNY or USD). */
+  currency: string
+  /** Total spendable balance, preserved as a decimal string. */
+  totalBalance: string
+  /** Promotional or granted portion of the total balance. */
+  grantedBalance: string
+  /** User-funded portion of the total balance. */
+  toppedUpBalance: string
+}
+```
+
+```ts type-equiv
+/** Provider account availability and its per-currency balances. */
+interface LlmAccountBalance {
+  /** Whether the provider currently considers the account usable. */
+  isAvailable: boolean
+  /** Detached balance rows in provider order. */
+  balances: readonly LlmBalanceInfo[]
+}
+```
+
 适配器插件还会通过 `registerConfigurableProviders()` 声明哪些路由*可以*运行，并指明每条路由的用户设置分节，使配置界面能在任何路由注册之前就呈现休眠的提供方。
 
 ```ts type-equiv
@@ -728,6 +754,14 @@ declare abstract class LlmAdapter {
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo>;
   /**
+   * Read the account balance associated with this route's current credential.
+   * Adapters without a balance endpoint reject with a stable capability code.
+   * @param _provider - one provider route owned by this adapter.
+   * @param _signal - cancellation for the provider request.
+   * @returns provider account availability and exact decimal balance strings.
+   */
+  accountBalance(_provider: string, _signal?: AbortSignal): Promise<LlmAccountBalance>;
+  /**
    * Stream one model call as raw chunks. The only required method.
    * @param options - the fully-assembled request; implementations must honor `options.signal`.
    * @returns the chunk stream, obeying the adapter contract documented on `StreamChunk`.
@@ -824,6 +858,15 @@ providerRetryPolicy(provider: string): ResolvedRetryPolicy
 async listModels(provider: string): Promise<LlmModelInfo[]>
 
 /**
+ * Read and validate one registered provider's account balance.
+ * Decimal amounts remain strings so the wire never rounds money.
+ * @param provider - registered provider route to inspect.
+ * @param signal - optional cancellation for the adapter request.
+ * @returns validated, detached provider account-balance metadata.
+ */
+async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>
+
+/**
  * Resolve and validate all metadata from the adapter that owns one exact
  * route. The result is detached from adapter-owned objects; catalog
  * membership remains advisory and does not control request routing.
@@ -870,7 +913,7 @@ async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<Prepared
 stream(options: GenerateOptions): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:284`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:296`](../../packages/llm/llm/src/index.ts)
 
 <a id="llm-events"></a>
 
@@ -919,5 +962,5 @@ Waterfall around every streaming model call (retry, replay, routing). Bound to t
 'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:64`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:65`](../../packages/llm/llm/src/index.ts)
 <!-- END GENERATED cordis-surface -->

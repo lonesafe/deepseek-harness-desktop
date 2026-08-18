@@ -2971,6 +2971,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         ],
       }),
       models: request => ok(request, { groups: fixtureModelGroups(), failures: [] }),
+      balance: request => ok(request, { isAvailable: true, balances: [] }),
       // The fixture endpoint is imaginary, so the interrogation answers the
       // catalog it already serves — enough for a surface to exercise adopting
       // candidates without a reachable provider.
@@ -3147,6 +3148,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'credentials.unset': return this.api.credentials.unset(request)
       case 'llm.providers': return this.api.llm.providers(request)
       case 'llm.models': return this.api.llm.models(request)
+      case 'llm.balance': return this.api.llm.balance(request, signal)
       case 'llm.discoverModels': return this.api.llm.discoverModels(request, signal)
     }
   }

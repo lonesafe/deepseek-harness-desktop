@@ -8,6 +8,8 @@ harness LLM（大语言模型）seam 的 DeepSeek chat-completions 适配器：�
 
 包根入口导出 Cordis 插件约定与 `DeepSeekAdapter`；协议序列化、SSE 解析与分片转换 helper 不属于该根约定。
 
+适配器也为当前路由凭据实现 `accountBalance()`。它会向解析后的 `baseURL` 发送带应用归属信息和 Bearer 鉴权的 `GET /user/balance`，在提供方边界校验响应，并把总余额、赠送余额与充值余额保留为十进制字符串，因此账户金额不会被 JavaScript 数值舍入。
+
 ## 配置
 
 ```yaml

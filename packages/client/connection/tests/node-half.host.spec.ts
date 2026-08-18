@@ -482,7 +482,7 @@ describe('connection node half over a real HTTP server', () => {
       // reachable too: `session.create` already takes an `agentPreset`, and the
       // deployment's own default already carries bash, so pinning the switch
       // would be a fence beside an open gate.
-      for (const method of ['llm.providers', 'llm.models', 'agentPreset.list', 'agentPreset.select']) {
+      for (const method of ['llm.providers', 'llm.models', 'llm.balance', 'agentPreset.list', 'agentPreset.select']) {
         expect([method, await call(port, method, 'harness.example')]).toEqual([method, 404])
       }
       // Loopback reaches everything, configuration included.

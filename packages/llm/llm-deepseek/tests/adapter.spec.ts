@@ -1011,6 +1011,52 @@ describe('plugin registration and config', () => {
     await expect(adapter.listModels('deepseek-official')).resolves.toHaveLength(2)
   })
 
+  it('reads the account balance without exposing or rounding monetary values', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      is_available: true,
+      balance_infos: [{
+        currency: 'CNY',
+        total_balance: '123.4500',
+        granted_balance: '3.4500',
+        topped_up_balance: '120.0000',
+      }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    try {
+      const adapter = adapterOf({ baseURL: 'https://api.deepseek.com/', apiKey: 'balance-key' })
+      await expect(adapter.accountBalance('deepseek-official')).resolves.toEqual({
+        isAvailable: true,
+        balances: [{
+          currency: 'CNY',
+          totalBalance: '123.4500',
+          grantedBalance: '3.4500',
+          toppedUpBalance: '120.0000',
+        }],
+      })
+      const [url, init] = fetchSpy.mock.calls[0] ?? []
+      expect(url).toBe('https://api.deepseek.com/user/balance')
+      expect(init?.method).toBe('GET')
+      const headers = new Headers(init?.headers)
+      expect(headers.get('authorization')).toBe('Bearer balance-key')
+      expect(headers.get('user-agent')).toBe(userAgent())
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
+  it('rejects malformed balance rows at the provider boundary', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      is_available: true,
+      balance_infos: [{
+        currency: 'CNY', total_balance: 1, granted_balance: '0', topped_up_balance: '1',
+      }],
+    }), { status: 200 }))
+    try {
+      await expect(adapterOf().accountBalance('deepseek-official')).rejects.toMatchObject({ code: 'INVALID_BALANCE' })
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
   it('resolves connection facts and the credential exactly once per stream call', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const options = vi.fn(() => resolveAdapterOptions({ baseURL: server.url }))

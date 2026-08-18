@@ -75,6 +75,7 @@ export interface RpcMethodMap {
   'credentials.unset': CredentialsApi['unset']
   'llm.providers': LlmApi['providers']
   'llm.models': LlmApi['models']
+  'llm.balance': LlmApi['balance']
   'llm.discoverModels': LlmApi['discoverModels']
 }
 

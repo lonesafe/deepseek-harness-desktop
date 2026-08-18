@@ -16,6 +16,7 @@ import LlmRuntime, {
 } from '@deepseek-ai/dsh-llm'
 import type {
   LlmModelContext,
+  LlmAccountBalance,
   LlmModelInfo,
   LlmModelReasoningInfo,
   LlmProviderInfo,
@@ -552,6 +553,24 @@ describe('LlmRuntime', () => {
       provider: 'plain', id: 'unlisted', name: 'unlisted',
     })
     await expect(ctx.llm.resolveModelInfo('missing', 'm')).rejects.toMatchObject({ code: 'NO_ADAPTER' })
+    await expect(ctx.llm.accountBalance('plain')).rejects.toMatchObject({ code: 'BALANCE_UNSUPPORTED' })
+  })
+
+  it('returns a detached, precision-preserving provider balance', async () => {
+    const source: LlmAccountBalance = {
+      isAvailable: true,
+      balances: [{ currency: 'USD', totalBalance: '10.2500', grantedBalance: '0.2500', toppedUpBalance: '10.0000' }],
+    }
+    const adapter = new class extends ScriptedAdapter {
+      override accountBalance(): Promise<LlmAccountBalance> { return Promise.resolve(source) }
+    }(SCRIPT)
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['route'], adapter)
+    const result = await ctx.llm.accountBalance('route')
+    expect(result).toEqual(source)
+    ;(result.balances[0] as { totalBalance: string }).totalBalance = 'mutated'
+    expect(source.balances[0]!.totalBalance).toBe('10.2500')
   })
 
   it.each([

@@ -9,6 +9,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import type {
   GenerateOptions,
+  LlmAccountBalance,
   LlmConfigurableProvider,
   LlmDiscoveredModel,
   LlmFailure,
@@ -222,6 +223,17 @@ export abstract class LlmAdapter {
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({ provider, id: model, name: model })
+  }
+
+  /**
+   * Read the account balance associated with this route's current credential.
+   * Adapters without a balance endpoint reject with a stable capability code.
+   * @param _provider - one provider route owned by this adapter.
+   * @param _signal - cancellation for the provider request.
+   * @returns provider account availability and exact decimal balance strings.
+   */
+  accountBalance(_provider: string, _signal?: AbortSignal): Promise<LlmAccountBalance> {
+    return Promise.reject(new LlmError('this provider does not expose an account balance', 'BALANCE_UNSUPPORTED'))
   }
 
   /**
@@ -605,6 +617,53 @@ export class LlmRuntime extends Service {
         ...inputModalities === undefined ? {} : { inputModalities },
       }
     })
+  }
+
+  /**
+   * Read and validate one registered provider's account balance.
+   * Decimal amounts remain strings so the wire never rounds money.
+   * @param provider - registered provider route to inspect.
+   * @param signal - optional cancellation for the adapter request.
+   * @returns validated, detached provider account-balance metadata.
+   */
+  async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance> {
+    const value: unknown = await this.registration(provider).adapter.accountBalance(provider, signal)
+    if (typeof value !== 'object' || value === null) {
+      throw new LlmError(`adapter returned invalid balance metadata for provider "${provider}"`, 'INVALID_BALANCE')
+    }
+    const balance = value as { isAvailable?: unknown; balances?: unknown }
+    if (typeof balance.isAvailable !== 'boolean' || !Array.isArray(balance.balances)) {
+      throw new LlmError(`adapter returned invalid balance metadata for provider "${provider}"`, 'INVALID_BALANCE')
+    }
+    const seen = new Set<string>()
+    const decimal = /^-?\d+(?:\.\d+)?$/
+    const balances = balance.balances.map((entry: unknown) => {
+      if (typeof entry !== 'object' || entry === null) {
+        throw new LlmError(`adapter returned invalid balance metadata for provider "${provider}"`, 'INVALID_BALANCE')
+      }
+      const item = entry as Record<string, unknown>
+      if (
+        typeof item.currency !== 'string'
+        || item.currency.length === 0
+        || seen.has(item.currency)
+        || typeof item.totalBalance !== 'string'
+        || typeof item.grantedBalance !== 'string'
+        || typeof item.toppedUpBalance !== 'string'
+        || !decimal.test(item.totalBalance)
+        || !decimal.test(item.grantedBalance)
+        || !decimal.test(item.toppedUpBalance)
+      ) {
+        throw new LlmError(`adapter returned invalid balance metadata for provider "${provider}"`, 'INVALID_BALANCE')
+      }
+      seen.add(item.currency)
+      return {
+        currency: item.currency,
+        totalBalance: item.totalBalance,
+        grantedBalance: item.grantedBalance,
+        toppedUpBalance: item.toppedUpBalance,
+      }
+    })
+    return { isAvailable: balance.isAvailable, balances }
   }
 
   /**

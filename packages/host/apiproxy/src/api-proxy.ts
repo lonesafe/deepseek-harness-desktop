@@ -3378,6 +3378,20 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         return ok(request, await buildModelCatalog(ctx))
       },
 
+      async balance(request, signal) {
+        const { provider } = request.payload
+        try {
+          const balance = await ctx.llm.accountBalance(provider, signal)
+          return ok(request, { isAvailable: balance.isAvailable, balances: [...balance.balances] })
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'balance-unavailable',
+            message: error instanceof Error ? error.message : String(error),
+            details: { provider },
+          })
+        }
+      },
+
       async discoverModels(request, signal) {
         const { settingsNs, provider, baseURL, api, apiKey } = request.payload
         try {

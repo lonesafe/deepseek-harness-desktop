@@ -232,6 +232,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   DirectoryRegistrationHandle: 'llm-streaming.md',
   LlmCallConfig: 'llm-streaming.md',
   LlmModelContext: 'llm-streaming.md',
+  LlmAccountBalance: 'llm-streaming.md',
   LlmModelReasoningInfo: 'llm-streaming.md',
   LlmResolvedModelInfo: 'llm-streaming.md',
   LlmFailure: 'llm-streaming.md',

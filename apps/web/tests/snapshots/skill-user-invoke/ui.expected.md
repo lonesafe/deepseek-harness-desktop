@@ -3,6 +3,7 @@
     - button "/user-invoke-demo and confirm the fixtur" [disabled]
   - img
   - text: Standard mode
+  - 'button "Balance: --. Click to refresh"': Balance --
   - button "Session log":
     - text: Session log
     - img

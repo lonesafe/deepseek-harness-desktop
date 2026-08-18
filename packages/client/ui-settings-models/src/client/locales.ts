@@ -97,6 +97,14 @@ export const en = {
   onboardingSave: 'Save and continue',
   onboardingSaving: 'Saving…',
   keyRequired: 'Enter an API key to continue.',
+  balance: 'Balance',
+  balanceLoading: 'Loading account balance…',
+  balanceUnavailable: 'Balance unavailable',
+  balanceAccountUnavailable: 'The DeepSeek account is currently unavailable',
+  balanceTotal: 'total',
+  balanceToppedUp: 'topped up',
+  balanceGranted: 'granted',
+  balanceRefresh: 'Click to refresh',
 }
 
 /** The settings.models namespace key union. */
@@ -197,4 +205,12 @@ export const zh: { [Key in keyof typeof en]: string } = {
   onboardingSave: '保存并继续',
   onboardingSaving: '保存中…',
   keyRequired: '请输入 API 密钥后继续。',
+  balance: '余额',
+  balanceLoading: '正在加载账户余额…',
+  balanceUnavailable: '余额暂不可用',
+  balanceAccountUnavailable: 'DeepSeek 账户当前不可用',
+  balanceTotal: '总额',
+  balanceToppedUp: '充值',
+  balanceGranted: '赠送',
+  balanceRefresh: '点击刷新',
 }

@@ -11,6 +11,7 @@
 import { attributionHeaders, CONTEXT_WINDOW_EXCEEDED_CODE, isContextWindowExceededError, isQuotaExceededError, LlmAdapter, LlmError, ProviderRequestId, QUOTA_EXCEEDED_CODE, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions,
+  LlmAccountBalance,
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
@@ -213,6 +214,79 @@ export class DeepSeekAdapter extends LlmAdapter {
           },
         },
     })
+  }
+
+  /** Query the official/current endpoint associated with this route's key. */
+  override async accountBalance(_provider: string, signal?: AbortSignal): Promise<LlmAccountBalance> {
+    const connection = this.config.options()
+    const apiKey = await this.config.resolveApiKey(connection)
+    let response: Response
+    try {
+      response = await fetch(`${connection.baseURL.replace(/\/$/, '')}/user/balance`, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          accept: 'application/json',
+          ...attributionHeaders(),
+        },
+        ...signal === undefined ? {} : { signal },
+      })
+    } catch (error: unknown) {
+      if (signal?.aborted) throw new LlmError('DeepSeek balance request aborted by caller', 'ABORTED', { cause: error })
+      throw new LlmError(`DeepSeek balance request to ${connection.baseURL} failed`, 'TRANSPORT', { cause: error })
+    }
+    if (!response.ok) {
+      let providerError: WireError['error']
+      try {
+        providerError = (await response.json() as WireError).error
+      } catch {
+        // The HTTP status remains the authoritative failure when a gateway
+        // returns an empty or malformed error body.
+      }
+      throw new LlmError(
+        providerError?.message ?? `DeepSeek balance API error (HTTP ${response.status})`,
+        httpErrorCode(response.status, providerError),
+        { status: response.status },
+      )
+    }
+    let value: unknown
+    try {
+      value = await response.json()
+    } catch (error: unknown) {
+      throw new LlmError('DeepSeek balance API returned invalid JSON', 'INVALID_BALANCE', { cause: error })
+    }
+    if (typeof value !== 'object' || value === null) {
+      throw new LlmError('DeepSeek balance API returned an invalid response', 'INVALID_BALANCE')
+    }
+    const wire = value as { is_available?: unknown; balance_infos?: unknown }
+    if (typeof wire.is_available !== 'boolean' || !Array.isArray(wire.balance_infos)) {
+      throw new LlmError('DeepSeek balance API returned an invalid response', 'INVALID_BALANCE')
+    }
+    const decimal = /^-?\d+(?:\.\d+)?$/
+    const balances = wire.balance_infos.map((row: unknown) => {
+      if (typeof row !== 'object' || row === null) {
+        throw new LlmError('DeepSeek balance API returned an invalid balance row', 'INVALID_BALANCE')
+      }
+      const item = row as Record<string, unknown>
+      if (
+        typeof item.currency !== 'string'
+        || typeof item.total_balance !== 'string'
+        || typeof item.granted_balance !== 'string'
+        || typeof item.topped_up_balance !== 'string'
+        || !decimal.test(item.total_balance)
+        || !decimal.test(item.granted_balance)
+        || !decimal.test(item.topped_up_balance)
+      ) {
+        throw new LlmError('DeepSeek balance API returned an invalid balance row', 'INVALID_BALANCE')
+      }
+      return {
+        currency: item.currency,
+        totalBalance: item.total_balance,
+        grantedBalance: item.granted_balance,
+        toppedUpBalance: item.topped_up_balance,
+      }
+    })
+    return { isAvailable: wire.is_available, balances }
   }
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {

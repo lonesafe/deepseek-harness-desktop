@@ -32,6 +32,8 @@ env:
 
 jobs:
   build:
+    # Pages is provisioned only for the official documentation repository.
+    if: github.repository == 'deepseek-ai/deepseek-harness'
     runs-on: ubuntu-latest
     permissions:
       contents: read

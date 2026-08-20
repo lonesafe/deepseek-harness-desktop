@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 const runnerPrivatePnpmDestination = '${{ runner.temp }}/setup-pnpm'
+const officialRepository = "github.repository == 'deepseek-ai/deepseek-harness'"
+const officialMasterPush = `${officialRepository} && github.event_name == 'push' && github.ref == 'refs/heads/master'`
 
 describe('CI workflow', () => {
   it('isolates every pnpm action setup destination per runner', () => {
@@ -70,6 +72,8 @@ describe('CI workflow', () => {
     expect(windowsNative['runs-on']).toContain('self-hosted')
     expect(windowsNative['runs-on']).toContain('dsh-win-ci')
     expect(windowsNative['runs-on']).toContain('dsh-windows-2025-16core')
+    expect(windowsNative['runs-on']).toContain('windows-latest')
+    expect(windowsNative['runs-on']).toContain('deepseek-ai/deepseek-harness')
     expect(windowsNative.name).toBe('windows node 24 / native complete')
     expect(windowsNative.if).toBe("github.event_name == 'pull_request'")
     expect(windowsNative.env).toMatchObject({
@@ -85,7 +89,7 @@ describe('CI workflow', () => {
     expect(wineAptCache['runs-on']).toBe('ubuntu-latest')
 
     // serial-windows: master-only standby, self-hosted, non-blocking.
-    expect(serialWindows.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
+    expect(serialWindows.if).toBe(officialMasterPush)
     expect(serialWindows['runs-on']).toEqual(['self-hosted', 'dsh-win-ci', 'windows'])
     expect(serialWindows.name).toBe('serial / windows (self-hosted standby)')
 
@@ -102,6 +106,8 @@ describe('CI workflow', () => {
       expect(job['runs-on'], `${jobName} runs-on must use the Linux failover switch`).toContain('DSH_CI_FAILOVER_LINUX')
       expect(job['runs-on'], `${jobName} runs-on must not use the Windows failover switch`).not.toContain('DSH_CI_FAILOVER_WINDOWS')
       expect(job['runs-on']).toContain('vm-backup')
+      expect(job['runs-on']).toContain('ubuntu-latest')
+      expect(job['runs-on']).toContain('deepseek-ai/deepseek-harness')
     }
     expect(aggregate['runs-on']).toContain('DSH_CI_FAILOVER_LINUX')
     expect(aggregate['runs-on']).not.toContain('DSH_CI_FAILOVER_WINDOWS')
@@ -132,7 +138,7 @@ describe('CI workflow', () => {
       if (!isRecord(job)) throw new TypeError(`${name} must be defined`)
       expect(job.concurrency).toBeUndefined()
       // Both stay master-push-only; that is what makes the push carve-out safe.
-      expect(job.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
+      expect(job.if).toBe(officialMasterPush)
     }
 
     // What bounds the cost of exempting push: a master push may only carry the
@@ -146,8 +152,8 @@ describe('CI workflow', () => {
     const NOT_PUSH_REACHABLE = new Set([
       "github.event_name == 'pull_request'",
       "always() && github.event_name == 'pull_request'",
-      "github.event_name == 'workflow_dispatch' && inputs.suite == 'larger-runner-benchmark'",
-      "github.event_name == 'workflow_dispatch' && inputs.suite == 'consolidated-runner-benchmark'",
+      `${officialRepository} && github.event_name == 'workflow_dispatch' && inputs.suite == 'larger-runner-benchmark'`,
+      `${officialRepository} && github.event_name == 'workflow_dispatch' && inputs.suite == 'consolidated-runner-benchmark'`,
     ])
     const pushReachable = Object.entries(workflow.jobs)
       .filter(([, job]) => {
@@ -249,6 +255,22 @@ describe('DeepSeek e2e workflow', () => {
       run: 'bash scripts/prepare-ci-bubblewrap.sh',
     })
     expect(JSON.stringify(steps)).not.toContain('apt-get')
+    expect(e2e.if).toContain(officialRepository)
+    expect(e2e.if).toContain("github.event_name == 'workflow_dispatch'")
+  })
+})
+
+describe('Repository-hosted workflows', () => {
+  it('does not require official Pages or run unrelated macOS unit tests in forks', () => {
+    const docs = loadWorkflow('.github/workflows/docs-pages.yml')
+    expect(workflowJob(docs, 'build').if).toBe(officialRepository)
+
+    const sandbox = loadWorkflow('.github/workflows/sandbox.yml')
+    const sandboxJob = workflowJob(sandbox, 'sandbox-e2e')
+    if (!Array.isArray(sandboxJob.steps)) throw new TypeError('Sandbox workflow must define steps')
+    const darwinUnit = sandboxJob.steps.filter(isRecord).find(step => step.name === 'Seatbelt unit tests (darwin parity)')
+    expect(darwinUnit?.run).toContain('packages/sandbox/sandbox-local/tests/local.spec.ts')
+    expect(darwinUnit?.run).not.toBe('pnpm run test')
   })
 })
 
@@ -412,8 +434,9 @@ describe('Issue lifecycle workflow', () => {
     expect(lifecyclePullRequest.types).toContain('review_requested')
     expect(lifecycleReview.types).toEqual(['submitted'])
     expect(lifecycleJob.if).toBe(
-      "${{ github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested') }}",
+      `${officialRepository} && (github.event_name != 'pull_request_review' || (github.event.action == 'submitted' && github.event.review.state == 'changes_requested'))`,
     )
+    expect(workflowJob(policy, 'policy').if).toBe(officialRepository)
     expect(policyPullRequest.types).toContain('ready_for_review')
   })
 })

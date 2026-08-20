@@ -254,12 +254,17 @@ describe('connection client apply', () => {
     }))
     socket.receive(rpcBinaryFrame(start.id, JSON.stringify({
       type: 'server-response', rpcId: logical.rpcId,
-      result: { ok: true, value: { version: 'remote', cwd: '/workspace', attachedSessions: 1, canOpenPath: false } },
+      result: {
+        ok: true,
+        value: {
+          version: 'remote', cwd: '/workspace', home: '/home/remote', attachedSessions: 1, canOpenPath: false,
+        },
+      },
     })))
     socket.receive(JSON.stringify({ type: 'rpc_response_end', id: start.id }))
 
     await expect(pending).resolves.toMatchObject({
-      result: { ok: true, value: { version: 'remote', cwd: '/workspace', canOpenPath: false } },
+      result: { ok: true, value: { version: 'remote', cwd: '/workspace', home: '/home/remote', canOpenPath: false } },
     })
     expect(fetch).not.toHaveBeenCalled()
 

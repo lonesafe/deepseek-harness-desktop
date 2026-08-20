@@ -26,9 +26,9 @@ const MID_EXPECTED = join(SNAPSHOT_DIR, 'mid-steer.expected.md')
 const SETTLED_EXPECTED = join(SNAPSHOT_DIR, 'settled.expected.md')
 const MODE = webSnapshotMode()
 // The question composer replaces the textarea, so fill → Queue row → Steer
-// must finish inside the first replay chunk window. At 15 ms that window is
-// shorter than Playwright's round trips; 100 ms supplies test-only headroom,
-// while larger values lengthen all three replay scenarios linearly.
+// must finish inside the first replay chunk window. This pace keeps the
+// transient queue state observable while complete recorded turns remain
+// inside the 30-second gate.
 const REPLAY_PACE_MS = 100
 
 const PROMPT = 'Use the ask_user_question tool to ask me exactly one question with id "checkpoint", question "Ready to continue?", header "Checkpoint", and options labeled "Yes" and "No". After I answer, reply with one short sentence acknowledging my answer and stop.'
@@ -43,6 +43,9 @@ const STEER_ALL_FIXTURE = join(STEER_ALL_DIR, 'session.jsonl')
 const STEER_ALL_OVERRIDE = join(STEER_ALL_DIR, 'replay.override.json')
 const STEER_ALL_MID = join(STEER_ALL_DIR, 'mid-steer.expected.md')
 const STEER_ALL_SETTLED = join(STEER_ALL_DIR, 'settled.expected.md')
+// The short override leaves this window open long enough for three composer
+// submissions and still completes both model calls in a few seconds.
+const STEER_ALL_REPLAY_PACE_MS = 250
 const STEER_ONE = 'Interjection: include the word BANANA in your final reply.'
 const STEER_TWO = 'Interjection: include the word ORANGE in your final reply.'
 
@@ -106,9 +109,8 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
     // this exact occurrence into the current turn's steering outbox.
     await input.fill(STEER)
     await input.press('Enter')
-    const queued = page.getByText(STEER, { exact: true })
-    await queued.waitFor({ timeout: 10_000 })
     const queuedRow = page.getByRole('listitem').filter({ hasText: STEER })
+    await queuedRow.waitFor({ timeout: 10_000 })
     const steerButton = queuedRow.getByRole('button', { name: 'Steer queued message' })
     await expect.poll(() => steerButton.isEnabled(), { timeout: 10_000 }).toBe(true)
     await steerButton.click({ timeout: 10_000 })
@@ -305,7 +307,7 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     scaffold = await launchWebScaffold({
       replayFixture: STEER_ALL_FIXTURE,
       replayOverride: STEER_ALL_OVERRIDE,
-      paceMs: REPLAY_PACE_MS,
+      paceMs: STEER_ALL_REPLAY_PACE_MS,
     })
     scaffold.ctx.on('session/event', (_session, event) => { sessionEvents.push(event) })
     browser = await chromium.launch()
@@ -337,17 +339,13 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     await input.fill(STEER_TWO)
     await input.press('Enter')
     const dock = page.locator('[data-queue-dock]')
-    // Both messages queued: the two-row dock shows a collapsed count header,
-    // and Playwright text matching skips the hidden rows. Replay frames can
-    // replace the dock while the question call is still arriving, so converge
-    // on an expanded instance before asserting each row's content.
-    await dock.getByText('2 queued messages').waitFor({ timeout: 10_000 })
-    await expect.poll(async () => {
-      const firstVisible = await dock.getByText(STEER_ONE, { exact: true }).isVisible()
-      const secondVisible = await dock.getByText(STEER_TWO, { exact: true }).isVisible()
-      if (!firstVisible || !secondVisible) await dock.getByRole('button').first().click()
-      return firstVisible && secondVisible
-    }, { timeout: 30_000 }).toBe(true)
+    // Both messages queued: expand the count header before the question
+    // composer takes over the input region, then inspect both visible rows.
+    const expandQueue = dock.getByRole('button', { name: '2 queued messages' })
+    await expandQueue.waitFor({ timeout: 10_000 })
+    await expandQueue.click()
+    await dock.getByText(STEER_ONE, { exact: true }).waitFor({ timeout: 10_000 })
+    await dock.getByText(STEER_TWO, { exact: true }).waitFor({ timeout: 10_000 })
     expect(await page.locator('[data-pending-steering]').count()).toBe(0)
 
     // Empty draft + Cmd+Enter: both queued rows steer in FIFO order, the dock

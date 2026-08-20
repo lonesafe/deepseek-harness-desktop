@@ -93,6 +93,8 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await compareOrRefreshGolden(FUZZY_COMMAND_MENU_EXPECTED, fuzzySnapshot, MODE)
     await input.fill('')
     await expect.poll(() => menu.count()).toBe(0)
+    await page.mouse.move(0, 0)
+    await expect.poll(() => page.getByRole('tooltip').count()).toBe(0)
   })
 
   it.skipIf(MODE === 'record')('shows active Plan as the warn-state status action', async () => {
@@ -173,15 +175,49 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await input.fill(PROMPT)
     const observeTurn = async () => {
       const originalViewport = page.viewportSize() ?? { width: 1680, height: 1000 }
-      if (MODE !== 'record') await page.setViewportSize({ width: 390, height: 844 })
       try {
         await input.press('Enter')
         if (MODE !== 'record') {
           const liveTail = page.locator('[data-variant="think"][data-state="running"] [data-follow-end]')
-          await expect.poll(async () => await liveTail.evaluate(element => (
-            element.scrollWidth > element.clientWidth
-              && element.scrollLeft >= element.scrollWidth - element.clientWidth - 1
-          )), { timeout: 10_000, interval: 10 }).toBe(true)
+          await liveTail.waitFor({ timeout: 10_000 })
+          const followProbe = await liveTail.evaluate(async (element) => {
+            element.style.flex = '0 0 120px'
+            element.style.minWidth = '120px'
+            element.style.maxWidth = '120px'
+            element.style.width = '120px'
+            return await new Promise<{ followed: boolean; maxOverflow: number; maxScrollLeft: number }>((resolve) => {
+              const deadline = performance.now() + 10_000
+              let maxOverflow = 0
+              let maxScrollLeft = 0
+              const inspect = () => {
+                maxOverflow = Math.max(maxOverflow, element.scrollWidth - element.clientWidth)
+                maxScrollLeft = Math.max(maxScrollLeft, element.scrollLeft)
+                if (element.scrollWidth > element.clientWidth
+                  && element.scrollLeft >= element.scrollWidth - element.clientWidth - 1) {
+                  resolve({ followed: true, maxOverflow, maxScrollLeft })
+                  return
+                }
+                if (performance.now() >= deadline) {
+                  resolve({ followed: false, maxOverflow, maxScrollLeft })
+                  return
+                }
+                requestAnimationFrame(inspect)
+              }
+              inspect()
+            })
+          })
+          expect(followProbe.followed, JSON.stringify(followProbe)).toBe(true)
+          // The live summary uses a deterministic narrow scrollport above;
+          // responsive geometry keeps the product's full-width phone viewport.
+          await page.setViewportSize({ width: 390, height: 844 })
+          const phoneCenter = page.locator('[data-sidebar-overlay] [class*="centerCol"]')
+          await phoneCenter.waitFor({ timeout: 10_000 })
+          await page.locator('[data-composer-seat] [data-composer-card] [data-composer-toolbar]')
+            .waitFor({ timeout: 10_000 })
+          await expect.poll(
+            () => phoneCenter.evaluate(element => element.getBoundingClientRect().left),
+            { timeout: 10_000 },
+          ).toBe(0)
           const phoneLayout = await page.evaluate(() => {
             const frame = document.querySelector<HTMLElement>('[data-sidebar-overlay]')
             const center = frame?.querySelector<HTMLElement>('[class*="centerCol"]')

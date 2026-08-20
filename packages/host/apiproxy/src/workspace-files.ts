@@ -1,7 +1,7 @@
 /** Bounded, read-only filesystem projection for registered Workspaces. */
 
 import { opendir, open, realpath, stat } from 'node:fs/promises'
-import { extname, isAbsolute, join, relative, sep } from 'node:path'
+import { extname, isAbsolute, join, posix, relative, sep } from 'node:path'
 import type {
   WorkspaceFileEntry, WorkspaceFileListing, WorkspaceFilePreview,
 } from './api/workspace.ts'
@@ -212,13 +212,15 @@ function mimeFor(path: string): string {
   const extension = extname(path).toLowerCase()
   return IMAGE_MIME_BY_EXTENSION[extension]
     ?? TEXT_MIME_BY_EXTENSION[extension]
-    ?? (extension === '.pdf' ? 'application/pdf' : 'application/octet-stream')
+    ?? (TEXT_FILENAMES.has(posix.basename(path).toLowerCase())
+      ? 'text/plain'
+      : extension === '.pdf' ? 'application/pdf' : 'application/octet-stream')
 }
 
 function textKind(path: string): 'markdown' | 'text' | undefined {
   const extension = extname(path).toLowerCase()
   if (MARKDOWN_EXTENSIONS.has(extension)) return 'markdown'
-  if (TEXT_MIME_BY_EXTENSION[extension] !== undefined || TEXT_FILENAMES.has(path.split('/').at(-1)?.toLowerCase() ?? '')) {
+  if (TEXT_MIME_BY_EXTENSION[extension] !== undefined || TEXT_FILENAMES.has(posix.basename(path).toLowerCase())) {
     return 'text'
   }
   return undefined
@@ -266,7 +268,7 @@ export async function readWorkspaceFile(
     }
     const common = {
       path,
-      name: path.split('/').at(-1) ?? path,
+      name: posix.basename(path),
       mime: mimeFor(path),
       size: info.size,
       modifiedAt: info.mtime.toISOString(),

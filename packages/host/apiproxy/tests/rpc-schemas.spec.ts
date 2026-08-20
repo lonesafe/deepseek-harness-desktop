@@ -25,7 +25,9 @@ import {
   workspaceDeleteRequestSchema, workspaceDeleteValueSchema,
   workspaceInsertBeforeRequestSchema, workspaceInsertBeforeValueSchema,
   workspaceInsertSessionBeforeRequestSchema, workspaceInsertSessionBeforeValueSchema,
+  workspaceListFilesRequestSchema, workspaceListFilesValueSchema,
   workspaceListRequestSchema, workspaceListValueSchema,
+  workspaceReadFileRequestSchema, workspaceReadFileValueSchema,
   workspaceRenameRequestSchema, workspaceRenameValueSchema, workspaceViewSchema,
 } from '../src/api/workspace.schema.ts'
 import { skillEntrySchema, skillListRequestSchema, skillListValueSchema } from '../src/api/skills.schema.ts'
@@ -312,14 +314,17 @@ describe('host domain schemas', () => {
   it('validates describe request/value', () => {
     expect(hostDescribeRequestSchema.parse({})).toEqual({})
     const value = hostDescribeValueSchema.parse({
-      version: '1', cwd: '/x', provider: 'p', model: 'm', attachedSessions: 2, canOpenPath: true,
+      version: '1', cwd: '/x', provider: 'p', model: 'm', attachedSessions: 2, home: '/h', canOpenPath: true,
     })
     expect(value).toMatchObject({ provider: 'p', model: 'm', attachedSessions: 2, canOpenPath: true })
     expect(hostDescribeValueSchema.parse({
-      version: '1', cwd: '/x', attachedSessions: 0, canOpenPath: false,
+      version: '1', cwd: '/x', attachedSessions: 0, home: '/h', canOpenPath: false,
     }).provider).toBeUndefined()
     expect(() => hostDescribeValueSchema.parse({
       version: '1', cwd: '/x', attachedSessions: 0,
+    })).toThrow()
+    expect(() => hostDescribeValueSchema.parse({
+      version: '1', cwd: '/x', attachedSessions: 0, canOpenPath: true,
     })).toThrow()
   })
 
@@ -366,6 +371,23 @@ describe('workspace domain schemas', () => {
     expect(workspaceArchiveSessionValueSchema.parse({ archivedSessionIds: ['s1', 's2'] }).archivedSessionIds)
       .toEqual(['s1', 's2'])
     expect(() => workspaceArchiveSessionValueSchema.parse({ archivedSessionIds: 's1' })).toThrow()
+  })
+
+  it('accepts portable Workspace file paths and rejects every unsafe segment form', () => {
+    expect(workspaceListFilesRequestSchema.parse({ workspaceId: 'w1' })).toEqual({ workspaceId: 'w1' })
+    expect(workspaceListFilesRequestSchema.parse({ workspaceId: 'w1', path: '' }).path).toBe('')
+    expect(workspaceReadFileRequestSchema.parse({ workspaceId: 'w1', path: 'docs/architecture.md' }).path)
+      .toBe('docs/architecture.md')
+    for (const path of ['\0', 'nested\\windows', '/absolute', 'nested//empty', '.', '..', 'nested/../escape']) {
+      expect(() => workspaceListFilesRequestSchema.parse({ workspaceId: 'w1', path })).toThrow(/portable relative paths/)
+    }
+    expect(() => workspaceReadFileRequestSchema.parse({ workspaceId: 'w1', path: '' }))
+      .toThrow(/non-empty path/)
+    expect(workspaceListFilesValueSchema.parse({ path: '', entries: [], truncated: false }).entries).toEqual([])
+    expect(workspaceReadFileValueSchema.parse({
+      path: 'README.md', name: 'README.md', mime: 'text/markdown', size: 1,
+      modifiedAt: 'now', kind: 'markdown', encoding: 'utf8', content: '#',
+    }).kind).toBe('markdown')
   })
 
   it('insertSessionBefore accepts an anchored and an anchorless move', () => {

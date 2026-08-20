@@ -183,11 +183,14 @@ describe('directory-picker-browse client half', () => {
     const injected = (entry.inject as () => {
       listDirectory: (path?: string) => Promise<DirectoryListing>
       createDirectory: (path: string, name: string) => Promise<string>
+      pick: () => Promise<string | null>
     })()
     await expect(injected.listDirectory()).resolves.toBe(homeListing)
     await expect(injected.createDirectory(HOME, 'fresh')).resolves.toBe(`${HOME}/fresh`)
+    await expect(injected.pick()).resolves.toBe('/tmp/picked')
     expect(b.listDirectory).toHaveBeenCalledOnce()
     expect(b.createDirectory).toHaveBeenCalledWith(HOME, 'fresh')
+    expect(b.pickDirectory).toHaveBeenCalledOnce()
   })
 
   it('adapts the owner conversation onto the dialog: confirm picks, dismissal cancels', async () => {
@@ -234,6 +237,103 @@ describe('directory-picker-browse client half', () => {
     expect(pick).toHaveBeenCalledOnce()
     expect(listDirectory).not.toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('maps native dismissal and Error or non-Error failures onto the owner conversation', async () => {
+    const cancelled = owner()
+    const first = render(
+      <BrowseDirectoryFlow
+        {...cancelled}
+        listDirectory={vi.fn(async () => homeListing)}
+        createDirectory={vi.fn(async () => '')}
+        pick={vi.fn(async () => null)}
+        isLoopback
+        nativeOnLoopback
+        t={key => key}
+      />,
+    )
+    await waitFor(() => { expect(cancelled.onCancel).toHaveBeenCalledOnce() })
+    first.unmount()
+
+    for (const [reason, message] of [[new Error('native failed'), 'native failed'], ['raw failure', 'raw failure']] as const) {
+      const failed = owner()
+      const view = render(
+        <BrowseDirectoryFlow
+          {...failed}
+          listDirectory={vi.fn(async () => homeListing)}
+          createDirectory={vi.fn(async () => '')}
+          pick={vi.fn(async () => { throw reason })}
+          isLoopback
+          nativeOnLoopback
+          t={key => key}
+        />,
+      )
+      await waitFor(() => { expect(failed.onError).toHaveBeenCalledWith(message) })
+      view.unmount()
+    }
+  })
+
+  it('arms once while open, resets while closed, and uses the latest owner callbacks', async () => {
+    const first = owner()
+    const second = owner()
+    const pickFirst = vi.fn(async (): Promise<string | null> => '/tmp/first')
+    const pickSecond = vi.fn(async (): Promise<string | null> => '/tmp/second')
+    const common = {
+      listDirectory: vi.fn(async () => homeListing),
+      createDirectory: vi.fn(async () => ''),
+      isLoopback: true,
+      nativeOnLoopback: true,
+      t: (key: string): string => key,
+    }
+    const view = render(<BrowseDirectoryFlow {...first} {...common} pick={pickFirst} />)
+    await waitFor(() => { expect(first.onPicked).toHaveBeenCalledWith('/tmp/first') })
+
+    view.rerender(<BrowseDirectoryFlow {...second} {...common} pick={pickSecond} />)
+    await Promise.resolve()
+    expect(pickSecond).not.toHaveBeenCalled()
+
+    view.rerender(<BrowseDirectoryFlow {...second} {...common} pick={pickSecond} open={false} />)
+    view.rerender(<BrowseDirectoryFlow {...second} {...common} pick={pickSecond} open />)
+    await waitFor(() => { expect(second.onPicked).toHaveBeenCalledWith('/tmp/second') })
+  })
+
+  it.each(['resolve', 'reject'] as const)('ignores a native %s after unmount', async (settlement) => {
+    const pending = Promise.withResolvers<string | null>()
+    const props = owner()
+    const view = render(
+      <BrowseDirectoryFlow
+        {...props}
+        listDirectory={vi.fn(async () => homeListing)}
+        createDirectory={vi.fn(async () => '')}
+        pick={() => pending.promise}
+        isLoopback
+        nativeOnLoopback
+        t={key => key}
+      />,
+    )
+    view.unmount()
+    if (settlement === 'resolve') pending.resolve('/tmp/late'); else pending.reject(new Error('late'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(props.onPicked).not.toHaveBeenCalled()
+    expect(props.onError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the native arm dormant while closed', async () => {
+    const pick = vi.fn(async (): Promise<string | null> => '/tmp/unused')
+    render(
+      <BrowseDirectoryFlow
+        {...owner({ open: false })}
+        listDirectory={vi.fn(async () => homeListing)}
+        createDirectory={vi.fn(async () => '')}
+        pick={pick}
+        isLoopback
+        nativeOnLoopback
+        t={key => key}
+      />,
+    )
+    await Promise.resolve()
+    expect(pick).not.toHaveBeenCalled()
   })
 
   it('renders nothing while the flow is closed', () => {

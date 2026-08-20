@@ -30,7 +30,7 @@ interface ComWorld {
   /** Contexts `SetThreadDpiAwarenessContext` accepts; others return NULL. */
   supportedDpiContexts: number[]
   enumThrows: boolean
-  path: string
+  path: string | null
   titles: string[]
   options: number[]
   dpiContexts: unknown[]
@@ -74,7 +74,7 @@ function installFakeKoffi(world: ComWorld): void {
       if (outBuffers.has(value)) return outBuffers.get(value)
       return { owner: value as FakePtr }
     },
-    { string16: (value: unknown) => (value as FakePtr).text as string },
+    { string16: (value: unknown) => (value as FakePtr).text as string | null },
   )
 
   const dispatch = (self: FakePtr, slot: number, args: unknown[]): number => {
@@ -237,6 +237,14 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     // The shell item is released even when its display name cannot be read.
     expect(nameWorld.released).toEqual(['item', 'dialog'])
     expect(nameWorld.freed).toHaveLength(0)
+
+    vi.doUnmock('koffi')
+    vi.resetModules()
+    const nullPathWorld = comWorld({ path: null })
+    installFakeKoffi(nullPathWorld)
+    bindings = await (await loadBindingsModule()).loadWin32DialogBindings()
+    expect(() => runFolderDialog(bindings, 'Pick', vi.fn())).toThrow('null filesystem path')
+    expect(nullPathWorld.released).toEqual(['item', 'dialog'])
   })
 })
 

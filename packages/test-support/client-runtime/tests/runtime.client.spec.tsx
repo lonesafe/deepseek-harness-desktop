@@ -383,23 +383,44 @@ describe('workspaces', () => {
     await expect(runtime.workspaces.listDirectory()).resolves.toMatchObject({ path: '/home/test', entries: [] })
     await expect(runtime.workspaces.listDirectory('/home/test')).resolves.toMatchObject({ path: '/home/test' })
     await expect(runtime.workspaces.createDirectory('/home/test', 'fresh')).resolves.toBe('/home/test/fresh')
+    await expect(runtime.workspaces.listFiles('w1' as WorkspaceId)).resolves.toEqual({
+      path: '', entries: [], truncated: false,
+    })
+    await expect(runtime.workspaces.readFile('w1' as WorkspaceId, 'README.md')).resolves.toMatchObject({
+      path: 'README.md', kind: 'text', encoding: 'utf8',
+    })
     // The recorded signal seat mirrors the production face (undefined here;
     // cancellation tests pass and observe a real one).
     expect(runtime.workspaces.calls).toEqual([
       { method: 'listDirectory', args: [undefined, undefined] },
       { method: 'listDirectory', args: ['/home/test', undefined] },
       { method: 'createDirectory', args: ['/home/test', 'fresh'] },
+      { method: 'listFiles', args: ['w1', '', undefined] },
+      { method: 'readFile', args: ['w1', 'README.md', undefined] },
     ])
     // Stubs replace the defaults like every sibling method.
     const listing = { path: '/x', home: '/x', crumbs: [], entries: [] }
     const listStub = vi.fn(() => Promise.resolve(listing as never))
     runtime.workspaces.stub('listDirectory', listStub)
     runtime.workspaces.stub('createDirectory', vi.fn(() => Promise.resolve('/x/made' as never)))
+    const listFilesStub = vi.fn(() => Promise.resolve({ path: 'src', entries: [], truncated: true } as never))
+    const readFileStub = vi.fn(() => Promise.resolve({
+      path: 'src/a.ts', name: 'a.ts', mime: 'text/typescript', size: 1, modifiedAt: '0',
+      kind: 'text', encoding: 'utf8', content: 'x',
+    } as never))
+    runtime.workspaces.stub('listFiles', listFilesStub)
+    runtime.workspaces.stub('readFile', readFileStub)
     const scan = new AbortController()
     await expect(runtime.workspaces.listDirectory('/x', scan.signal)).resolves.toBe(listing)
     // The stub receives the signal too, like the production face gives the wire.
     expect(listStub).toHaveBeenLastCalledWith('/x', scan.signal)
     await expect(runtime.workspaces.createDirectory('/x', 'made')).resolves.toBe('/x/made')
+    await expect(runtime.workspaces.listFiles('w1' as WorkspaceId, 'src', scan.signal))
+      .resolves.toMatchObject({ path: 'src', truncated: true })
+    await expect(runtime.workspaces.readFile('w1' as WorkspaceId, 'src/a.ts', scan.signal))
+      .resolves.toMatchObject({ name: 'a.ts' })
+    expect(listFilesStub).toHaveBeenCalledWith('w1', 'src', scan.signal)
+    expect(readFileStub).toHaveBeenCalledWith('w1', 'src/a.ts', scan.signal)
     await runtime.dispose()
   })
 })

@@ -142,6 +142,7 @@ export function WorkspaceFilesView({
   }, [])
 
   const openFile = useCallback((entry: WorkspaceFileEntry) => {
+    /* v8 ignore next -- file actions are rendered only when a registered Workspace exists. */
     if (workspace === undefined) return
     previewController.current?.abort()
     const controller = new AbortController()

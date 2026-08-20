@@ -254,12 +254,20 @@ describe('connection client apply', () => {
     }))
     socket.receive(rpcBinaryFrame(start.id, JSON.stringify({
       type: 'server-response', rpcId: logical.rpcId,
-      result: { ok: true, value: { version: 'remote', cwd: '/workspace', attachedSessions: 1, canOpenPath: false } },
+      result: {
+        ok: true,
+        value: {
+          version: 'remote', cwd: '/workspace', attachedSessions: 1, home: '/home/remote', canOpenPath: false,
+        },
+      },
     })))
     socket.receive(JSON.stringify({ type: 'rpc_response_end', id: start.id }))
 
     await expect(pending).resolves.toMatchObject({
-      result: { ok: true, value: { version: 'remote', cwd: '/workspace', canOpenPath: false } },
+      result: {
+        ok: true,
+        value: { version: 'remote', cwd: '/workspace', home: '/home/remote', canOpenPath: false },
+      },
     })
     expect(fetch).not.toHaveBeenCalled()
 
@@ -442,9 +450,13 @@ describe('connection client apply', () => {
     }
   })
 
-  it('carries Goal Remotes over the same state as the client-only fixture API', async () => {
+  it('carries fixture Remotes over the same state as the client-only fixture API', async () => {
     ;(globalThis as Win).location = { hostname: 'localhost', search: '?fixture' }
     const handle = await mount()
+    await expect(handle.rpc.call('/api', 'dynamicCordisRunner/inventory', { args: {} }))
+      .resolves.toEqual({ ok: true, value: [] })
+    await expect(handle.rpc.call('/api', 'dynamicCordisRunner/syncInspectManifest', { args: { providers: [] } }))
+      .resolves.toEqual({ ok: true, value: null })
     const created = await handle.rpc.call('/api', 'goals/create', {
       args: { agentId: 'fx-alpha', request: { objective: 'fixture remote' } },
     })

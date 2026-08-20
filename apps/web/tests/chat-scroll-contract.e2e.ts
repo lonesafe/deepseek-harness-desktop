@@ -772,24 +772,33 @@ describe('web e2e: long Chat scroll contract', () => {
       await expectBottom(world.page)
       const backToBottom = world.page.getByRole('button', { name: 'Back to bottom', exact: true })
 
-      // Focus rides the last seeded tool row (a tabbable button whose keydown
-      // handler passes scrolling keys through). End first normalizes the
-      // focus-driven scrollIntoView back to the floor.
-      const lastToolRow = world.page.locator(
-        `[data-chat-call-id="chat-scroll-${String(INPUTS_FIXTURE.turns).padStart(3, '0')}-1"] [data-sample="bash"]`,
-      )
-      await lastToolRow.focus()
+      // Focus the actual scrollport. Automatic history paging can replace
+      // transcript rows, while this host remains stable across prepends and
+      // exercises the same native keyboard-scroll event path.
+      const scrollport = world.page.locator('[data-conversation-scroll]')
+      await scrollport.evaluate((element) => {
+        element.tabIndex = -1
+        element.focus()
+      })
       await world.page.keyboard.press('End')
       await expectBottom(world.page)
       await expect.poll(() => backToBottom.count(), { timeout: 10_000 }).toBe(0)
       for (let press = 0; press < 3; press += 1) {
+        await scrollport.focus()
         await world.page.keyboard.press('PageUp')
         await nextPaint(world.page)
       }
       await backToBottom.waitFor({ timeout: 10_000 })
       await expect.poll(async () => (await scrollGeometry(world.page)).distanceFromBottom, { timeout: 10_000 })
         .toBeGreaterThan(100)
-      await world.page.keyboard.press('End')
+      // A head-triggered prepend owns a saved reader anchor until it settles.
+      // Activate the product control only after that restoration is complete.
+      await nextPaint(world.page)
+      await expect.poll(
+        () => world.page.getByRole('button', { name: 'Loading…', exact: true }).count(),
+        { timeout: 10_000 },
+      ).toBe(0)
+      await backToBottom.click()
       await expectBottom(world.page)
       await expect.poll(() => backToBottom.count(), { timeout: 10_000 }).toBe(0)
       assertClean(world)

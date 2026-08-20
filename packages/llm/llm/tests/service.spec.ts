@@ -19,6 +19,7 @@ import type {
   LlmAccountBalance,
   LlmModelInfo,
   LlmModelReasoningInfo,
+  ModelModality,
   LlmProviderInfo,
   LlmResolvedModelInfo,
 } from '@deepseek-ai/dsh-llm'
@@ -218,7 +219,7 @@ describe('LlmRuntime', () => {
     expect(ctx.llm.providerRetryPolicy('configured')).toBe(configured)
     expect(ctx.llm.providerRetryPolicy('defaulted')).toMatchObject({
       mode: 'normal',
-      maxRetries: 2,
+      maxRetries: 5,
     })
     expect(() => ctx.llm.providerRetryPolicy('missing')).toThrow(
       expect.objectContaining({ code: 'NO_ADAPTER' }),
@@ -525,21 +526,23 @@ describe('LlmRuntime', () => {
     await ctx.plugin(LlmRuntime)
     const provider = { id: 'catalog', name: 'Catalog Provider' }
     const model = { provider: 'catalog', id: 'fast', name: 'Fast', description: 'Low latency' }
-    ctx.llm.registerAdapter(['catalog'], new CatalogAdapter(provider, [model]))
+    const vision = { provider: 'catalog', id: 'vision', name: 'Vision', inputModalities: ['text', 'image'] as ModelModality[] }
+    ctx.llm.registerAdapter(['catalog'], new CatalogAdapter(provider, [model, vision]))
 
     const providers = ctx.llm.listProviders()
     const models = await ctx.llm.listModels('catalog')
     expect(providers).toEqual([provider])
-    expect(models).toEqual([model])
+    expect(models).toEqual([model, vision])
 
     providers[0]!.name = 'mutated'
     models[0]!.name = 'mutated'
     provider.name = 'source mutated'
     model.name = 'source mutated'
     expect(ctx.llm.listProviders()).toEqual([{ id: 'catalog', name: 'Catalog Provider' }])
-    await expect(ctx.llm.listModels('catalog')).resolves.toEqual([{
-      provider: 'catalog', id: 'fast', name: 'source mutated', description: 'Low latency',
-    }])
+    await expect(ctx.llm.listModels('catalog')).resolves.toEqual([
+      { provider: 'catalog', id: 'fast', name: 'source mutated', description: 'Low latency' },
+      vision,
+    ])
   })
 
   it('defaults adapters to their route name and an empty advisory model list', async () => {
@@ -571,6 +574,27 @@ describe('LlmRuntime', () => {
     expect(result).toEqual(source)
     ;(result.balances[0] as { totalBalance: string }).totalBalance = 'mutated'
     expect(source.balances[0]!.totalBalance).toBe('10.2500')
+  })
+
+  it.each([
+    [null, 'non-object response'],
+    [{ isAvailable: 'yes', balances: [] }, 'invalid account fields'],
+    [{ isAvailable: true, balances: [null] }, 'non-object balance row'],
+    [{
+      isAvailable: true,
+      balances: [{ currency: '', totalBalance: '1', grantedBalance: '0', toppedUpBalance: '1' }],
+    }, 'invalid balance row'],
+  ] as const)('rejects invalid provider balance metadata (%s: %s)', async (metadata, _label) => {
+    const adapter = new class extends ScriptedAdapter {
+      override accountBalance(): Promise<LlmAccountBalance> {
+        return Promise.resolve(metadata as unknown as LlmAccountBalance)
+      }
+    }(SCRIPT)
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['route'], adapter)
+
+    await expect(ctx.llm.accountBalance('route')).rejects.toMatchObject({ code: 'INVALID_BALANCE' })
   })
 
   it.each([

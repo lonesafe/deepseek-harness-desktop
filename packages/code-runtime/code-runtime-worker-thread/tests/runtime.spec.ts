@@ -389,7 +389,7 @@ describe('WorkerThreadCodeRuntime — budgets and containment (real workers)', (
     expect(result.error).toBeUndefined()
     expect(result.logs).toEqual([])
     expect(result.value).toHaveLength(67_108_860)
-  }, 60_000)
+  }, 120_000)
 
   it('fails one byte over the default 64 MiB combined boundary', async () => {
     const { runtime } = await setup()

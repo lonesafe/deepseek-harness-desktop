@@ -72,7 +72,7 @@ function scriptedApi(overrides: {
     },
     host: {
       describe: r => ok(r, {
-        version: '0-test', cwd: '/t', attachedSessions: 0, canOpenPath: true,
+        version: '0-test', cwd: '/t', attachedSessions: 0, home: '/h', canOpenPath: true,
       }),
       pickDirectory: r => ok(r, { path: null }),
       listDirectory: r => ok(r, { path: '/t', home: '/t', crumbs: [], entries: [], truncated: false }),
@@ -455,6 +455,13 @@ describe('workspace domain round trip', () => {
     const c = client(scriptedApi())
     const list = await c.workspace.list({})
     expect(list.result).toEqual({ ok: true, value: { items: [], archivedSessionIds: [] } })
+    const files = await c.workspace.listFiles({ workspaceId: 'w1' as never, path: 'docs' })
+    expect(files.result).toEqual({ ok: true, value: { path: 'docs', entries: [], truncated: false } })
+    const preview = await c.workspace.readFile({ workspaceId: 'w1' as never, path: 'README.md' })
+    expect(preview.result).toMatchObject({
+      ok: true,
+      value: { path: 'README.md', kind: 'text', encoding: 'utf8' },
+    })
     const created = await c.workspace.create({ path: '/t' })
     expect(created.result.ok).toBe(true)
     if (created.result.ok) expect(created.result.value.created).toBe(true)

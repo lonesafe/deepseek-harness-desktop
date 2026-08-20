@@ -243,8 +243,12 @@ export class WebSocketRpcTransport {
         }
         for (const value of values) headers.append(name, value)
       }
+      const body = pending.chunks.length === 0 && [204, 205, 304].includes(pending.status)
+        ? null
+        : new Blob(pending.chunks)
+      const response = new Response(body, { status: pending.status, headers })
       this.finish(frame.id)
-      pending.resolve(new Response(new Blob(pending.chunks), { status: pending.status, headers }))
+      pending.resolve(response)
       return
     }
     const rawData: unknown = event.data

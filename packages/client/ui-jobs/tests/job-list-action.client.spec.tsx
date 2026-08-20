@@ -204,6 +204,21 @@ describe('JobListAction dismissal', () => {
     expect(list.style.visibility).toBe('visible')
   })
 
+  it('places a tall list above a trigger near the viewport bottom', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(390)
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(844)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(200)
+    render(<JobListAction {...props([job()])} />)
+    const trigger = screen.getByRole('button')
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      x: 20, y: 800, top: 800, right: 150, bottom: 828, left: 20,
+      width: 130, height: 28, toJSON: () => ({}),
+    })
+
+    fireEvent.click(trigger)
+    expect(screen.getByRole('list', { name: zh['list.aria'] }).style.top).toBe('595px')
+  })
+
   it('closes on Escape and returns focus to the trigger', () => {
     render(<JobListAction {...props([job()])} />)
     const trigger = screen.getByRole('button')

@@ -5,7 +5,6 @@
 - button "1 subagent":
   - text: 1 subagent
   - img
-- 'button "Balance: --. Click to refresh"': Balance --
 - button "Session log":
   - text: Session log
   - img

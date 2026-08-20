@@ -1,7 +1,6 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Markdown image policy" [disabled]
-  - 'button "Balance: --. Click to refresh"': Balance --
   - button "Session log":
     - text: Session log
     - img

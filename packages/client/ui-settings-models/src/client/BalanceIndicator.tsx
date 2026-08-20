@@ -1,19 +1,19 @@
-/** Compact account-balance utility shared by desktop and remote browser UI. */
+/** Compact account-balance utility beside Settings in desktop and remote UI. */
 
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { BalanceState } from './balance-store.ts'
 import css from './BalanceIndicator.module.css'
 
-/** Plugin-owned dependencies injected into the header contribution. */
+/** Plugin-owned dependencies injected into the settings-footer contribution. */
 export interface BalanceIndicatorInjected {
   hooks: { balance: SnapshotStore<BalanceState> }
   refresh: () => void
 }
 
-/** Full props for the right-aligned session-header utility. */
-export type BalanceIndicatorProps = PropsRuntime<'conversation.session.header.utilities'>
+/** Full props for the balance utility beside the Settings trigger. */
+export type BalanceIndicatorProps = PropsRuntime<'settings.footer.utility'>
   & PropsLocale<'settings.models'>
   & InjectFace<BalanceIndicatorInjected>
 
@@ -36,9 +36,10 @@ function detail(state: BalanceState, t: BalanceIndicatorProps['t']): string {
   return state.isAvailable ? rows : `${t('balanceAccountUnavailable')}\n${rows}`
 }
 
-/** Top-right balance label; clicking it performs an explicit refresh. */
-export function BalanceIndicator({ useBalance, refresh, t }: BalanceIndicatorProps) {
+/** Settings-row balance label; clicking it performs an explicit refresh. */
+export function BalanceIndicator({ wide, useBalance, refresh, t }: BalanceIndicatorProps) {
   const state = useBalance(value => value)
+  if (!wide) return null
   const value = state.status === 'ready' && state.balances.length > 0
     ? state.balances.map(row => amountLabel(row.currency, row.totalBalance)).join(' / ')
     : state.status === 'loading'

@@ -154,6 +154,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         >
           {renderSlot('settings.trigger', { wide })}
         </button>
+        {renderSlot('settings.footer.utility', { wide })}
         <DesktopVersionLabel wide={wide} />
         <DesktopUpdateBadge wide={wide} />
       </div>

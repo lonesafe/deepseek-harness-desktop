@@ -11,8 +11,6 @@ import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 // Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-// Type-only: pulls the conversation header utility SlotMap merge.
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the ctx.remote merge and the forwarded-event key face
@@ -152,10 +150,10 @@ export function apply(ctx: ClientContext): void {
     order: 0,
     inject: deepSeekOnboardingInjected,
   }, DeepSeekOnboardingDialog))
-  ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
-    name: 'conversation.session.header.utilities',
+  ctx.slots.inject('settings.footer.utility', () => ctx.slots.register({
+    name: 'settings.footer.utility',
     id: 'deepseek-balance',
-    order: -10,
+    order: 0,
     locale: NS,
     inject: balanceInjected,
   }, BalanceIndicator))

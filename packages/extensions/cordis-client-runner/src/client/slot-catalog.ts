@@ -960,7 +960,6 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'conversation.session.header\' (client-ui-conversation), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-settings-models BalanceIndicator id \'deepseek-balance\'',
       'session-log-export SessionLogDownloadHeaderAction id \'session-log-download\'',
     ],
     replaceRisk: 'none',
@@ -1119,7 +1118,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.action\', () => ctx.slots.register(\n      { name: \'settings.action\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-settings/src/client/contract/slots.ts:35',
+    source: 'packages/client/ui-settings/src/client/contract/slots.ts:42',
   },
   {
     key: 'settings.close',
@@ -1145,7 +1144,52 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.close\', () => ctx.slots.register(\n      { name: \'settings.close\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-settings/src/client/contract/slots.ts:41',
+    source: 'packages/client/ui-settings/src/client/contract/slots.ts:48',
+  },
+  {
+    key: 'settings.footer.utility',
+    kind: 'list',
+    scope: 'root',
+    summary: 'Ordered utilities rendered in the sidebar footer after the Settings trigger and before desktop-only version/update chrome.',
+    doc: 'Ordered utilities rendered in the sidebar footer after the Settings\ntrigger and before desktop-only version/update chrome. Each utility\nowns its button and compact/hidden behavior; the shell supplies the\ncurrent wide/rail state so entries do not crowd the collapsed rail.',
+    registerOptions: [
+      {
+        name: 'id',
+        requirement: 'required',
+        type: 'string',
+        doc: 'Your cell key. Use an id of your own: a fresh id is added beside the shipped entries, while reusing a shipped id puts you in THAT cell and replaces it. Owners that filter by id address you by it.',
+      },
+      {
+        name: 'order',
+        requirement: 'optional',
+        type: 'number',
+        doc: 'Position among the entries, ascending (default 0).',
+      },
+      {
+        name: 'label',
+        requirement: 'optional',
+        type: 'string | (() => string)',
+        doc: 'Display text where the owner projects one (nav rows, tabs). A thunk is re-read on every projection, so localized text follows the active locale without re-registering.',
+      },
+    ],
+    ownerProps: [
+      '/** Owner share of a utility beside the Settings trigger. */\nexport interface SettingsFooterUtilityOwnerProps {\n  /** Whether the sidebar renders wide content (false = 56px rail). */\n  wide: boolean\n}',
+    ],
+    ownerPropsReferences: [],
+    standardProps: [
+      'useSessions: SnapshotSelectorHook<SessionListState>',
+      'useWorkspaces: SnapshotSelectorHook<import(\'./workspaces/service.ts\').WorkspaceListState>',
+    ],
+    keyDomain: '',
+    hookContext: '',
+    slotInject: '',
+    declaredBy: 'an entry in \'sidebar.settings\' (client-ui-settings-general), so it exists while that entry is mounted',
+    occupants: [
+      'client-ui-settings-models BalanceIndicator id \'deepseek-balance\'',
+    ],
+    replaceRisk: 'none',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.footer.utility\', () => ctx.slots.register(\n      { name: \'settings.footer.utility\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    source: 'packages/client/ui-settings/src/client/contract/slots.ts:30',
   },
   {
     key: 'settings.general.item',
@@ -1195,7 +1239,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.general.item\', () => ctx.slots.register(\n      { name: \'settings.general.item\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-settings/src/client/contract/slots.ts:88',
+    source: 'packages/client/ui-settings/src/client/contract/slots.ts:95',
   },
   {
     key: 'settings.header',
@@ -1221,7 +1265,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.header\', () => ctx.slots.register(\n      { name: \'settings.header\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-settings/src/client/contract/slots.ts:29',
+    source: 'packages/client/ui-settings/src/client/contract/slots.ts:36',
   },
   {
     key: 'settings.onboarding',
@@ -1267,7 +1311,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.onboarding\', () => ctx.slots.register(\n      { name: \'settings.onboarding\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-settings/src/client/contract/slots.ts:73',
+    source: 'packages/client/ui-settings/src/client/contract/slots.ts:80',
   },
   {
     key: 'settings.plugin.item',
@@ -1348,7 +1392,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.plugins.tab\', () => ctx.slots.register(\n      { name: \'settings.plugins.tab\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-settings/src/client/contract/slots.ts:62',
+    source: 'packages/client/ui-settings/src/client/contract/slots.ts:69',
   },
   {
     key: 'settings.section',
@@ -1396,7 +1440,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.section\', () => ctx.slots.register(\n      { name: \'settings.section\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-settings/src/client/contract/slots.ts:53',
+    source: 'packages/client/ui-settings/src/client/contract/slots.ts:60',
   },
   {
     key: 'settings.trigger',

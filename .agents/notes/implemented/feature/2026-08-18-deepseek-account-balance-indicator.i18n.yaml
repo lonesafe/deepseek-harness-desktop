@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-deepseek-account-balance-indicator.md
-2026-08-18-deepseek-account-balance-indicator.md: 62723da1578e3c8a345d0039a253272262fdba7a
-2026-08-18-deepseek-account-balance-indicator.zh.md: 1e7154a1c07c680502194863228c7d7dda9bfa5e
+2026-08-18-deepseek-account-balance-indicator.md: 37ebac7a343560cbd9ace15171bf33f51ecec14e
+2026-08-18-deepseek-account-balance-indicator.zh.md: dbbea357905d3520e828d1e6a7ac7f7b0d93668f

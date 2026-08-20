@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Desktop/remote session-header balance presentation. */
+/** Desktop/remote settings-footer balance presentation. */
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,7 +15,7 @@ const t = (key: keyof typeof en): string => en[key]
 
 function renderBalance(store: BalanceStore, refresh = vi.fn()) {
   render(<BalanceIndicator {...({
-    useBalance: bindSnapshotSelector(store.store), refresh, t,
+    wide: true, useBalance: bindSnapshotSelector(store.store), refresh, t,
   } as unknown as BalanceIndicatorProps)} />)
   return refresh
 }
@@ -47,5 +47,13 @@ describe('BalanceIndicator', () => {
     expect(button.getAttribute('title')).toContain('API key missing')
     fireEvent.click(button)
     expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays out of the collapsed sidebar rail', () => {
+    const store = new BalanceStore({ llm: {} } as never)
+    render(<BalanceIndicator {...({
+      wide: false, useBalance: bindSnapshotSelector(store.store), refresh: vi.fn(), t,
+    } as unknown as BalanceIndicatorProps)} />)
+    expect(screen.queryByRole('button')).toBeNull()
   })
 })

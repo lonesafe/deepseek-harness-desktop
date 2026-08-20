@@ -20,6 +20,7 @@
 - button "Settings":
   - img
   - text: Settings
+- 'button "Balance: --. Click to refresh"': Balance --
 - text: Into the Unknown Preview
 - button "Choose workspace":
   - img

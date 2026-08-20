@@ -5,7 +5,13 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  window.history.replaceState({}, '', '/')
+})
+
+const desktopSearch = '?dsh_desktop_version=1.0.0-beta.11&dsh_desktop_platform=darwin&dsh_desktop_arch=arm64&dsh_update_origin=https%3A%2F%2Fdsh.roubsite.com'
 
 type Row = { id: string; order: number; label: string }
 type Step = { id: string; order: number }
@@ -38,6 +44,7 @@ function mount({
   const renderSlot = vi.fn(
     ((key: string, _owner: unknown, opts?: { only?: string }) => {
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
+      if (key === 'settings.footer.utility') return <span data-testid="footer-utility">Balance</span>
       return SEAT_CONTENT[key]
     }) as SettingsRootComponentProps['renderSlot'],
   )
@@ -85,6 +92,8 @@ describe('SettingsRoot trigger', () => {
     const trigger = screen.getByRole('button', { name: 'Settings' })
     expect(trigger.hasAttribute('aria-label')).toBe(false)
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: true })
+    expect(renderSlot).toHaveBeenCalledWith('settings.footer.utility', { wide: true })
+    expect(trigger.compareDocumentPosition(screen.getByTestId('footer-utility')) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(trigger)
     expect(screen.getByRole('dialog')).toBeTruthy()
@@ -94,6 +103,16 @@ describe('SettingsRoot trigger', () => {
   it('hands the rail state to the trigger seat', () => {
     const { renderSlot } = mount({ wide: false })
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: false })
+    expect(renderSlot).toHaveBeenCalledWith('settings.footer.utility', { wide: false })
+  })
+
+  it('places footer utilities before the desktop version label', () => {
+    window.history.replaceState({}, '', desktopSearch)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ update_available: false }), { status: 200 })))
+    mount()
+    const utility = screen.getByTestId('footer-utility')
+    const version = screen.getByText('v1.0.0-beta.11')
+    expect(utility.compareDocumentPosition(version) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
   })
 })
 

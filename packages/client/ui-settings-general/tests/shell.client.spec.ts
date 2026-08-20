@@ -40,6 +40,7 @@ function injectedOf(slots: SlotRegistry): SettingsRootInjected {
 /** The shell's child declarations (chrome, actions, sections, and onboarding overlays). */
 const CHILD_SPECS = {
   'settings.trigger': { kind: 'single', scope: 'root' },
+  'settings.footer.utility': { kind: 'list', scope: 'root' },
   'settings.header': { kind: 'single', scope: 'root' },
   'settings.action': { kind: 'list', scope: 'root' },
   'settings.close': { kind: 'single', scope: 'root' },

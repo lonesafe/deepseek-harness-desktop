@@ -1,4 +1,4 @@
-/** DeepSeek account-balance state shared by every resident session header. */
+/** DeepSeek account-balance state shared by the desktop and remote settings footer. */
 
 import type { BalanceView, IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
@@ -6,7 +6,7 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 /** Official DeepSeek route whose configured credential owns the balance. */
 export const DEEPSEEK_OFFICIAL_PROVIDER = 'deepseek-official'
 
-/** Session-header balance snapshot. */
+/** Settings-footer balance snapshot. */
 export interface BalanceState {
   status: 'loading' | 'ready' | 'error'
   isAvailable: boolean
@@ -16,7 +16,7 @@ export interface BalanceState {
 
 /** Latest-wins controller for the read-only balance RPC. */
 export class BalanceStore {
-  /** Observable balance state consumed by the session-header indicator. */
+  /** Observable balance state consumed by the settings-footer indicator. */
   readonly store: SnapshotStore<BalanceState> = createSnapshotStore<BalanceState>({
     status: 'loading', isAvailable: false, balances: [], error: null,
   })

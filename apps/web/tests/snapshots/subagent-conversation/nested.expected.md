@@ -5,7 +5,6 @@
     - button "event-sourcing researcher"
     - text: /
     - button "example editor" [disabled]
-  - 'button "Balance: --. Click to refresh"': Balance --
   - button "Session log":
     - text: Session log
     - img

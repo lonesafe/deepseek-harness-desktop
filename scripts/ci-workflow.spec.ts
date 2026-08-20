@@ -114,22 +114,18 @@ describe('CI workflow', () => {
     expect(aggregate['runs-on']).toContain('vm-backup')
   })
 
-  it('exempts push from cancellation, so one master merge does not cancel the running drill', () => {
+  it('only exempts official push runs from cancellation, so forks do not accumulate stale cache seeders', () => {
     const workflow = loadWorkflow('.github/workflows/ci.yml')
     if (!isRecord(workflow.jobs) || !isRecord(workflow.concurrency)) {
       throw new TypeError('CI workflow must define jobs and a workflow-level concurrency block')
     }
 
     // Cancellation applies to the whole superseded RUN, so this has to be
-    // decided at workflow level and gated on the event: a job-level group
-    // cannot exempt its job from its run being cancelled. Only push is exempt —
-    // a drill takes longer than the interval between master merges. The negated
-    // form is load-bearing: `== 'pull_request'` would also stop cancelling
-    // workflow_dispatch, and a re-dispatched runner benchmark holds up to 12
-    // larger runners for 15 minutes in this same group on master. The
-    // expression is evaluated against the NEWLY TRIGGERED run, so a dispatch on
-    // master still cancels a mid-flight drill; the runbook records that bound.
-    expect(workflow.concurrency['cancel-in-progress']).toBe("${{ github.event_name != 'push' }}")
+    // decided at workflow level. Fork pushes only seed the Wine cache and must
+    // cancel stale pending runs. Only official pushes are exempt because they
+    // also carry the standby drills. The event clause remains load-bearing for
+    // official workflow_dispatch runs, which must cancel stale benchmarks.
+    expect(workflow.concurrency['cancel-in-progress']).toBe("${{ github.repository != 'deepseek-ai/deepseek-harness' || github.event_name != 'push' }}")
 
     // Neither drill may carry a job-level group: it would not exempt the job
     // from run-scoped cancellation.

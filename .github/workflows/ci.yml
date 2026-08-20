@@ -15,11 +15,12 @@ on:
           - larger-runner-benchmark
           - consolidated-runner-benchmark
 
-# Cancel a superseded run on every event EXCEPT push. A push run carries the two
-# self-hosted standby drills, which take longer than the interval between master
-# merges, so cancelling supersedes a drill before it reaches a verdict and the
-# lane yields no readiness evidence. Must be decided here: cancellation applies
-# to the whole superseded run, so a job-level group cannot exempt its job.
+# Cancel every superseded run in forks, where a push only seeds the Wine cache.
+# The official repository exempts push because it also carries two self-hosted
+# standby drills, which take longer than the interval between master merges, so
+# cancelling supersedes a drill before it reaches a verdict and the lane yields
+# no readiness evidence. Must be decided here: cancellation applies to the whole
+# superseded run, so a job-level group cannot exempt its job.
 # Negated rather than `== 'pull_request'` so workflow_dispatch keeps cancelling:
 # a re-dispatched runner benchmark holds up to 12 larger runners for 15 minutes
 # and shares this group with the drills on master, so queueing it would delay
@@ -29,7 +30,7 @@ on:
 # .agents/notes/implemented/process/2026-07-26-ci-failover-runbook.md
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  cancel-in-progress: ${{ github.repository != 'deepseek-ai/deepseek-harness' || github.event_name != 'push' }}
 
 permissions:
   contents: read

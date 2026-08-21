@@ -162,7 +162,7 @@ jobs:
         if: matrix.platform == 'mac' && env.MACOS_SIGNING_CONFIGURED != 'true'
         run: echo 'The macOS artifact is unsigned; follow the first-launch steps in README.md.'
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deepseek-harness-${{ matrix.artifact }}
           path: |

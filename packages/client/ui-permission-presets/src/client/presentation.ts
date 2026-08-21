@@ -1,16 +1,22 @@
 /** Machine value of the preset that requires an explicit GUI risk gate. */
 export const FULL_ACCESS_PRESET = 'danger-full-access'
 
-/** Locale keys shared by every permission-preset picker. */
+/** Locale dictionary key for a built-in permission preset label. */
 export type PermissionPresetLabelKey =
   | 'preset.readOnly'
   | 'preset.workspaceWrite'
   | 'preset.fullAccess'
 
-const PRESET_LABEL_KEYS: Readonly<Record<string, PermissionPresetLabelKey>> = {
-  'read-only': 'preset.readOnly',
-  'workspace-write': 'preset.workspaceWrite',
-  [FULL_ACCESS_PRESET]: 'preset.fullAccess',
+const PRESET_LABEL_KEYS = new Map<string, PermissionPresetLabelKey>([
+  ['read-only', 'preset.readOnly'],
+  ['workspace-write', 'preset.workspaceWrite'],
+  [FULL_ACCESS_PRESET, 'preset.fullAccess'],
+])
+
+const DEFAULT_PRESET_LABELS: Record<PermissionPresetLabelKey, string> = {
+  'preset.readOnly': 'Read Only',
+  'preset.workspaceWrite': 'Workspace Write',
+  'preset.fullAccess': 'Full access',
 }
 
 /**
@@ -27,14 +33,17 @@ export function displayPresetName(name: string): string {
  * Render a permission preset under its product label.
  * @param value - preset machine value.
  * @param name - host-supplied preset name.
- * @returns the Full access product label or the conventional display name.
+ * @param t - optional locale dictionary lookup for built-in product labels.
+ * @returns the built-in product label or the conventional display name.
  */
 export function displayPermissionPreset(
   value: string,
   name: string,
-  translate?: (key: PermissionPresetLabelKey) => string,
+  t?: (key: PermissionPresetLabelKey) => string,
 ): string {
-  const localeKey = PRESET_LABEL_KEYS[value]
-  if (translate !== undefined && localeKey !== undefined) return translate(localeKey)
-  return value === FULL_ACCESS_PRESET ? 'Full access' : displayPresetName(name)
+  const key = PRESET_LABEL_KEYS.get(value)
+  if (key !== undefined && (name === value || name === DEFAULT_PRESET_LABELS[key])) {
+    return t?.(key) ?? DEFAULT_PRESET_LABELS[key]
+  }
+  return displayPresetName(name)
 }

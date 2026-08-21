@@ -683,6 +683,9 @@ describe('web e2e: long Chat scroll contract', () => {
       // The narrow breakpoint auto-collapses the sidebar. Re-open it because
       // this scenario switches sessions while pinning the narrow Chat scroll owner.
       await world.page.getByRole('button', { name: 'Open sidebar', exact: true }).click()
+      // Remount Chat against the final column width, after AppFrame's 300ms
+      // sidebar-track transition, so the semantic restore measures one layout.
+      await world.page.waitForTimeout(350)
       await world.page.getByRole('tab', { name: 'Chat', exact: true }).click()
       await nextPaint(world.page)
       await expectSameFlowTop(world.page, sessionAnchor)

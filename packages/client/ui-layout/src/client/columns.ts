@@ -31,7 +31,7 @@ export const SIDEBAR_COLLAPSED = 56
  * LG breakpoint); a manual toggle below it re-expands over the squeezed center
  * (stores.ts narrowExpanded). */
 export const SIDEBAR_AUTO_COLLAPSE = 1024
-/** Viewport width below which the sidebar floats over a full-width center
+/** Maximum viewport width where the sidebar floats over a full-width center
  * column instead of reserving a permanent rail track. */
 export const SIDEBAR_OVERLAY_BREAKPOINT = 640
 /** Details drag clamp floor. */

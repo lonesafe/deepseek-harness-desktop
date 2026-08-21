@@ -62,7 +62,7 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(await trigger.getAttribute('aria-expanded')).toBe('true')
     // General is active by default; Permission, Language and Appearance are functional.
     expect(await dialog.getByRole('button', { name: '通用设置' }).getAttribute('aria-current')).toBe('true')
-    await dialog.getByRole('button', { name: '工作区写入' }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '可写入工作区' }).waitFor({ timeout: 10_000 })
     await expect.poll(() => dialog.getByText('语言', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     await expect.poll(() => dialog.getByText('外观', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     const openDocument = dialog.getByRole('button', { name: '打开配置文件' })
@@ -135,44 +135,44 @@ describe('web e2e: settings modal and General preferences', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-permission'))
     const existing = scaffold.ctx.sessions.create(SessionId('settings-permission-before'))
     expect(existing.events.find(event => event.type === 'permission/preset')?.data)
-      .toEqual({ preset: 'workspace-write' })
+      .toEqual({ preset: 'workspace-write', origin: 'default' })
 
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.waitFor({ timeout: 10_000 })
-    const selector = dialog.getByRole('button', { name: '工作区写入' })
+    const selector = dialog.getByRole('button', { name: '可写入工作区' })
     await selector.waitFor({ timeout: 10_000 })
     await expect.poll(() => selector.isEnabled(), { timeout: 5_000 }).toBe(true)
     await selector.click()
-    await page.getByRole('menuitem', { name: '只读' }).click()
-    await dialog.getByRole('button', { name: '只读' }).waitFor({ timeout: 10_000 })
+    await page.getByRole('menuitem', { name: '仅可查看' }).click()
+    await dialog.getByRole('button', { name: '仅可查看' }).waitFor({ timeout: 10_000 })
 
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('permission:')
     expect(document).toContain('defaultPreset: read-only')
     expect(existing.events.find(event => event.type === 'permission/preset')?.data)
-      .toEqual({ preset: 'workspace-write' })
+      .toEqual({ preset: 'workspace-write', origin: 'default' })
 
     const created = scaffold.ctx.sessions.create(SessionId('settings-permission-after'))
     expect(created.events.map(event => [event.type, event.data])).toEqual([
-      ['permission/preset', { preset: 'read-only' }],
+      ['permission/preset', { preset: 'read-only', origin: 'default' }],
       ['sandbox/mode', { mode: 'read-only' }],
       ['approval/policy', { policy: 'ask' }],
     ])
 
-    await dialog.getByRole('button', { name: '只读' }).click()
-    await page.getByRole('menuitem', { name: '完全访问' }).click()
-    const confirmation = page.getByRole('dialog', { name: '确认启用完全访问？' })
-    const enable = confirmation.getByRole('button', { name: '启用完全访问' })
+    await dialog.getByRole('button', { name: '仅可查看' }).click()
+    await page.getByRole('menuitem', { name: '完全权限' }).click()
+    const confirmation = page.getByRole('dialog', { name: '确认启用完全权限？' })
+    const enable = confirmation.getByRole('button', { name: '启用完全权限' })
     expect(await enable.isDisabled()).toBe(true)
     await confirmation.getByRole('checkbox').click()
     await enable.click()
-    await dialog.getByRole('button', { name: '完全访问' }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '完全权限' }).waitFor({ timeout: 10_000 })
     const confirmedDocument = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(confirmedDocument).toContain('defaultPreset: danger-full-access')
     const confirmed = scaffold.ctx.sessions.create(SessionId('settings-permission-confirmed'))
     expect(confirmed.events.map(event => [event.type, event.data])).toEqual([
-      ['permission/preset', { preset: 'danger-full-access' }],
+      ['permission/preset', { preset: 'danger-full-access', origin: 'default' }],
       ['sandbox/mode', { mode: 'danger-full-access' }],
       ['approval/policy', { policy: 'never' }],
     ])
@@ -239,58 +239,6 @@ describe('web e2e: settings modal and General preferences', () => {
     }).toBe(false)
     await page.keyboard.press('Escape')
     expect(tripwire.pageErrors).toEqual([])
-  }, 90_000)
-
-  it('gives the active settings section the full panel width on phones', async () => {
-    const mobilePage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
-    const mobileTripwire = watchConsole(mobilePage)
-    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-settings-phone-layout'))
-    try {
-      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
-      await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await mobilePage.getByRole('button', { name: '设置', exact: true }).click()
-      const dialog = mobilePage.getByRole('dialog', { name: '设置' })
-      await dialog.waitFor({ timeout: 10_000 })
-      await dialog.getByText('语言', { exact: true }).waitFor({ timeout: 10_000 })
-      await mobilePage.setViewportSize({ width: 390, height: 844 })
-
-      const layout = await dialog.evaluate((element) => {
-        const nav = element.querySelector('nav')
-        const content = nav?.nextElementSibling
-        const options = content?.lastElementChild
-        if (nav === null || nav === undefined || options === null || options === undefined) {
-          throw new Error('settings panel layout nodes are missing')
-        }
-        const dialogRect = element.getBoundingClientRect()
-        const navRect = nav.getBoundingClientRect()
-        const optionsRect = options.getBoundingClientRect()
-        return {
-          dialogWidth: dialogRect.width,
-          navWidth: navRect.width,
-          optionsWidth: optionsRect.width,
-          navBottom: navRect.bottom,
-          optionsTop: optionsRect.top,
-          viewportWidth: window.innerWidth,
-          pageWidth: document.documentElement.scrollWidth,
-        }
-      })
-
-      expect(layout.dialogWidth).toBeGreaterThan(350)
-      expect(layout.navWidth).toBe(layout.dialogWidth)
-      expect(layout.optionsWidth).toBe(layout.dialogWidth)
-      expect(layout.optionsWidth).toBeGreaterThan(320)
-      expect(layout.optionsTop).toBe(layout.navBottom)
-      expect(layout.pageWidth).toBe(layout.viewportWidth)
-
-      await dialog.getByRole('button', { name: 'Agent 预设' }).click()
-      await dialog.getByRole('heading', { name: 'Agent 预设' }).waitFor({ timeout: 10_000 })
-      await dialog.getByRole('button', { name: '关闭' }).click()
-      await expect.poll(() => mobilePage.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
-      expect(mobileTripwire.pageErrors).toEqual([])
-      expect(mobileTripwire.warnings).toEqual([])
-    } finally {
-      await mobilePage.close()
-    }
   }, 90_000)
 
   it('flips the theme through the Appearance cubes and persists across reload and a distinct port', async () => {

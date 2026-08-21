@@ -12,7 +12,7 @@ Status: implemented
 
 浏览器真实载体为两类下行流各开一条独立 WebSocket：`/api/events.mux` 只发送 `MuxFrame`，`/api/events.host` 只发送 `HostFrame`。每条文本消息是一份完整的 `ServerRequest` JSON；客户端继续先校验信封，再按路径校验具体 frame union，并把窄形 `RpcRequest<Frame>` 交给既有 `ConnectionController`。两条流保持独立生命周期和无跨流顺序保证，任一条结束仍使整个 connection generation 失败并按既有退避策略重建。
 
-两条事件 WebSocket 只承担 host→browser 下行，不接收客户端业务消息。直连 Host 的浏览器继续使用 `POST /api/*` 发送 client→host unary 调用与 `respond`；经过认证的远程官网壳可选择单独说明的[复用 `/api/rpc` 载体](2026-08-16-remote-websocket-rpc-carrier.md)，官网会把它转换为现有桌面 HTTP 隧道请求，使 Host 策略继续作为真源。fixture（测试前置数据）和 `InProcessApiClient(toFetchHandler(api))` 继续实现同一 `IApiClient` 双流抽象。进程内 fetch 载体保留 SSE 编解码来检验通道无关的协议同构，但网络上对 `/api/events.*` 的 GET 请求只返回 upgrade required，不作为浏览器兼容回退。
+两条事件 WebSocket 只承担 host→browser 下行，不接收客户端业务消息。直连 Host 的浏览器继续使用 `POST /api/*` 发送 client→host unary 调用与 `respond`；经过认证的远程官网壳可选择单独说明的[复用 `/api/rpc` 载体](2026-08-16-remote-websocket-rpc-carrier.zh.md)，官网会把它转换为现有桌面 HTTP 隧道请求，使 Host 策略继续作为真源。fixture（测试前置数据）和 `InProcessApiClient(toFetchHandler(api))` 继续实现同一 `IApiClient` 双流抽象。进程内 fetch 载体保留 SSE 编解码来检验通道无关的协议同构，但网络上对 `/api/events.*` 的 GET 请求只返回 upgrade required，不作为浏览器兼容回退。
 
 ## Upgrade 与生命周期边界
 

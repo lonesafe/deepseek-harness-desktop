@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md
 2026-08-15-electron-desktop-launcher.md: a40d5b02ceaf064c36948a39667398a1ca4e819c
-2026-08-15-electron-desktop-launcher.zh.md: f5cc85f3b9090f85abae60e236da826807967d94
+2026-08-15-electron-desktop-launcher.zh.md: 192c8702b8cffefc5f6f41a8a92c990fa322a963

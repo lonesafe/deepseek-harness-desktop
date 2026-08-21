@@ -120,7 +120,7 @@ export function apply(ctx: ClientContext): void {
         refreshModels()
         if (ns === 'llm-deepseek') void balanceController.load()
       }),
-      ctx.remote.$on('credentials/updated', (ref) => {
+      ctx.remote.$on('credentials/reference-updated', (ref) => {
         refreshModels()
         if (ref === 'DEEPSEEK_API_KEY') void balanceController.load()
       }),

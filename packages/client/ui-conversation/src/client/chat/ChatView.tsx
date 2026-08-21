@@ -14,6 +14,7 @@
 // lifecycle updates replace only their own row without remounting it.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { ConversationTimelineSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
@@ -429,9 +430,38 @@ export function ChatView({
     loadOlder()
   }
 
+  const onTranscriptKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+    const target = event.target
+    if (!(target instanceof HTMLElement)) return
+    if (target.closest('input, textarea, select, [contenteditable="true"]') !== null) return
+    const el = scrollerOf(event.currentTarget)
+    const page = Math.max(1, el.clientHeight * 0.9)
+    switch (event.key) {
+      case 'End':
+        el.scrollTop = el.scrollHeight
+        break
+      case 'Home':
+        el.scrollTop = 0
+        break
+      case 'PageDown':
+        el.scrollTop += page
+        break
+      case 'PageUp':
+        el.scrollTop -= page
+        break
+      default:
+        return
+    }
+    // Chromium does not consistently route paging keys from nested buttons
+    // to the outer conversation scrollport. Leave observedTopRef unchanged:
+    // the scroll ledger then classifies this movement as reader-owned.
+    event.preventDefault()
+  }
+
   return (
     <div className={css.root}>
-      <div ref={listRef} className={css.scroll}>
+      <div ref={listRef} className={css.scroll} onKeyDown={onTranscriptKeyDown}>
         <div ref={columnRef} className={css.column} data-chat-flow="">
           {openState === 'loading' && <div className={css.hint}>{t('chat.loadingHistory')}</div>}
           {openState === 'error' && openError !== null && (

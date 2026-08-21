@@ -329,6 +329,17 @@ describe('AppFrame — narrow-viewport auto-collapse', () => {
 })
 
 describe('AppFrame — phone sidebar overlay', () => {
+  it('includes the 640px boundary and releases the rail at 641px', () => {
+    frameWidth = 640
+    const { frame } = mountFrame()
+    expect(tracks(frame)).toEqual([0, 0])
+    expect(frame.hasAttribute('data-sidebar-overlay')).toBe(true)
+    frameWidth = 641
+    act(() => { fireResize?.(); vi.advanceTimersByTime(20) })
+    expect(tracks(frame)).toEqual([SIDEBAR_COLLAPSED, 0])
+    expect(frame.hasAttribute('data-sidebar-overlay')).toBe(false)
+  })
+
   it('gives the center the full track while retaining a floating collapsed opener', () => {
     frameWidth = 390
     const { frame, slotCalls } = mountFrame()

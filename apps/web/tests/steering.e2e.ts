@@ -26,10 +26,10 @@ const MID_EXPECTED = join(SNAPSHOT_DIR, 'mid-steer.expected.md')
 const SETTLED_EXPECTED = join(SNAPSHOT_DIR, 'settled.expected.md')
 const MODE = webSnapshotMode()
 // The question composer replaces the textarea, so fill → Queue row → Steer
-// must finish inside the first replay chunk window. At 15 ms that window is
-// shorter than Playwright's round trips; 50 ms supplies test-only headroom,
-// while larger values lengthen all three replay scenarios linearly.
-const REPLAY_PACE_MS = 50
+// must finish inside the first replay chunk window. The desktop composition
+// mounts more client plugins before the first turn, so 150 ms supplies
+// test-only headroom while keeping all three replay scenarios bounded.
+const REPLAY_PACE_MS = 150
 
 const PROMPT = 'Use the ask_user_question tool to ask me exactly one question with id "checkpoint", question "Ready to continue?", header "Checkpoint", and options labeled "Yes" and "No". After I answer, reply with one short sentence acknowledging my answer and stop.'
 const STEER = 'Interjection: include the word BANANA in your final reply.'

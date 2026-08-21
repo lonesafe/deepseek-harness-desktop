@@ -6,11 +6,11 @@ Status: implemented
 
 ## 问题
 
-ChatView 的贴底跟随此前只把滚轮／触控板手势识别为读者输入：钉在底部（floor）期间，一个没有对应滚轮位移的滚动事件会被视为程序化滚动并被拉回底部。因此触控平移、拖动原生滚动条与键盘翻页都无法离开流式 transcript（文本记录）的底部，在手机上尾部实际上被锁死。这种仅认滚轮的输入来源判定是 [sticky-composer 笔记](2026-07-29-sticky-composer-conversation-scroll.md)中有意的暂缓：该笔记拒绝为「此次窄范围修复」建立通用输入状态机，把其余所有滚动来源都留在模型之外。
+ChatView 的贴底跟随此前只把滚轮／触控板手势识别为读者输入：钉在底部（floor）期间，一个没有对应滚轮位移的滚动事件会被视为程序化滚动并被拉回底部。因此触控平移、拖动原生滚动条与键盘翻页都无法离开流式 transcript（文本记录）的底部，在手机上尾部实际上被锁死。这种仅认滚轮的输入来源判定是 [sticky-composer 笔记](2026-07-29-sticky-composer-conversation-scroll.zh.md)中有意的暂缓：该笔记拒绝为「此次窄范围修复」建立通用输入状态机，把其余所有滚动来源都留在模型之外。
 
 ## 决策
 
-读者输入不再依据设备来识别。ChatView 维护一份 observed-top ledger（`observedTopRef`）：即最近一次由主线程交付、或由组件自身写入的 `scrollTop`，并在每一个程序化写入点（贴底跟随、打开时恢复、前置锚定、尺寸变化跟随以及滚动交付本身）同步记录。滚动事件到达时，偏离 `min(ledger, floor)` 超过半像素的位置即为读者输入；落在 ledger 上的位置（迟到的程序化交付），或恰好落在收缩后底部上的位置（内容收缩后的浏览器钳制），则维持当前的所有权状态。此后所有权只经由读者输入、按既有阈值规则变化：位置距底部在 `FOLLOW_THRESHOLD` 以内则重新贴底，超出则释放跟随并显示「回到底部」。滚轮监听器及其 epoch 簿记已删除；组件只监听 `scroll`，因此滚轮、触控、滚动条、键盘以及未来任何输入来源都由同一条规则覆盖。
+读者输入不再依据设备来识别。ChatView 维护一份 observed-top ledger（`observedTopRef`）：即最近一次由主线程交付、或由组件自身写入的 `scrollTop`，并在每一个程序化写入点（贴底跟随、打开时恢复、前置锚定、尺寸变化跟随以及滚动交付本身）同步记录。滚动事件到达时，偏离 `min(ledger, floor)` 超过半像素的位置即为读者输入；落在 ledger 上的位置（迟到的程序化交付），或恰好落在收缩后底部上的位置（内容收缩后的浏览器钳制），则维持当前的所有权状态。此后所有权只经由读者输入、按既有阈值规则变化：位置距底部在 `FOLLOW_THRESHOLD` 以内则重新贴底，超出则释放跟随并显示「回到底部」。滚动归因只监听 `scroll`，因此滚轮、触控、滚动条、键盘以及未来任何输入来源都由同一条规则覆盖。另有一个在 transcript 上冒泡的键盘处理器，负责把非编辑型嵌套控件发出的未带修饰键的 Home、End、PageUp 与 PageDown 导向解析出的会话滚动容器，因为 Chromium 并不总会选择这个外层滚动区；该处理器不改写 ledger，因此随后到达的滚动事件仍按同一条设备无关规则确立读者所有权。
 
 前置锚定根据最终几何位置确定所有权。恢复被锚定的行后，ChatView 会把最终滚动位置与新的底部位置比较，更新 `atBottom`，并持久化规范化的读者位置或贴底哨兵。插入的历史记录把底部推远后，插入前的位置不能继续保有贴底所有权。
 
@@ -20,7 +20,7 @@ ChatView 的贴底跟随此前只把滚轮／触控板手势识别为读者输�
 
 ## 测试
 
-`packages/client/ui-conversation/tests/chat-view.client.spec.tsx` 中的单元测试直接钉住 ledger 约定：`readerScroll` 辅助函数交付一个组件从未写入过的位置，程序化交付落在 ledger 上，流收尾阶段的收缩钳制保持跟随。`apps/web/tests/chat-scroll-contract.e2e.ts` 中的两个场景扩展了[浏览器 e2e 车道](../testing/2026-07-24-web-gui-browser-e2e-lane.md)：在已停稳的 transcript 上做键盘翻页，以及对着按节奏推进的流式输出做一次触控式惯性快滑（momentum fling）；两者在仅认滚轮的实现下均为红、在 ledger 下均为绿。
+`packages/client/ui-conversation/tests/chat-view.client.spec.tsx` 中的单元测试直接钉住 ledger 约定：`readerScroll` 辅助函数交付一个组件从未写入过的位置，程序化交付落在 ledger 上，流收尾阶段的收缩钳制保持跟随；来自非编辑型嵌套控件的翻页键会移动解析出的滚动容器，而带修饰键的组合与编辑型目标保持不变。`apps/web/tests/chat-scroll-contract.e2e.ts` 中的两个场景扩展了[浏览器 e2e 车道](../testing/2026-07-24-web-gui-browser-e2e-lane.zh.md)：在已停稳的 transcript 上做键盘翻页，以及对着按节奏推进的流式输出做一次触控式惯性快滑（momentum fling）；两者在仅认滚轮的实现下均为红、在 ledger 下均为绿。
 
 前置锚定单元场景还验证：锚定位置不再靠近扩展后的底部时会释放跟随、保存规范化位置并显示「回到底部」。`apps/web/tests/stats-paged-history.e2e.ts` 通过自动加载历史分页覆盖同一转换。
 

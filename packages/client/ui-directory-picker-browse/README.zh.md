@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-应用内目录浏览界面：它通过 ui-workspace 的两个 directory-flow 洞（`conversation.hero.workspace.directoryFlow` 与 `sidebar.workspaces.directoryFlow`）装入「选择工作区目录」对话框，经 `ctx.workspaces` 驱动 `host.listDirectory` 与 `host.createDirectory`。普通 browse 模式始终渲染该对话框。启用 `nativeOnLoopback` 时，同一界面对回环桌面页面无渲染地驱动 `host.pickDirectory`，对远程页面则保留目录浏览对话框，使同一 adaptive 桌面 Host 能服务两种操作者位置，而不把原生选择器暴露给远程页面。它的 node 对侧是 [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.md)。
+应用内目录浏览界面：它通过 ui-workspace 的两个 directory-flow 洞（`conversation.hero.workspace.directoryFlow` 与 `sidebar.workspaces.directoryFlow`）装入「选择工作区目录」对话框，经 `ctx.workspaces` 驱动 `host.listDirectory` 与 `host.createDirectory`。普通 browse 模式始终渲染该对话框。启用 `nativeOnLoopback` 时，同一界面对回环桌面页面无渲染地驱动 `host.pickDirectory`，对远程页面则保留目录浏览对话框，使同一 adaptive 桌面 Host 能服务两种操作者位置，而不把原生选择器暴露给远程页面。它的 node 对侧是 [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.zh.md)。
 
 对话框是 680×500 的 Miller 分栏视图（在较矮或较窄的视口中限制尺寸）：头部承载标题、选中路径面包屑和可点击编辑的路径区；下方在未选中行时是一整栏层级，选中后该行均分为「层级 | 选中文件夹的子项」两栏。导航落地是选择锚定且安静的——面包屑跳转或提交路径被扫描期间仍渲染旧视图，目标目录与父目录两段导航在同一帧完成——因此回退时，只要尚未到达显示根目录，就会始终保持两栏，且不会闪过中间帧。**新建文件夹**打开一个嵌套创建对话框，目标为选中的文件夹，并选中它创建出来的那个；**打开**采纳选中的文件夹，没有选中时回落到当前层级。Host 标记的隐藏条目默认不显示，直到页脚开关将其揭开——那只是客户端过滤。
 

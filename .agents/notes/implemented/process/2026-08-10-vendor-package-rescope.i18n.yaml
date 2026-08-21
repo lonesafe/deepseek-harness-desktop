@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-10-vendor-package-rescope.md
 2026-08-10-vendor-package-rescope.md: 960f3cca391718d20f91d5183be36e09e1233c69
-2026-08-10-vendor-package-rescope.zh.md: 87ff66b67409b98d0ed04907500b633ed53cc77b
+2026-08-10-vendor-package-rescope.zh.md: 34896aca4d5d705c88150baa0cd8bbd909c37108

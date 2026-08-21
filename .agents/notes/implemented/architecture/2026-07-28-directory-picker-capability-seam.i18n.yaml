@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.md
 2026-07-28-directory-picker-capability-seam.md: 4299736531526bbb82a19e508a2f877b23ab9e38
-2026-07-28-directory-picker-capability-seam.zh.md: e69d0d68bd3bb453234672c1dae386737df75a9c
+2026-07-28-directory-picker-capability-seam.zh.md: f20dd1831fc828b4c772c35389b10a42d5be184e

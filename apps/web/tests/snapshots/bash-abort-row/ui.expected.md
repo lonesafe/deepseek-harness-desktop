@@ -8,7 +8,7 @@
     - tab "Chat" [selected]
     - tab "Trajectory"
     - tab "Files"
-- text: "Run two shell commands: wait for cancellation, then write skipped.txt. {{date}} {{clock}}"
+- text: "Run two shell commands: wait for cancellation, then write skipped.txt. {{clock}}"
 - button "Copy":
   - img
 - button "Context injection @deepseek-ai/dsh-system-prompt":

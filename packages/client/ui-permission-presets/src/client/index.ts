@@ -10,8 +10,8 @@
  * write through one path and the pushed projection frame is the one
  * confirmation. The Full access row carries the same explicit risk gate as
  * the composer chip; the shared popup shell owns the modal mechanics.
- * The General-settings row separately writes the default preset for sessions
- * created later through the host Settings API.
+ * The General-settings row separately writes the default preset for fresh
+ * sessions and eligible confirmed blank reuse through the host Settings API.
  */
 import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).

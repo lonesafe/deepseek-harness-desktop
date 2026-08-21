@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-29-directory-picker-adaptive-default.md
 2026-07-29-directory-picker-adaptive-default.md: 17a2cfb6899c0803a2d85248d3a25b7eb1e4327a
-2026-07-29-directory-picker-adaptive-default.zh.md: c5d61da2dff56de10942f3b469552954ccd790a3
+2026-07-29-directory-picker-adaptive-default.zh.md: 3b3baae6f18748208ffa0f898d439c64575487ba

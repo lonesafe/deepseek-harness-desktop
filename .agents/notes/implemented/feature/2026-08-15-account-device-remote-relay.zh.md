@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-直接[局域网访问](2026-08-15-authenticated-lan-web-access.md)无法让移动网络中的手机连接家庭路由器后的电脑，而把 Harness 监听器暴露到公网既要求端口映射，也会让具备命令执行能力的应用占用公共入站端口。远程使用需要账号所有权、按设备撤销和服务器中转，并且不能要求桌面端接收官网密码，也不能让中转服务器选择任意本地目标。
+直接[局域网访问](2026-08-15-authenticated-lan-web-access.zh.md)无法让移动网络中的手机连接家庭路由器后的电脑，而把 Harness 监听器暴露到公网既要求端口映射，也会让具备命令执行能力的应用占用公共入站端口。远程使用需要账号所有权、按设备撤销和服务器中转，并且不能要求桌面端接收官网密码，也不能让中转服务器选择任意本地目标。
 
 ## Decision
 
@@ -16,7 +16,7 @@ Status: implemented
 
 **已启用设备建立一条经过认证的出站 WebSocket。** 主进程使用设备 token 连接官网，并在偏好保持开启时自动重连。公网中转只通过该连接复用有界 `/api` 请求与业务 WebSocket 流；中转端和桌面端都会拒绝非 API 隧道目标。每个请求目标都相对于已就绪 Harness 回环 origin 解析，逃离该 origin 的请求会被拒绝；中转提供的 Cookie、Authorization、Origin 与浏览器元数据不会转发。小型 HTTP 响应继续使用原有单帧形状，大型响应则使用有序的 start/chunk/end 序列，把 512 KiB 二进制切片分别编码到各帧，并对完整响应设置 128 MiB 上限。设备隧道和面向浏览器的中转均协商标准 WebSocket 压缩，因此大型 JSON 历史不会按解压后大小占用公网链路。中转同时接受两种响应形状，使服务端升级继续兼容已安装客户端；但要返回超过旧版限制的历史，客户端必须支持分片。关闭偏好、撤销设备、重启本地后端或退出应用都会关闭隧道及其本地 WebSocket，并等待清理完成。
 
-**独立中转 authority 提供中央 Web 壳并保留 API 路径。** 经过认证的官网用户选择自己名下的在线设备后，服务会把一分钟有效的单次票据兑换成 HttpOnly 中转 session。官网一次性导出版本匹配的 Harness 壳、启动图、插件包、样式与字体，再从中转 authority 直接提供这些可缓存文件，因此加载或刷新这些资源不会消耗设备上行或隧道带宽。壳中的精确标记会为 unary 与 respond 操作选择一条复用的浏览器到官网 `/api/rpc` WebSocket；官网校验每项操作并把它转换为现有设备 `http_request` 帧，mux 与 host 事件下行仍使用独立 WebSocket。响应 start/chunk/end 帧会直接流过官网，不在服务端完整重组；分帧方式与不回退规则由[远程 WebSocket RPC 载体决策](../architecture/2026-08-16-remote-websocket-rpc-carrier.md)持有。低于 640px 时，该壳会从布局中移除已收起的侧栏轨道，只保留浮动入口，压缩会话 chrome，并让 composer 贴合动态视口与底部安全区。中转在转发前校验 Host、浏览器 Origin、账号设备所有权、session 过期时间、撤销状态与在线隧道。
+**独立中转 authority 提供中央 Web 壳并保留 API 路径。** 经过认证的官网用户选择自己名下的在线设备后，服务会把一分钟有效的单次票据兑换成 HttpOnly 中转 session。官网一次性导出版本匹配的 Harness 壳、启动图、插件包、样式与字体，再从中转 authority 直接提供这些可缓存文件，因此加载或刷新这些资源不会消耗设备上行或隧道带宽。壳中的精确标记会为 unary 与 respond 操作选择一条复用的浏览器到官网 `/api/rpc` WebSocket；官网校验每项操作并把它转换为现有设备 `http_request` 帧，mux 与 host 事件下行仍使用独立 WebSocket。响应 start/chunk/end 帧会直接流过官网，不在服务端完整重组；分帧方式与不回退规则由[远程 WebSocket RPC 载体决策](../architecture/2026-08-16-remote-websocket-rpc-carrier.zh.md)持有。不超过 640px 时，该壳会从布局中移除已收起的侧栏轨道，只保留浮动入口，压缩会话 chrome，并让 composer 贴合动态视口与底部安全区。中转在转发前校验 Host、浏览器 Origin、账号设备所有权、session 过期时间、撤销状态与在线隧道。
 
 **远程配置采用只读投影。** 会话和 Agent 仍然可用，因为它们正是远程控制的目的，其中包括本地 Harness 会话本来就有的命令与 workspace 能力。中央 Web 壳还需要 `settings.describe` 和 `credentials.describe`，才能在模型、通用设置、插件与 Agent 预设界面中正常显示内容而不产生传输错误。因此桌面端允许这两项已经脱敏的读取，但会在返回前改写其能力：设置不可写且不能打开宿主文档，每条凭据引用也不可写且永远不携带凭据值。设置与凭据写入、原生目录选择、路径打开、Agent preset 管理和草稿模型发现仍会在抵达回环服务器前被拒绝。隧道会先规范化 HTTP 方法大小写与百分号编码的 RPC 名称再执行拒绝，因此替代拼写无法绕过限制。
 

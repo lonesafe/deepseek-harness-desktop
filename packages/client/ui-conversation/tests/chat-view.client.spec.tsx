@@ -1133,6 +1133,39 @@ describe('ChatView', () => {
     expect(view.queryByLabelText('回到底部')).toBeNull()
   })
 
+  it('routes transcript paging keys from nested non-editable controls to the scrollport', () => {
+    const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    Object.defineProperty(scroller, 'scrollHeight', { value: 1_000, writable: true })
+    Object.defineProperty(scroller, 'clientHeight', { value: 300, writable: true })
+    const control = document.createElement('button')
+    scroller.append(control)
+
+    scroller.scrollTop = 700
+    expect(fireEvent.keyDown(control, { key: 'PageUp' })).toBe(false)
+    expect(scroller.scrollTop).toBe(430)
+    expect(fireEvent.keyDown(control, { key: 'PageDown' })).toBe(false)
+    expect(scroller.scrollTop).toBe(700)
+    expect(fireEvent.keyDown(control, { key: 'Home' })).toBe(false)
+    expect(scroller.scrollTop).toBe(0)
+    expect(fireEvent.keyDown(control, { key: 'End' })).toBe(false)
+    expect(scroller.scrollTop).toBe(1_000)
+
+    for (const modifier of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey'] as const) {
+      scroller.scrollTop = 500
+      expect(fireEvent.keyDown(control, { key: 'PageUp', [modifier]: true })).toBe(true)
+      expect(scroller.scrollTop).toBe(500)
+    }
+    expect(fireEvent.keyDown(control, { key: 'ArrowDown' })).toBe(true)
+    expect(scroller.scrollTop).toBe(500)
+
+    const input = document.createElement('textarea')
+    scroller.append(input)
+    expect(fireEvent.keyDown(input, { key: 'Home' })).toBe(true)
+    expect(scroller.scrollTop).toBe(500)
+  })
+
   it('keeps following when a stream-finalization shrink clamp delivers its scroll', () => {
     const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
     const view = render(<h.ChatView {...h.props} />)

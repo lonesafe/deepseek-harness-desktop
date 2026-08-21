@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-15-chinese-default-repository-readme.md
 2026-08-15-chinese-default-repository-readme.md: ae7fdbf44d487a8d66d86fb60dad4a867ca65c64
-2026-08-15-chinese-default-repository-readme.zh.md: 7db9fdaac589a8ad9dc868e5d2bce14206a5bb23
+2026-08-15-chinese-default-repository-readme.zh.md: 1aec2738415eb1c2555df39747a81514fc6f826a

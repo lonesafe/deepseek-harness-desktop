@@ -142,7 +142,7 @@ export function AppFrame({
     ? 0
     : panels.sidebar === 0 ? SIDEBAR_DEFAULT : panels.sidebar
   const cols = computeColumns(viewport, sidebarPreference, detailsSession === undefined ? 0 : panels.details)
-  const overlaySidebar = viewport < SIDEBAR_OVERLAY_BREAKPOINT
+  const overlaySidebar = viewport <= SIDEBAR_OVERLAY_BREAKPOINT
   const sidebarTrack = overlaySidebar ? 0 : cols.sidebar
   const colsRef = useRef(cols)
   colsRef.current = cols

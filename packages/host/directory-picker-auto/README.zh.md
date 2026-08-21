@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-[目录选择 seam](../directory-picker/README.md) 的**自适应选择器**：一个只有 node 半侧的插件，在启动时一次性判定宿主处境，并把后端与 client 界面作为真实 Loader 条目挂进内存根树（绝不持久化到配置文件；根树的 `write()` 是 no-op）。判定为 browse 时，挂载 [`-browse`](../directory-picker-browse/README.md) 与应用内浏览器。判定为 native 时，挂载 [`-native`](../directory-picker-native/README.md) adaptive 后端，并把同一 browse 界面配置为回环页面使用 OS 选择器、远程页面使用应用内浏览。卸载选择器会移除两个条目并汇入它们的拆卸。
+[目录选择 seam](../directory-picker/README.zh.md) 的**自适应选择器**：一个只有 node 半侧的插件，在启动时一次性判定宿主处境，并把后端与 client 界面作为真实 Loader 条目挂进内存根树（绝不持久化到配置文件；根树的 `write()` 是 no-op）。判定为 browse 时，挂载 [`-browse`](../directory-picker-browse/README.zh.md) 与应用内浏览器。判定为 native 时，挂载 [`-native`](../directory-picker-native/README.zh.md) adaptive 后端，并把同一 browse 界面配置为回环页面使用 OS 选择器、远程页面使用应用内浏览。卸载选择器会移除两个条目并汇入它们的拆卸。
 
 判定是一次纯函数的启动时采样（`resolveDirectoryPickerBackend`），已导出供复用。`native` 要求仅回环绑定、非 SSH 启动和可服务的显示会话——darwin／win32 上视为存在；linux 上要求 `DISPLAY`／`WAYLAND_DISPLAY`，外加 `PATH` 上有 zenity 或 kdialog；其他平台上不成立。任何含糊情形都判定为 `browse`。每次启动只采样一次，adaptive client 界面则按 `ctx.connection.isLoopback` 逐页决定使用 native 还是 browse。固定交互不是这里的配置字段；直接组合 `-browse` 即可强制应用内浏览。
 

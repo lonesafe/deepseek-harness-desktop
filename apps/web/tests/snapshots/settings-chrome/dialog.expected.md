@@ -22,8 +22,8 @@
     - text: 标准模式
     - img
   - text: 权限 选择新会话的默认权限模式
-  - button "工作区写入":
-    - text: 工作区写入
+  - button "可写入工作区":
+    - text: 可写入工作区
     - img
   - text: 语言
   - button "中文":

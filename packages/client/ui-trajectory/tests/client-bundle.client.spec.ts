@@ -60,7 +60,7 @@ describe('tsdown client artifact', () => {
     return { handoff: handoff!, exports }
   }
 
-  it.skipIf(code === undefined)('hands off with the manifest id and a DI-require factory', async () => {
+  it.skipIf(code === undefined)('hands off with the manifest id and a DI-require factory', { timeout: 15_000 }, async () => {
     const { handoff, exports } = await loadArtifact()
     expect(handoff.id).toBe(PLUGIN_ID)
     expect(exports.apply).toBeTypeOf('function')

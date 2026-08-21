@@ -240,10 +240,12 @@ describe('web e2e: the feedback note editor floats above the column', () => {
    */
   const settleAt = async (width: number, editorOpen: boolean): Promise<PopoverMetrics> => {
     await page.setViewportSize({ width, height: 900 })
-    // Crossing the 640px overlay breakpoint changes the AppFrame tracks after
-    // ResizeObserver publishes the new width, then eases them for 300ms. Two
-    // immediately equal samples can occur before that transition starts, so
-    // first let the responsive shell finish its complete slow transition.
+    // Crossing the 640px overlay breakpoint first updates AppFrame through
+    // ResizeObserver, then eases the tracks for 300ms. Wait for both phases:
+    // equal width samples alone can occur before the responsive state lands.
+    const frame = page.locator('[class*="frame"]').first()
+    await expect.poll(() => frame.getAttribute('data-sidebar-overlay'), { timeout: 10_000 })
+      .toBe(width <= 640 ? 'true' : null)
     await page.waitForTimeout(350)
     let previous = -1
     await expect.poll(async () => {

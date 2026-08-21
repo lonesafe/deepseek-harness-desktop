@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-GitHub 会将根目录中不带语言后缀的 `README.md` 渲染为仓库首页。标准[双语兄弟文件决策](2026-07-02-bilingual-docs-and-pairing-gate.md)将该路径分配给英文，并将 `.zh.md` 分配给中文，因此即使这个桌面发行版主要面向中文读者，访问者仍会先看到英文。把中文链接标记为首选并不能改变 GitHub 渲染的页面。
+GitHub 会将根目录中不带语言后缀的 `README.md` 渲染为仓库首页。标准[双语兄弟文件决策](2026-07-02-bilingual-docs-and-pairing-gate.zh.md)将该路径分配给英文，并将 `.zh.md` 分配给中文，因此即使这个桌面发行版主要面向中文读者，访问者仍会先看到英文。把中文链接标记为首选并不能改变 GitHub 渲染的页面。
 
 ## 决策
 

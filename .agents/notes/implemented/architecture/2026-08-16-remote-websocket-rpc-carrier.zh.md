@@ -14,9 +14,9 @@ Status: implemented
 
 浏览器与官网使用独立的传输 id 复用并发操作。文本帧负责开始和结束请求、开始和结束响应、报告传输失败，或取消一项操作；二进制帧由两字节大端序传输 id 长度、UTF-8 传输 id 与一个正文分片组成。请求与响应上限仍为 24 MiB 和 128 MiB，每条正文消息最大 512 KiB。官网把经过校验的桌面 start/chunk/end 响应帧流式传给浏览器，不重建完整正文；浏览器只重组自己的响应，再把兼容 fetch 的 `Response` 交回未改动的逻辑解析器。两段公网 WebSocket 都会协商标准压缩，因此重复度很高的 JSON 历史在传输时会被压缩，而逻辑大小限制和浏览器解析仍按解压后的字节计算。
 
-官网先认证中转 session、把浏览器 Origin 与中转 authority 比较，并确认当前设备归属和在线状态，然后才 upgrade `/api/rpc`。它会把每项完整的浏览器 JSON 请求转换为现有桌面隧道 `http_request` 帧，而不是打开本地 RPC WebSocket。因此桌面端继续作为策略真源，负责规范化 RPC 路径检查、特权方法拒绝、敏感 header 移除、固定回环目标，以及[远程中转决策](../feature/2026-08-15-account-device-remote-relay.md)所述的只读设置与凭据投影。浏览器取消会释放官网等待，socket 断开会取消全部在途官网操作。带标记的远程客户端不会静默回退到 HTTP；兼容发布期间，现有 HTTP 中转仍可供较旧的导出壳使用。
+官网先认证中转 session、把浏览器 Origin 与中转 authority 比较，并确认当前设备归属和在线状态，然后才 upgrade `/api/rpc`。它会把每项完整的浏览器 JSON 请求转换为现有桌面隧道 `http_request` 帧，而不是打开本地 RPC WebSocket。因此桌面端继续作为策略真源，负责规范化 RPC 路径检查、特权方法拒绝、敏感 header 移除、固定回环目标，以及[远程中转决策](../feature/2026-08-15-account-device-remote-relay.zh.md)所述的只读设置与凭据投影。浏览器取消会释放官网等待，socket 断开会取消全部在途官网操作。带标记的远程客户端不会静默回退到 HTTP；兼容发布期间，现有 HTTP 中转仍可供较旧的导出壳使用。
 
-两条业务事件流继续遵守[浏览器下行决策](2026-08-04-websocket-downlink-carrier.md)，保持彼此独立且只下行。一个远程页面因此持有三条 socket：一条复用的客户端发起 RPC 载体，加上 mux 与 host 下行。它们的逻辑 schema、就绪行为和跨流无序属性均不改变。
+两条业务事件流继续遵守[浏览器下行决策](2026-08-04-websocket-downlink-carrier.zh.md)，保持彼此独立且只下行。一个远程页面因此持有三条 socket：一条复用的客户端发起 RPC 载体，加上 mux 与 host 下行。它们的逻辑 schema、就绪行为和跨流无序属性均不改变。
 
 ## Verification
 

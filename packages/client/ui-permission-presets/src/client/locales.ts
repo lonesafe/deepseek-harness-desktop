@@ -6,14 +6,14 @@ export const zh = {
   'description': '选择新会话的默认权限模式',
   'loading': '加载中',
   'unavailable': '不可用',
-  'preset.readOnly': '只读',
-  'preset.workspaceWrite': '工作区写入',
-  'preset.fullAccess': '完全访问',
-  'confirm.title': '确认启用完全访问？',
-  'confirm.description': '启用完全访问后，新会话将减少确认步骤，并且可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任后续任务时使用。',
+  'preset.readOnly': '仅可查看',
+  'preset.workspaceWrite': '可写入工作区',
+  'preset.fullAccess': '完全权限',
+  'confirm.title': '确认启用完全权限？',
+  'confirm.description': '启用完全权限后，新会话将减少确认步骤，并且可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任后续任务时使用。',
   'confirm.acknowledge': '我已了解风险，并愿意继续',
   'confirm.cancel': '取消',
-  'confirm.enable': '启用完全访问',
+  'confirm.enable': '启用完全权限',
 } satisfies Record<string, string>
 
 /** The settings.permission namespace key union. */
@@ -37,14 +37,14 @@ export const en = {
 
 /** Simplified Chinese dictionary for the current-session popup gate. */
 export const accessZh = {
-  'preset.readOnly': '只读',
-  'preset.workspaceWrite': '工作区写入',
-  'preset.fullAccess': '完全访问',
-  'confirm.title': '确认启用完全访问？',
-  'confirm.description': '启用完全访问后，agent 将减少确认步骤，并且可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任当前任务时使用。',
+  'preset.readOnly': '仅可查看',
+  'preset.workspaceWrite': '可写入工作区',
+  'preset.fullAccess': '完全权限',
+  'confirm.title': '确认启用完全权限？',
+  'confirm.description': '启用完全权限后，智能体将减少确认步骤，并且可以直接执行更多操作，包括敏感操作、文件修改或外部命令。仅建议在你信任当前任务时使用。',
   'confirm.acknowledge': '我已了解风险，并愿意继续',
   'confirm.cancel': '取消',
-  'confirm.enable': '启用完全访问',
+  'confirm.enable': '启用完全权限',
 } satisfies Record<string, string>
 
 /** Current-session popup-gate key union. */

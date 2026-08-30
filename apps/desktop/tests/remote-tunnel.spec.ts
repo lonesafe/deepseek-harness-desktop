@@ -2,7 +2,6 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket, { type RawData, WebSocketServer } from 'ws'
-import { loopbackOnlyMethods } from '@deepseek-ai/dsh-client-connection'
 import {
   REMOTE_RPC_POLICY, remoteRpcDisposition, startRemoteTunnel, type RemoteTunnel,
 } from '../src/remote-tunnel.ts'
@@ -77,29 +76,38 @@ function collectChunkedResponse(socket: WebSocket, id: string): Promise<{
 }
 
 describe('desktop remote tunnel', () => {
-  it('classifies every loopback-only RPC and keeps remote workspace browsing available', () => {
-    const loopbackOnly = loopbackOnlyMethods()
-    const projected = new Set(['settings.describe', 'credentials.describe'])
-    for (const method of loopbackOnly) {
-      expect(remoteRpcDisposition(method)).toBe(projected.has(method) ? 'read-only' : 'blocked')
-    }
-    expect(Object.entries(REMOTE_RPC_POLICY)
-      .filter(([, disposition]) => disposition !== 'forward')
-      .map(([method]) => method)
-      .sort())
-      .toEqual([...loopbackOnly].sort())
-    expect(remoteRpcDisposition('host.listDirectory')).toBe('forward')
-    expect(remoteRpcDisposition('host.createDirectory')).toBe('forward')
-    expect(remoteRpcDisposition('workspace.create')).toBe('forward')
-    expect(remoteRpcDisposition('workspace.listFiles')).toBe('forward')
-    expect(remoteRpcDisposition('workspace.readFile')).toBe('forward')
+  it('classifies every privileged RPC and keeps remote workspace browsing available', () => {
+    expect(Object.keys(REMOTE_RPC_POLICY).sort())
+      .toEqual([
+        'agentPresets/copy',
+        'agentPresets/deletePreset',
+        'agentPresets/read',
+        'credentials/describe',
+        'credentials/set',
+        'credentials/unset',
+        'directoryPicker/pick',
+        'llm/discoverModels',
+        'session/openWorkspacePath',
+        'settings/describe',
+        'settings/mutate',
+        'settings/openAgentPresetDirectory',
+        'settings/openSettingsDocument',
+        'settings/replace',
+        'settings/update',
+      ])
+    expect(remoteRpcDisposition('directoryPicker/list')).toBe('forward')
+    expect(remoteRpcDisposition('directoryPicker/createDirectory')).toBe('forward')
+    expect(remoteRpcDisposition('workspace/create')).toBe('forward')
+    expect(remoteRpcDisposition('workspace/listFiles')).toBe('forward')
+    expect(remoteRpcDisposition('workspace/readFile')).toBe('forward')
   })
 
   it('proxies only the fixed loopback origin and exposes configuration as read-only', async () => {
     const local = createServer((request, response) => {
       response.writeHead(200, { 'content-type': 'application/json' })
-      if (request.url === '/api/settings.describe') {
+      if (request.url === '/api/settings/describe') {
         response.end(JSON.stringify({
+          type: 'server-response',
           rpcId: 'settings-rpc',
           result: {
             ok: true,
@@ -112,21 +120,20 @@ describe('desktop remote tunnel', () => {
         }))
         return
       }
-      if (request.url === '/api/credentials.describe') {
+      if (request.url === '/api/credentials/describe') {
         response.end(JSON.stringify({
+          type: 'server-response',
           rpcId: 'credentials-rpc',
           result: {
             ok: true,
             value: {
-              credentials: {
-                DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: true },
-              },
+              DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: true },
             },
           },
         }))
         return
       }
-      if (request.url === '/api/session.history') {
+      if (request.url === '/api/session/page') {
         response.end(Buffer.alloc((1 << 20) + 17, 0x61))
         return
       }
@@ -199,7 +206,7 @@ describe('desktop remote tunnel', () => {
       try {
         const largeResponse = collectChunkedResponse(socket, '8'.repeat(32))
         socket.send(JSON.stringify({
-          type: 'http_request', id: '8'.repeat(32), method: 'POST', path: '/api/session.history', body: '',
+          type: 'http_request', id: '8'.repeat(32), method: 'POST', path: '/api/session/page', body: '',
         }))
         return await largeResponse
       } finally {
@@ -218,11 +225,12 @@ describe('desktop remote tunnel', () => {
     expect(staticDenied).toMatchObject({ type: 'error', id: '3'.repeat(32), message: 'Remote tunnel only accepts Harness API requests.' })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '2'.repeat(32), method: 'POST', path: '/api/settings.describe', body: '',
+      type: 'http_request', id: '2'.repeat(32), method: 'POST', path: '/api/settings/describe', body: '',
     }))
     const settings = await nextFrame(socket)
     expect(settings).toMatchObject({ type: 'http_response', id: '2'.repeat(32), status: 200 })
     expect(JSON.parse(Buffer.from(settings.body as string, 'base64').toString())).toEqual({
+      type: 'server-response',
       rpcId: 'settings-rpc',
       result: {
         ok: true,
@@ -235,7 +243,7 @@ describe('desktop remote tunnel', () => {
     })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '4'.repeat(32), method: 'POST', path: '/api/credentials.describe', body: '',
+      type: 'http_request', id: '4'.repeat(32), method: 'POST', path: '/api/credentials/describe', body: '',
     }))
     const credentials = await nextFrame(socket)
     expect(credentials).toMatchObject({ type: 'http_response', id: '4'.repeat(32), status: 200 })
@@ -244,47 +252,45 @@ describe('desktop remote tunnel', () => {
         result: {
           ok: true,
           value: {
-            credentials: {
-              DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: false },
-            },
+            DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: false },
           },
         },
       })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '5'.repeat(32), method: 'post', path: '/api/settings.mutate', body: '',
+      type: 'http_request', id: '5'.repeat(32), method: 'post', path: '/api/settings/mutate', body: '',
     }))
     const writeForbidden = await nextFrame(socket)
     expect(writeForbidden).toMatchObject({ type: 'http_response', id: '5'.repeat(32), status: 403 })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '6'.repeat(32), method: 'POST', path: '/api/settings%2Emutate', body: '',
+      type: 'http_request', id: '6'.repeat(32), method: 'POST', path: '/api/settings%2Fmutate', body: '',
     }))
     const encodedWriteForbidden = await nextFrame(socket)
     expect(encodedWriteForbidden).toMatchObject({ type: 'http_response', id: '6'.repeat(32), status: 403 })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '9'.repeat(32), method: 'POST', path: '/api/host.pickDirectory', body: '',
+      type: 'http_request', id: '9'.repeat(32), method: 'POST', path: '/api/directoryPicker/pick', body: '',
     }))
     const nativePickerForbidden = await nextFrame(socket)
     expect(nativePickerForbidden).toMatchObject({ type: 'http_response', id: '9'.repeat(32), status: 403 })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: 'a'.repeat(32), method: 'POST', path: '/api/host.listDirectory', body: '',
+      type: 'http_request', id: 'a'.repeat(32), method: 'POST', path: '/api/directoryPicker/list', body: '',
     }))
     const browsePickerForwarded = await nextFrame(socket)
     expect(browsePickerForwarded).toMatchObject({ type: 'http_response', id: 'a'.repeat(32), status: 200 })
     expect(JSON.parse(Buffer.from(browsePickerForwarded.body as string, 'base64').toString()))
-      .toEqual({ path: '/api/host.listDirectory', forwardedCookie: null })
+      .toEqual({ path: '/api/directoryPicker/list', forwardedCookie: null })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '7'.repeat(32), method: 'POST', path: '/api/settings.describe?malformed=true', body: '',
+      type: 'http_request', id: '7'.repeat(32), method: 'POST', path: '/api/settings/describe?malformed=true', body: '',
     }))
     const malformedProjection = await nextFrame(socket)
     expect(malformedProjection).toMatchObject({
       type: 'error',
       id: '7'.repeat(32),
-      message: 'Local settings.describe response had an invalid RPC envelope.',
+      message: 'Local settings/describe response had an invalid RPC envelope.',
     })
   }, 15_000)
 })

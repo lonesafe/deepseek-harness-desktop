@@ -2,7 +2,7 @@
 
 import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket, { type RawData } from 'ws'
-import type { RpcMethodMap } from '@deepseek-ai/dsh-client-connection'
+import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import type { RemoteDeviceAuthorization } from './remote-access.ts'
 
 const MAX_TUNNEL_REQUEST_BODY_BYTES = 24 << 20
@@ -13,69 +13,33 @@ const MAX_TUNNEL_MESSAGE_BYTES = MAX_TUNNEL_REQUEST_BODY_BYTES * 2
 /** Remote tunnel treatment of one logical RPC endpoint. */
 export type RemoteRpcDisposition = 'forward' | 'read-only' | 'blocked'
 
+type RemoteNamespace = Exclude<Extract<keyof ClientRemote, string>, `$${string}`>
+type RemoteRpcMethod = {
+  [Namespace in RemoteNamespace]: `${Namespace}/${Extract<keyof ClientRemote[Namespace], string>}`
+}[RemoteNamespace]
+
 /**
- * Exhaustive portal policy for every payload-direct RPC in IApiClient. A new
- * method added to RpcMethodMap cannot compile until its remote treatment is
- * reviewed here. Typert extension endpoints are outside RpcMethodMap and keep
- * their own service-level policy, so unknown names still fall through.
+ * Portal policy for Remote methods whose treatment is reviewed explicitly.
+ * Keys are checked against the generated Client Remote surface; methods absent
+ * from this table remain available through the authenticated relay.
  */
-export const REMOTE_RPC_POLICY: Readonly<{ [K in keyof RpcMethodMap]: RemoteRpcDisposition }> = {
-  'session.list': 'forward',
-  'session.search': 'forward',
-  'session.create': 'forward',
-  'session.history': 'forward',
-  'session.models': 'forward',
-  'session.selectModel': 'forward',
-  'session.rename': 'forward',
-  'session.fork': 'forward',
-  'session.prompt': 'forward',
-  'session.attachment': 'forward',
-  'session.updateQueue': 'forward',
-  'session.cancel': 'forward',
-  'subagent.list': 'forward',
-  'subagent.history': 'forward',
-  'subagent.prompt': 'forward',
-  'subagent.interrupt': 'forward',
-  'host.describe': 'forward',
-  'host.pickDirectory': 'blocked',
-  'host.listDirectory': 'forward',
-  'host.createDirectory': 'forward',
-  'host.openPath': 'blocked',
-  'workspace.list': 'forward',
-  'workspace.listFiles': 'forward',
-  'workspace.readFile': 'forward',
-  'workspace.create': 'forward',
-  'workspace.rename': 'forward',
-  'workspace.delete': 'forward',
-  'workspace.insertBefore': 'forward',
-  'workspace.insertSessionBefore': 'forward',
-  'workspace.archiveSession': 'forward',
-  'skill.list': 'forward',
-  'agentPreset.list': 'forward',
-  'agentPreset.select': 'forward',
-  'agentPreset.read': 'blocked',
-  'agentPreset.copy': 'blocked',
-  'agentPreset.openDocument': 'blocked',
-  'agentPreset.remove': 'blocked',
-  'goal.create': 'forward',
-  'goal.edit': 'forward',
-  'goal.pause': 'forward',
-  'goal.resume': 'forward',
-  'goal.complete': 'forward',
-  'goal.clear': 'forward',
-  'settings.describe': 'read-only',
-  'settings.openDocument': 'blocked',
-  'settings.update': 'blocked',
-  'settings.replace': 'blocked',
-  'settings.mutate': 'blocked',
-  'credentials.describe': 'read-only',
-  'credentials.set': 'blocked',
-  'credentials.unset': 'blocked',
-  'llm.providers': 'forward',
-  'llm.models': 'forward',
-  'llm.balance': 'forward',
-  'llm.discoverModels': 'blocked',
-}
+export const REMOTE_RPC_POLICY = {
+  'directoryPicker/pick': 'blocked',
+  'session/openWorkspacePath': 'blocked',
+  'agentPresets/read': 'blocked',
+  'agentPresets/copy': 'blocked',
+  'agentPresets/deletePreset': 'blocked',
+  'settings/describe': 'read-only',
+  'settings/openSettingsDocument': 'blocked',
+  'settings/openAgentPresetDirectory': 'blocked',
+  'settings/update': 'blocked',
+  'settings/replace': 'blocked',
+  'settings/mutate': 'blocked',
+  'credentials/describe': 'read-only',
+  'credentials/set': 'blocked',
+  'credentials/unset': 'blocked',
+  'llm/discoverModels': 'blocked',
+} as const satisfies Partial<Record<RemoteRpcMethod, RemoteRpcDisposition>>
 
 /**
  * Classify one logical RPC method at the desktop trust boundary. Exported so
@@ -84,7 +48,7 @@ export const REMOTE_RPC_POLICY: Readonly<{ [K in keyof RpcMethodMap]: RemoteRpcD
  */
 export function remoteRpcDisposition(method: string): RemoteRpcDisposition {
   return Object.hasOwn(REMOTE_RPC_POLICY, method)
-    ? REMOTE_RPC_POLICY[method as keyof RpcMethodMap]
+    ? REMOTE_RPC_POLICY[method as keyof typeof REMOTE_RPC_POLICY]
     : 'forward'
 }
 
@@ -377,16 +341,13 @@ function projectReadOnlyResponse(target: URL, method: string, body: Buffer): Buf
     throw new Error(`Local ${rpcMethod} response had an invalid result.`)
   }
   const value = envelope.result.value
-  if (rpcMethod === 'settings.describe') {
+  if (rpcMethod === 'settings/describe') {
     value.writable = false
     value.hasDocument = false
   } else {
-    if (!isRecord(value.credentials)) {
-      throw new Error('Local credentials.describe response had an invalid credential map.')
-    }
-    for (const credential of Object.values(value.credentials)) {
+    for (const credential of Object.values(value)) {
       if (!isRecord(credential)) {
-        throw new Error('Local credentials.describe response had an invalid credential entry.')
+        throw new Error('Local credentials/describe response had an invalid credential entry.')
       }
       credential.writable = false
     }

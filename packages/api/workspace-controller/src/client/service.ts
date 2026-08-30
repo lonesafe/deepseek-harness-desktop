@@ -11,7 +11,7 @@ import type { ClientWorkspaceModel, WorkspaceSnapshot } from './model.ts'
 export class WorkspaceCreateError extends Error {
   override readonly name = 'WorkspaceCreateError'
 
-  /** @param rpcError - Host business or folded transport failure. */
+  /** @param rpcError - Host business or folded carrier failure. */
   constructor(readonly rpcError: RemoteFailure) {
     super(`workspace create failed: ${rpcError.code}: ${rpcError.message}`)
   }
@@ -74,9 +74,21 @@ export interface IWorkspaces {
     sessionId: SessionId,
     beforeSessionId?: SessionId,
   ): Promise<WorkspaceView>
-  /** List one Workspace-relative directory level. */
+  /**
+   * List one Workspace-relative directory level.
+   * @param workspaceId - registered Workspace to inspect.
+   * @param path - portable relative directory path; empty selects the root.
+   * @param signal - optional caller cancellation.
+   * @returns bounded direct children in directory-first order.
+   */
   listFiles(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFileListing>
-  /** Read one bounded Workspace-relative file. */
+  /**
+   * Read one bounded Workspace-relative file.
+   * @param workspaceId - registered Workspace to inspect.
+   * @param path - portable non-empty relative file path.
+   * @param signal - optional caller cancellation.
+   * @returns typed preview or download content.
+   */
   readFile(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFilePreview>
 }
 

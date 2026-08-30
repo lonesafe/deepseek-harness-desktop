@@ -34,13 +34,15 @@ async function bench() {
   ctx.provide('locale', new LocaleRuntime(ctx))
   const listDirectory = vi.fn(async (): Promise<DirectoryListing> => homeListing)
   const createDirectory = vi.fn(async (path: string, name: string) => `${path}/${name}`)
-  ctx.provide('uiWorkspace', { listDirectory, createDirectory } as never)
+  const pickDirectory = vi.fn(async () => null)
+  ctx.provide('uiWorkspace', { listDirectory, createDirectory, pickDirectory } as never)
+  ctx.provide('remote', { $host: { isLoopback: true } } as never)
   const slots = ctx.get('slots') as SlotRegistry
   const declare = () => slots.register({
     name: 'root',
     children: Object.fromEntries(HOLES.map(name => [name, { kind: 'single', scope: 'root' }])),
   } as never, () => null)
-  return { ctx, slots, listDirectory, createDirectory, declare }
+  return { ctx, slots, listDirectory, createDirectory, pickDirectory, declare }
 }
 
 function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowOwnerProps {
@@ -53,7 +55,7 @@ function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowO
 
 describe('directory-picker-browse client half', () => {
   it('declares the services it drives', () => {
-    expect(inject).toEqual(['slots', 'uiWorkspace', 'locale'])
+    expect(inject).toEqual(['slots', 'uiWorkspace', 'locale', 'remote'])
   })
 
   it('fills both directory-flow holes for declarations before or after apply, and leaves with its fiber', async () => {
@@ -197,6 +199,9 @@ describe('directory-picker-browse client half', () => {
         {...props}
         listDirectory={listDirectory}
         createDirectory={vi.fn(async () => '')}
+        pick={vi.fn(async () => null)}
+        isLoopback={false}
+        nativeOnLoopback={false}
         t={t}
       />,
     )
@@ -216,6 +221,9 @@ describe('directory-picker-browse client half', () => {
         {...owner({ open: false })}
         listDirectory={vi.fn(async () => homeListing)}
         createDirectory={vi.fn(async () => '')}
+        pick={vi.fn(async () => null)}
+        isLoopback={false}
+        nativeOnLoopback={false}
         t={key => key}
       />,
     )

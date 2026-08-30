@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-16-remote-websocket-rpc-carrier.md
-2026-08-16-remote-websocket-rpc-carrier.md: 83239fd850ce1bb3082e4846c1fe57e730d2bfba
-2026-08-16-remote-websocket-rpc-carrier.zh.md: d6e9a2b7b4df3181e154b6203f06bc339cbdfe7a
+2026-08-16-remote-websocket-rpc-carrier.md: 8b5ca87c8d05f91f10a307f7da41331b0b7c7336
+2026-08-16-remote-websocket-rpc-carrier.zh.md: e0264f17fa3e2951ecbfd3954fd722f7d035166c

@@ -3,11 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   RemoteStream,
   RemoteStreamCarrierError,
+  type ClientRemote,
   type RemoteStreamOptions,
 } from '@deepseek-ai/dsh-api-gateway/client'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteFailure, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import * as WorkspaceClientPlugin from '../src/client/index.ts'
 import {
   ClientWorkspaceModel,
@@ -27,9 +28,12 @@ import type {
   WorkspaceFollowFrame,
   WorkspaceInsertBeforeRequest,
   WorkspaceInsertSessionBeforeRequest,
+  WorkspaceFileListing,
+  WorkspaceFilePreview,
+  WorkspaceListFilesRequest,
   WorkspaceOrderValue,
+  WorkspaceReadFileRequest,
   WorkspaceRenameRequest,
-  WorkspaceError,
   WorkspaceId,
   WorkspaceValue,
   WorkspaceView,
@@ -45,11 +49,11 @@ const AVAILABLE_CONNECTION = {
 function workspaceClient(
   remote: WorkspaceRemote,
   connection: Pick<ConnectionHandle, 'generation'> = AVAILABLE_CONNECTION,
-) {
+): ClientRemote {
   return {
     workspace: remote,
     $stream: <Item>(options: RemoteStreamOptions<Item>) => new RemoteStream(connection, options),
-  }
+  } as unknown as ClientRemote
 }
 
 interface Generation {
@@ -94,7 +98,7 @@ function remoteOk<T>(value: T): RemoteResult<T> {
   return { ok: true, value }
 }
 
-function remoteFailure(error: WorkspaceError): RemoteResult<never> {
+function remoteFailure(error: RemoteFailure): RemoteResult<never> {
   return { ok: false, error }
 }
 
@@ -140,6 +144,14 @@ class ScriptedWorkspaceRemote implements WorkspaceRemote {
     throw new Error('unused')
   }
 
+  listFiles(_request: WorkspaceListFilesRequest): Promise<RemoteResult<WorkspaceFileListing>> {
+    throw new Error('unused')
+  }
+
+  readFile(_request: WorkspaceReadFileRequest): Promise<RemoteResult<WorkspaceFilePreview>> {
+    throw new Error('unused')
+  }
+
   async *follow(signal = new AbortController().signal): AsyncIterable<WorkspaceFollowFrame> {
     const generation = this.generations[this.calls++]
     if (generation === undefined) throw new Error('no scripted Workspace generation')
@@ -180,6 +192,10 @@ class CommandWorkspaceRemote implements WorkspaceRemote {
     archivedSessionIds: [request.sessionId],
   })))
 
+  readonly listFiles = vi.fn<WorkspaceRemote['listFiles']>(() => Promise.reject(new Error('unused')))
+
+  readonly readFile = vi.fn<WorkspaceRemote['readFile']>(() => Promise.reject(new Error('unused')))
+
   async *follow(_signal?: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {}
 }
 
@@ -199,9 +215,11 @@ function provideClientServices(ctx: Context, remote: WorkspaceRemote): void {
   const connection: ConnectionHandle = {
     isLoopback: true,
     generation: AVAILABLE_CONNECTION.generation,
+    state: { getSnapshot: () => 'connected' as const, subscribe: () => () => {} },
     rpc: {
       call: () => Promise.reject(new Error('unexpected generic RPC call')),
     },
+    reconnect: () => {},
     registerGenerationSource: () => () => {},
     start: () => ({ stop: () => {} }),
   }
@@ -231,6 +249,27 @@ describe('Workspace Controller Client apply', () => {
     expect(ctx.get('workspaces')).toBeUndefined()
   })
 
+  it('publishes exhausted carrier retries as a gateway/internal error state', async () => {
+    const ctx = new Context()
+    // Neither generation reaches an accepted baseline, so the retry budget runs
+    // out and the escaping carrier failure crosses the stream boundary marked.
+    const remote = new ScriptedWorkspaceRemote([
+      { frames: [], error: new RemoteStreamCarrierError('generation lost') },
+      { frames: [], error: new RemoteStreamCarrierError('generation lost again') },
+    ])
+    provideClientServices(ctx, remote)
+    const fiber = ctx.plugin(WorkspaceClientPlugin)
+    await fiber
+    await waitFor(() => {
+      expect(ctx.workspaces.list.getSnapshot()).toMatchObject({
+        state: 'error',
+        error: { code: 'gateway/internal', message: 'generation lost again' },
+      })
+    })
+    expect(remote.calls).toBe(2)
+    await fiber.dispose()
+  })
+
   it('marks carrier loss while retrying and publishes a later protocol failure', async () => {
     const ctx = new Context()
     const remote = new ScriptedWorkspaceRemote([
@@ -250,7 +289,7 @@ describe('Workspace Controller Client apply', () => {
         phase: 'ready',
         state: 'error',
         items: [{ workspaceId: 'fresh' }],
-        error: { code: 'internal', message: 'Workspace state stream emitted more than one opening snapshot' },
+        error: { code: 'gateway/internal', message: 'Workspace state stream emitted more than one opening snapshot' },
       })
     })
 
@@ -445,40 +484,27 @@ describe('WorkspaceController', () => {
   it('maps generated business failures to the command facade errors', async () => {
     const remote = new CommandWorkspaceRemote()
     const controller = new WorkspaceController(new Context(), new ClientWorkspaceModel(remote))
-    const missingWorkspace: WorkspaceError = {
-      code: 'workspace-not-found',
-      message: 'gone',
-      details: { workspaceId: wid('missing') },
-    }
-    const missingSession: WorkspaceError = {
-      code: 'session-not-found',
-      message: 'missing session',
-      details: { sessionId: sid('session') },
-    }
+    const missingWorkspace = new RemoteError('workspace/not-found', 'gone', { workspaceId: wid('missing') })
+    const missingSession = new RemoteError('session/not-found', 'missing session', { sessionId: sid('session') })
 
-    remote.create.mockResolvedValueOnce(remoteFailure({
-      code: 'workspace-invalid-path',
-      message: 'missing path',
-      details: { path: '/missing' },
-    }))
+    remote.create.mockResolvedValueOnce(remoteFailure(new RemoteError('workspace/invalid-path', 'missing path', { path: '/missing' })))
     const create = controller.create({ path: '/missing' })
     await expect(create).rejects.toBeInstanceOf(WorkspaceCreateError)
-    await expect(create).rejects.toThrow('workspace-invalid-path: missing path')
+    await expect(create).rejects.toThrow('workspace/invalid-path: missing path')
 
     remote.rename.mockResolvedValueOnce(remoteFailure(missingWorkspace))
-    await expect(controller.rename(wid('missing'), 'name')).rejects.toThrow('workspace rename failed: workspace-not-found: gone')
+    await expect(controller.rename(wid('missing'), 'name')).rejects.toThrow('workspace rename failed: workspace/not-found: gone')
     remote.delete.mockResolvedValueOnce(remoteFailure(missingWorkspace))
-    await expect(controller.delete(wid('missing'))).rejects.toThrow('workspace delete failed: workspace-not-found: gone')
+    await expect(controller.delete(wid('missing'))).rejects.toThrow('workspace delete failed: workspace/not-found: gone')
     remote.insertBefore.mockResolvedValueOnce(remoteFailure(missingWorkspace))
-    await expect(controller.insertBefore(wid('missing'))).rejects.toThrow('workspace reorder failed: workspace-not-found: gone')
+    await expect(controller.insertBefore(wid('missing'))).rejects.toThrow('workspace reorder failed: workspace/not-found: gone')
     remote.archiveSession.mockResolvedValueOnce(remoteFailure(missingSession))
-    await expect(controller.archiveSession(sid('session'))).rejects.toThrow('workspace session archive failed: session-not-found: missing session')
-    remote.insertSessionBefore.mockResolvedValueOnce(remoteFailure({
-      code: 'workspace-move-invalid',
-      message: 'invalid move',
-      details: { workspaceId: wid('missing'), sessionId: sid('session') },
-    }))
+    await expect(controller.archiveSession(sid('session')))
+      .rejects.toThrow('workspace session archive failed: session/not-found: missing session')
+    remote.insertSessionBefore.mockResolvedValueOnce(remoteFailure(new RemoteError(
+      'workspace/move-invalid', 'invalid move', { workspaceId: wid('missing'), sessionId: sid('session') },
+    )))
     await expect(controller.insertSessionBefore(wid('missing'), sid('session')))
-      .rejects.toThrow('workspace move failed: workspace-move-invalid: invalid move')
+      .rejects.toThrow('workspace move failed: workspace/move-invalid: invalid move')
   })
 })

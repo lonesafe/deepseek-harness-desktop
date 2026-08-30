@@ -2,7 +2,7 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
-import { Remote, TypertRemoteFailure, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { WorkspaceCommands } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
 import { WorkspaceFeed } from './feed.ts'
@@ -171,12 +171,12 @@ export class WorkspaceController extends TypertRemoteService {
 
 export default WorkspaceController
 
-function workspaceFileNotFound(workspaceId: WorkspaceId): TypertRemoteFailure {
-  return new TypertRemoteFailure({
-    code: 'workspace-not-found',
-    message: `Workspace "${workspaceId}" not found`,
-    details: { workspaceId },
-  })
+function workspaceFileNotFound(workspaceId: WorkspaceId): RemoteError {
+  return new RemoteError(
+    'workspace/not-found',
+    `Workspace "${workspaceId}" not found`,
+    { workspaceId },
+  )
 }
 
 function workspaceFileFailure(
@@ -185,20 +185,21 @@ function workspaceFileFailure(
   workspaceId: WorkspaceId,
   path: string,
   operation: 'listing' | 'preview',
-): TypertRemoteFailure | unknown {
+): unknown {
   if (signal.aborted) {
-    return new TypertRemoteFailure({
-      code: 'cancelled',
-      message: `Workspace file ${operation} was aborted`,
-      details: {},
-    })
+    return new RemoteError(
+      'gateway/cancelled',
+      `Workspace file ${operation} was aborted`,
+      {},
+    )
   }
   if (error instanceof WorkspaceFileError) {
-    return new TypertRemoteFailure({
-      code: error.code,
-      message: error.message,
-      details: { workspaceId, path },
-    })
+    return new RemoteError(
+      error.code,
+      error.message,
+      { workspaceId, path },
+      { cause: error },
+    )
   }
   return error
 }

@@ -9,7 +9,9 @@
  * covers everything the card shows.
  */
 
-import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+// Type-only: pulls the ctx.remote merge into this program.
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
@@ -38,9 +40,6 @@ export interface WebSearchSettings {
   /** Maximum searches served within one request. */
   maxUses?: number
 }
-
-/** The credentials Remote methods this card reads and writes through. */
-export type WebSearchCredentials = Pick<ClientRemote['credentials'], 'describe' | 'set'>
 
 /** What the credentials domain last reported, and for which reference. */
 interface CredentialState {
@@ -78,16 +77,20 @@ export interface WebSearchCardFace extends CardActions {
 export class WebSearchCardController {
   private readonly form: CardForm<WebSearchSettings>
   private readonly store: SnapshotStore<WebSearchCardState>
-  private credential: CredentialState = { ref: '', configured: false, writable: true }
+  private credential: CredentialState
 
   /**
    * @param scope - the bound settings scope for the `web-search-deepseek` namespace.
-   * @param credentials - Remote face used for the credential the section references.
+   * @param ctx - the card plugin's context, whose `remote.credentials` namespace
+   * answers for the credential the section references.
+   * @param allowCredentialWrites - whether this browser can reach Host credential mutation.
    */
   constructor(
     private readonly scope: SettingsScope<WebSearchSettings>,
-    private readonly credentials: WebSearchCredentials,
+    private readonly ctx: ClientContext,
+    private readonly allowCredentialWrites = ctx.remote.$host.isLoopback,
   ) {
+    this.credential = { ref: '', configured: false, writable: allowCredentialWrites }
     this.form = new CardForm(
       scope,
       [textField('baseURL'), numberField('maxUses')],
@@ -122,15 +125,13 @@ export class WebSearchCardController {
     if (ref !== this.credential.ref) {
       // A new reference knows nothing yet; keeping the old answer would claim
       // the key is configured under a name nobody has checked.
-      this.credential = { ref, configured: false, writable: true }
+      this.credential = { ref, configured: false, writable: this.allowCredentialWrites }
       this.store.set(this.projection())
     }
-    let response: Awaited<ReturnType<WebSearchCredentials['describe']>>
+    let response: Awaited<ReturnType<ClientContext['remote']['credentials']['describe']>>
     try {
-      response = await this.credentials.describe([ref])
-    } catch (_credentialReadFailure) {
-      // The card stays usable without this: the key control simply reports the
-      // last state it knew, and a write still reaches the Host.
+      response = await this.ctx.remote.credentials.describe([ref])
+    } catch {
       return
     }
     if (!response.ok || ref !== refOf(this.scope.getSnapshot())) return
@@ -140,7 +141,7 @@ export class WebSearchCardController {
       configured: view?.configured ?? false,
       // An unknown reference is treated as writable: the control stays usable
       // and the Host is what refuses, rather than the card guessing a refusal.
-      writable: view?.writable ?? true,
+      writable: this.allowCredentialWrites && (view?.writable ?? true),
     }
     if (next.configured === this.credential.configured && next.writable === this.credential.writable) return
     this.credential = next
@@ -174,12 +175,10 @@ export class WebSearchCardController {
    * @returns whether the Host reports a configured credential afterwards.
    */
   private async writeKey(value: string): Promise<boolean> {
-    try {
-      await this.credentials.set(refOf(this.scope.getSnapshot()), value)
-    } catch (_credentialWriteFailure) {
-      // Refusals surface through the re-read below: the Host is the only
-      // authority on whether the key now exists.
-    }
+    if (!this.allowCredentialWrites) return false
+    // Refusals surface through the re-read below: the Host is the only
+    // authority on whether the key now exists.
+    await this.ctx.remote.credentials.set(refOf(this.scope.getSnapshot()), value)
     await this.readCredential()
     return this.credential.configured
   }

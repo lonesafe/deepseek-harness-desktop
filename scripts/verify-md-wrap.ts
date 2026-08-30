@@ -23,7 +23,7 @@ const PATTERNS = [
   'docs/**/*.md',
   'packages/*/*.md',
   'packages/*/*/*.md',
-  'snapshots/**/system-prompt.expected.md',
+  'snapshots/**/*.md',
   'packages/**/system-prompt.expected.md',
   'AGENTS.md',
   'packages/AGENTS.md',
@@ -71,7 +71,12 @@ function findViolations(absPath: string): Violation[] {
   return out
 }
 
-const files = uniqueRepoFiles(root, PATTERNS, isArchivedAgentNotePath)
+const files = uniqueRepoFiles(root, PATTERNS, path => (
+  isArchivedAgentNotePath(path)
+  || (path.startsWith('snapshots/')
+    && path !== 'snapshots/AGENTS.md'
+    && !path.endsWith('/system-prompt.expected.md'))
+))
 const all = files.flatMap(file => findViolations(file.abs))
 const checked = files.length
 

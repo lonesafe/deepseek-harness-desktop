@@ -35,6 +35,8 @@ interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Login token required from non-loopback peers; at least 24 characters. @default '' */
+  accessToken?: string
   /** Response compression for socket-backed HTTP requests. @default 'none' */
   compression?: 'none' | 'gzip'
   /** Gzip DEFLATE level from 0 through 9. @default 1 */
@@ -44,7 +46,7 @@ interface Config {
 }
 ```
 
-`host` 只接受 `127.0.0.1`（默认姿态）和 `0.0.0.0`（刻意的网络暴露）。载体本身不拥有 TLS、认证或 Origin 策略，因此绑定到非回环地址会暴露服务器，除非组合层提供这些控制。`compression` 默认为 `none`；随附的 Web 组合选择 gzip level 1 和 1024 字节阈值。随附的 `dsh web` 命令选择 loopback 并拒绝 `--host 0.0.0.0`；其 Connection 插件为每个 Host API route 与 stream 提供 Host/Origin 校验和浏览器会话认证。其他组合自行拥有绑定与路由认证策略。dist 位置是认领席位的前端插件的组装事实。
+`host` 只接受 `127.0.0.1`（默认姿态）和 `0.0.0.0`（刻意的网络暴露）。绑定所有网卡时必须提供至少 24 个字符的 `accessToken`。非回环浏览器通过内置登录表单以用户名 `deepseek` 和该 token 换取 HttpOnly cookie；非浏览器客户端与 upgrade 请求可使用 HTTP Basic 凭据。载体不拥有 TLS，因此只应在可信 LAN 中直接开放，或部署在 TLS 终止代理之后。`compression` 默认为 `none`；随附的 Web 组合选择 gzip level 1 和 1024 字节阈值。随附的 `dsh web` 命令选择 loopback 并拒绝 `--host 0.0.0.0`；其 Connection 插件为每个 Host API route 与 stream 提供 Host/Origin 校验。其他组合仍自行拥有绑定选择，以及服务器 LAN 入口认证以外的逐路由授权。dist 位置是认领席位的前端插件的组装事实。
 
 ## 服务
 

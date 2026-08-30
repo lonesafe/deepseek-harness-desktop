@@ -61,7 +61,7 @@ describe('Workspace Controller file projection', () => {
     async (path) => {
       const root = workspace()
       await expect(listWorkspaceFiles(root, path, signal())).rejects.toMatchObject({
-        code: 'workspace-file-invalid-path',
+        code: 'workspace/file-invalid-path',
       })
     },
   )
@@ -74,7 +74,7 @@ describe('Workspace Controller file projection', () => {
 
     expect((await listWorkspaceFiles(root, '', signal())).entries).toEqual([])
     await expect(readWorkspaceFile(root, 'outside/secret.txt', signal())).rejects.toMatchObject({
-      code: 'workspace-file-invalid-path',
+      code: 'workspace/file-invalid-path',
     })
   })
 

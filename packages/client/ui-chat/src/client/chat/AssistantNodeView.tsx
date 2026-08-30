@@ -14,7 +14,7 @@ export const AssistantNodeView = memo(function AssistantNodeView({
   const owner = useMemo<TurnTailOwnerProps | undefined>(() => {
     if (turn?.status !== 'closed' || data.finalNode === undefined) return undefined
     if (tail?.closing?.finalNode.seq !== data.finalNode.seq) return undefined
-    return { turn, seq: data.finalNode.seq, ...(openFile === undefined ? {} : { openFile }) }
+    return { turn, seq: data.finalNode.seq, openFile }
   }, [data.finalNode, openFile, tail, turn])
   const mentions = useMemo(
     () => owner === undefined ? undefined : fileMentions(owner),

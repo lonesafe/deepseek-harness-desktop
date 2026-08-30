@@ -1,7 +1,7 @@
 /** Test-owned workspaces face: the renderer standard-kit observable plus recorded actions. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
-  IWorkspaces, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
+  IWorkspaces, WorkspaceFileListing, WorkspaceFilePreview, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -141,5 +141,30 @@ export class TestWorkspaces implements IWorkspaces {
     await this.update((draft) => {
       draft.archivedSessionIds = [...draft.archivedSessionIds, sessionId]
     })
+  }
+
+  /** List a Workspace directory (recorded; default empty). */
+  async listFiles(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFileListing> {
+    this.calls.push({ method: 'listFiles', args: [workspaceId, path, signal] })
+    const stub = this.stubs.get('listFiles')
+    if (stub !== undefined) return await (stub(workspaceId, path, signal) as Promise<WorkspaceFileListing>)
+    return { path, entries: [], truncated: false }
+  }
+
+  /** Read a Workspace file (recorded; default empty text). */
+  async readFile(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFilePreview> {
+    this.calls.push({ method: 'readFile', args: [workspaceId, path, signal] })
+    const stub = this.stubs.get('readFile')
+    if (stub !== undefined) return await (stub(workspaceId, path, signal) as Promise<WorkspaceFilePreview>)
+    return {
+      path,
+      name: path.split('/').at(-1) ?? path,
+      mime: 'text/plain',
+      size: 0,
+      modifiedAt: '2026-01-01T00:00:00.000Z',
+      kind: 'text',
+      encoding: 'utf8',
+      content: '',
+    }
   }
 }

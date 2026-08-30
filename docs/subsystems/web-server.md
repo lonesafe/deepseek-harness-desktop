@@ -35,6 +35,8 @@ interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
+  /** Login token required from non-loopback peers; at least 24 characters. @default '' */
+  accessToken?: string
   /** Response compression for socket-backed HTTP requests. @default 'none' */
   compression?: 'none' | 'gzip'
   /** Gzip DEFLATE level from 0 through 9. @default 1 */
@@ -44,7 +46,7 @@ interface Config {
 }
 ```
 
-`host` accepts only `127.0.0.1` (default posture) and `0.0.0.0` (deliberate network exposure). The carrier itself owns no TLS, authentication, or Origin policy, so a non-loopback bind exposes the server unless the composition supplies those controls. `compression` defaults to `none`; the shipped Web bundle selects gzip level 1 with a 1024-byte threshold. The shipped `dsh web` command selects loopback and rejects `--host 0.0.0.0`; its Connection plugin supplies Host/Origin checks plus browser-session authentication for every Host API route and stream. Other compositions own their bind and route-authentication policy. The dist location is an assembly fact of the frontend plugin that claims the seat.
+`host` accepts only `127.0.0.1` (default posture) and `0.0.0.0` (deliberate network exposure). An all-interfaces bind requires an `accessToken` of at least 24 characters. Non-loopback browsers exchange the username `deepseek` and that token through the built-in login form for an HttpOnly cookie; HTTP Basic credentials serve non-browser clients and upgrade requests. The carrier owns no TLS, so expose it only on a trusted LAN or behind a TLS terminator. `compression` defaults to `none`; the shipped Web bundle selects gzip level 1 with a 1024-byte threshold. The shipped `dsh web` command selects loopback and rejects `--host 0.0.0.0`; its Connection plugin supplies Host/Origin checks for every Host API route and stream. Other compositions still own bind selection and route-specific authorization beyond the server's LAN entry authentication. The dist location is an assembly fact of the frontend plugin that claims the seat.
 
 ## The service
 

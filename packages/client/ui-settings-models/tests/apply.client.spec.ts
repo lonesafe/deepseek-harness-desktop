@@ -42,7 +42,8 @@ async function bench(isLoopback = true, settings?: object, services: object = {}
     // ui-settings apply also provides the settingsSchema service.
     settings: settings ?? scriptedSettingsRemote().settings,
   })
-  ctx.provide('connection', { api: services, isLoopback } as never)
+  // The fixed Host facts the settings provider reads its persistence from.
+  remote.$host = { home: undefined, isLoopback }
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, remote }
 }
@@ -86,7 +87,7 @@ describe('ui-settings-models apply', () => {
     expect(injected.t('deleteTitle')).toBe('删除 {provider}？')
     expect(typeof injected.controller.load).toBe('function')
     expect(injected.hooks.snapshot).toBe(injected.controller.store)
-    expect(injected.api).toBeDefined()
+    expect(typeof injected.operations.writeSettings).toBe('function')
     const onboarding = before.slots.entries('settings.onboarding')
     expect(onboarding).toHaveLength(2)
     const utility = before.slots.entries('settings.footer.utility')[0]!
@@ -103,7 +104,7 @@ describe('ui-settings-models apply', () => {
       deepSeek.inject as unknown as () => import('../src/client/DeepSeekOnboardingDialog.tsx').DeepSeekOnboardingInjected
     )()
     expect(deepSeekInjected.hooks.models).toBe(injected.controller.store)
-    expect(deepSeekInjected.api).toBeDefined()
+    expect(typeof deepSeekInjected.operations.storeCredential).toBe('function')
 
     const after = await bench()
     await after.ctx.plugin({ inject: [...inject], apply }).await()

@@ -2,6 +2,7 @@
 
 import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/remote'
+import { isRemoteFailure } from '@deepseek-ai/dsh-api-gateway/client'
 import type { RemoteFailure, RemoteResult, TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   WorkspaceArchiveSessionRequest,
@@ -84,12 +85,7 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
    * @returns generated Remote result.
    */
   async create(input: WorkspaceCreateRequest): Promise<RemoteResult<WorkspaceCreateValue>> {
-    let result: RemoteResult<WorkspaceCreateValue>
-    try {
-      result = await this.remote.create(input)
-    } catch (error) {
-      result = failureResult(error)
-    }
+    const result = await this.remote.create(input)
     if (result.ok) this.upsert(result.value.workspace)
     return result
   }
@@ -131,19 +127,10 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     const frameGeneration = this.orderFrameGeneration
     const localOrder = this.items.map(workspace => workspace.workspaceId)
     this.installOrder(insertIdBefore(localOrder, workspaceId, beforeWorkspaceId))
-    let result: RemoteResult<WorkspaceOrderValue>
-    try {
-      result = await this.remote.insertBefore({
-        workspaceId,
-        ...beforeWorkspaceId === undefined ? {} : { beforeWorkspaceId },
-      })
-    } catch (error) {
-      if (requestGeneration === this.orderRequestGeneration
-        && frameGeneration === this.orderFrameGeneration) {
-        this.installOrder(this.committedOrder)
-      }
-      throw error
-    }
+    const result = await this.remote.insertBefore({
+      workspaceId,
+      ...beforeWorkspaceId === undefined ? {} : { beforeWorkspaceId },
+    })
     if (requestGeneration === this.orderRequestGeneration
       && frameGeneration === this.orderFrameGeneration) {
       this.installOrder(result.ok ? result.value.workspaceIds : this.committedOrder, result.ok)
@@ -185,7 +172,13 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     return result
   }
 
-  /** Read one Workspace-relative directory level. */
+  /**
+   * Read one Workspace-relative directory level.
+   * @param workspaceId - registered Workspace to inspect.
+   * @param path - portable relative directory path; empty selects the root.
+   * @param signal - optional caller cancellation.
+   * @returns generated Remote result containing bounded direct children.
+   */
   listFiles(
     workspaceId: WorkspaceId,
     path: string,
@@ -194,7 +187,13 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     return this.remote.listFiles({ workspaceId, path }, signal)
   }
 
-  /** Read one bounded Workspace-relative file. */
+  /**
+   * Read one bounded Workspace-relative file.
+   * @param workspaceId - registered Workspace to inspect.
+   * @param path - portable non-empty relative file path.
+   * @param signal - optional caller cancellation.
+   * @returns generated Remote result containing typed preview content.
+   */
   readFile(
     workspaceId: WorkspaceId,
     path: string,
@@ -253,8 +252,9 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
    * @param error - terminal stream failure.
    */
   handleStreamFailure(error: unknown): void {
+    if (!isRemoteFailure(error)) throw error
     this.state = 'error'
-    this.error = failureOf(error)
+    this.error = error
     this.invalidate()
   }
 
@@ -388,16 +388,4 @@ function insertIdBefore(
   const without = ids.filter(candidate => candidate !== id)
   const at = beforeId === undefined ? without.length : without.indexOf(beforeId)
   return [...without.slice(0, at), id, ...without.slice(at)]
-}
-
-function failureResult<T>(error: unknown): RemoteResult<T> {
-  return { ok: false, error: failureOf(error) }
-}
-
-function failureOf(error: unknown): RemoteFailure {
-  return {
-    code: 'internal',
-    message: error instanceof Error ? error.message : String(error),
-    details: {},
-  }
 }

@@ -14,7 +14,7 @@ export const WORKSPACE_FILE_PREVIEW_MAX_BYTES = 8 << 20
 /** Stable business failure reported by workspace file RPC methods. */
 export class WorkspaceFileError extends Error {
   constructor(
-    readonly code: 'workspace-file-invalid-path' | 'workspace-file-unreadable' | 'workspace-file-not-file',
+    readonly code: 'workspace/file-invalid-path' | 'workspace/file-unreadable' | 'workspace/file-not-file',
     message: string,
   ) {
     super(message)
@@ -91,11 +91,11 @@ const TEXT_FILENAMES = new Set([
 function relativeSegments(path: string): string[] {
   if (path === '') return []
   if (path.includes('\0') || path.includes('\\') || path.startsWith('/')) {
-    throw new WorkspaceFileError('workspace-file-invalid-path', 'Workspace file paths must be portable relative paths.')
+    throw new WorkspaceFileError('workspace/file-invalid-path', 'Workspace file paths must be portable relative paths.')
   }
   const segments = path.split('/')
   if (segments.some(segment => segment === '' || segment === '.' || segment === '..')) {
-    throw new WorkspaceFileError('workspace-file-invalid-path', 'Workspace file paths cannot contain empty, dot, or parent segments.')
+    throw new WorkspaceFileError('workspace/file-invalid-path', 'Workspace file paths cannot contain empty, dot, or parent segments.')
   }
   return segments
 }
@@ -110,13 +110,13 @@ async function resolveInside(root: string, path: string): Promise<string> {
   try {
     const resolved = await realpath(candidate)
     if (!within(root, resolved)) {
-      throw new WorkspaceFileError('workspace-file-invalid-path', 'Workspace file path resolves outside the Workspace.')
+      throw new WorkspaceFileError('workspace/file-invalid-path', 'Workspace file path resolves outside the Workspace.')
     }
     return resolved
   } catch (error: unknown) {
     if (error instanceof WorkspaceFileError) throw error
     throw new WorkspaceFileError(
-      'workspace-file-unreadable',
+      'workspace/file-unreadable',
       `Workspace file path is unavailable: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
@@ -127,7 +127,7 @@ async function resolveRoot(workspaceRoot: string): Promise<string> {
     return await realpath(workspaceRoot)
   } catch (error: unknown) {
     throw new WorkspaceFileError(
-      'workspace-file-unreadable',
+      'workspace/file-unreadable',
       `Workspace root is unavailable: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
@@ -156,12 +156,12 @@ export async function listWorkspaceFiles(
     info = await stat(directory)
   } catch (error: unknown) {
     throw new WorkspaceFileError(
-      'workspace-file-unreadable',
+      'workspace/file-unreadable',
       `Workspace directory cannot be read: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
   if (!info.isDirectory()) {
-    throw new WorkspaceFileError('workspace-file-unreadable', 'Workspace file listing target is not a directory.')
+    throw new WorkspaceFileError('workspace/file-unreadable', 'Workspace file listing target is not a directory.')
   }
   const entries: WorkspaceFileEntry[] = []
   let truncated = false
@@ -197,7 +197,7 @@ export async function listWorkspaceFiles(
   } catch (error: unknown) {
     if (signal.aborted) signal.throwIfAborted()
     throw new WorkspaceFileError(
-      'workspace-file-unreadable',
+      'workspace/file-unreadable',
       `Workspace directory cannot be read: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
@@ -246,7 +246,7 @@ export async function readWorkspaceFile(
   signal: AbortSignal,
 ): Promise<WorkspaceFilePreview> {
   if (path === '') {
-    throw new WorkspaceFileError('workspace-file-invalid-path', 'Workspace file preview requires a file path.')
+    throw new WorkspaceFileError('workspace/file-invalid-path', 'Workspace file preview requires a file path.')
   }
   const root = await resolveRoot(workspaceRoot)
   const target = await resolveInside(root, path)
@@ -255,14 +255,14 @@ export async function readWorkspaceFile(
     handle = await open(target, 'r')
   } catch (error: unknown) {
     throw new WorkspaceFileError(
-      'workspace-file-unreadable',
+      'workspace/file-unreadable',
       `Workspace file cannot be read: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
   try {
     const info = await handle.stat()
     if (!info.isFile()) {
-      throw new WorkspaceFileError('workspace-file-not-file', 'Workspace file preview target is not a regular file.')
+      throw new WorkspaceFileError('workspace/file-not-file', 'Workspace file preview target is not a regular file.')
     }
     const common = {
       path,

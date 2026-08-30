@@ -25,7 +25,7 @@ const ToolCall = memo(function ToolCall({
     callId,
     toolName,
     block,
-    ...(openFile === undefined ? {} : { openFile }),
+    openFile,
     cwd,
     home,
     inspect: () => { inspectCall(callId) },
@@ -58,7 +58,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
       callId={block.callId}
       toolName={callName(block)}
       block={block}
-      {...openFile === undefined ? {} : { openFile }}
+      openFile={openFile}
       selected={block.callId === selectedCallId}
       cwd={cwd}
       home={home}
@@ -74,7 +74,7 @@ const ToolCallBranch = memo(function ToolCallBranch({
               block={child}
               selectedCallId={selectedCallId}
               cwd={cwd}
-              {...openFile === undefined ? {} : { openFile }}
+              openFile={openFile}
               home={home}
               inspectCall={inspectCall}
               t={t}
@@ -93,9 +93,9 @@ const ToolCallBranch = memo(function ToolCallBranch({
  * @returns the Tool call tree.
  */
 export function ToolCallTree({
-  renderSlot, node, selectedCallId, cwd, openFile, inspectCall, useConnectionGeneration, t,
+  renderSlot, node, selectedCallId, cwd, openFile, inspectCall, useHostInfo, t,
 }: ToolTreeProps) {
-  const home = useConnectionGeneration(generation => generation?.host.home)
+  const home = useHostInfo(info => info.home)
   const block = node.data.root
   return (
     <ToolCallBranch
@@ -103,7 +103,7 @@ export function ToolCallTree({
       block={block}
       selectedCallId={selectedCallId}
       cwd={cwd}
-      {...openFile === undefined ? {} : { openFile }}
+      openFile={openFile}
       home={home}
       inspectCall={inspectCall}
       t={t}

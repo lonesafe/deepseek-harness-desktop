@@ -123,7 +123,7 @@ interface Workspace {
 
 ## 消费方
 
-[`dsh-workspace-controller`](../../packages/api/workspace-controller) 经 `ctx.workspaceRegistry` 向 GUI 客户端提供工作区 CRUD，[`dsh-session-controller`](../../packages/api/session-controller) 执行上文「先建会话再 attach」的流程。[dsh-agent-instructions](../../packages/context/agent-instructions) 尽管名字如此，却**不是**消费方：它在 agent 自己的 cwd 下发现 AGENTS.md 风格的指令文件，从不触碰 `ctx.workspaceRegistry`——两者共用的这个词指的是用户的工作目录，而非本注册表的实体。
+[`dsh-workspace-controller`](../../packages/api/workspace-controller) 经 `ctx.workspaceRegistry` 向 GUI 客户端提供工作区 CRUD。其 `listFiles` Remote 以 `WorkspaceFileListing` 返回一层有界目录，其中 `WorkspaceFileEntry` 行包含可移植相对路径、类型、大小和修改时间，不暴露 Host 绝对路径。`readFile` 返回有界的 `WorkspaceFilePreview`，内容分为 Markdown、文本、图像、PDF、二进制或不支持；`WorkspaceListFilesRequest` 与 `WorkspaceReadFileRequest` 只接受相对于已注册根目录的路径，解析到根目录以外的符号链接会被拒绝。[`dsh-session-controller`](../../packages/api/session-controller) 执行上文「先建会话再 attach」的流程。[dsh-agent-instructions](../../packages/context/agent-instructions) 尽管名字如此，却**不是**消费方：它在 agent 自己的 cwd 下发现 AGENTS.md 风格的指令文件，从不触碰 `ctx.workspaceRegistry`——两者共用的这个词指的是用户的工作目录，而非本注册表的实体。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -231,6 +231,22 @@ Host service backing the generated `ctx.remote.workspace` namespace.
  * @returns the complete resulting archive set.
  */
 @Remote('archiveSession') archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue>
+
+/**
+ * List one bounded directory level without exposing Host absolute paths.
+ * @param request - Workspace identity and portable relative directory.
+ * @param signal - caller cancellation for filesystem iteration.
+ * @returns direct children in directory-first order.
+ */
+@Remote('listFiles') async listFiles( request: WorkspaceListFilesRequest, signal: AbortSignal, ): Promise<WorkspaceFileListing>
+
+/**
+ * Read one bounded regular file for preview or download.
+ * @param request - Workspace identity and portable relative file path.
+ * @param signal - caller cancellation checked before projection.
+ * @returns typed UTF-8 or Base64 preview content.
+ */
+@Remote('readFile') async readFile( request: WorkspaceReadFileRequest, signal: AbortSignal, ): Promise<WorkspaceFilePreview>
 
 /**
  * Stream a complete Workspace baseline followed by ordered increments.

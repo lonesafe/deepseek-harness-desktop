@@ -14,7 +14,7 @@ DeepSeek Harness 已有完整的浏览器应用，但要求用户安装 Node.js�
 
 BrowserWindow 开启 context isolation 与 renderer sandbox，关闭 Node integration、webview、权限授予和不安全内容，只允许在受管 origin 内导航。无凭据的 HTTPS 链接可以交给系统浏览器打开；除由[官网托管的桌面更新通道](2026-08-16-portal-hosted-desktop-update-channel.zh.md)拥有的精确内部动作 `dsh-update://download` 外，其他外部目标一律拒绝。启动器不暴露 preload API。
 
-electron-builder 运行前，pnpm 会先部署桌面包。因为自动 peer 安装已关闭，其 manifest 显式提供可达生产图中的全部必需 workspace peer；`verify-runtime-closure.ts --manifest apps/desktop/package.json` 保证这个仅依赖闭包保持完整。打包不使用 asar，使内嵌 Node 进程可以直接执行 ESM CLI 并加载其运行时资源；它也不会重新构建已暂存的 pnpm 依赖树。
+electron-builder 运行前，pnpm 会先部署桌面包。使用共享锁文件的 workspace 需要 pnpm 的 legacy deploy 实现；即使目标目录独立，该实现仍会在仓库 workspace 状态文件中记录仅生产依赖的选择，因此暂存脚本会在 deploy 前后保存并还原调用方的 workspace 状态原始字节。后续 pnpm 命令因而保留仓库开发依赖，目标目录仍只包含生产依赖。因为自动 peer 安装已关闭，其 manifest 显式提供可达生产图中的全部必需 workspace peer；`verify-runtime-closure.ts --manifest apps/desktop/package.json` 保证这个仅依赖闭包保持完整。打包不使用 asar，使内嵌 Node 进程可以直接执行 ESM CLI 并加载其运行时资源；它也不会重新构建已暂存的 pnpm 依赖树。
 
 `desktop:dist` 打包当前平台。原生 GitHub Actions 矩阵分别在 macOS arm64、macOS x64、Linux x64 和 Windows x64 上安装和打包，依次生成 DMG/ZIP、AppImage/DEB 与 NSIS/ZIP 产物。macOS 发布 job 支持两种明确模式。Actions Secrets 中具备完整的 Base64 编码 Developer ID Application P12、其密码与 App Store Connect API Key 时，electron-builder 会导入该身份，使用 Hardened Runtime 和 Electron JIT entitlements 完成签名，提交 Apple 公证并装订票据。job 随后使用 `codesign --verify --deep --strict`、Gatekeeper 的 `spctl --assess` 与 `stapler validate` 验证应用。没有任何 Apple 凭据时，job 会明确关闭身份自动发现并发布未签名安装包；只配置部分凭据则作为配置错误失败。根 README 记录了未签名安装包首次启动时需要使用的 Control 点击以及「隐私与安全性」路径。没有凭据的本地打包采用相同的未签名行为。
 

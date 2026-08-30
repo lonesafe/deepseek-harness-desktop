@@ -4,10 +4,11 @@ import {
   desktopUpdateDownloadState, fetchDesktopUpdate, UPDATE_CHECK_INTERVAL_MS,
   type DesktopUpdate, type DesktopUpdateDownloadState,
 } from './desktop-update.ts'
+import type { SettingsRootComponentProps } from './shell-contract.ts'
 import css from './DesktopUpdateBadge.module.css'
 
 /** Desktop-only update affordance next to the sidebar Settings trigger. */
-export function DesktopUpdateBadge({ wide }: { wide: boolean }) {
+export function DesktopUpdateBadge({ wide, t }: { wide: boolean } & Pick<SettingsRootComponentProps, 't'>) {
   const configuration = useMemo(() => desktopUpdateConfiguration(window.location.search), [])
   const [update, setUpdate] = useState<DesktopUpdate | undefined>()
   const [download, setDownload] = useState<DesktopUpdateDownloadState>({ status: 'idle' })
@@ -54,12 +55,12 @@ export function DesktopUpdateBadge({ wide }: { wide: boolean }) {
   const transfer = 'version' in download ? download : undefined
   const progress = transfer === undefined ? 0 : Math.round((transfer.received / transfer.total) * 100)
   const status = download.status === 'checking'
-    ? '正在检查更新…'
+    ? t('update.status.checking')
     : download.status === 'verifying'
-      ? '正在校验安装包…'
+      ? t('update.status.verifying')
       : download.status === 'cancelling'
-        ? '正在取消下载…'
-        : '正在下载更新…'
+        ? t('update.status.cancelling')
+        : t('update.status.downloading')
   return (
     <>
       <a
@@ -67,25 +68,25 @@ export function DesktopUpdateBadge({ wide }: { wide: boolean }) {
         href="dsh-update://download"
         target="_blank"
         rel="noopener noreferrer"
-        title={`下载 DeepSeek Harness ${update.version}（${update.fileName}）`}
-        aria-label={`有新版本 ${update.version}，从官网下载`}
+        title={t('update.download.title', { version: update.version, fileName: update.fileName })}
+        aria-label={t('update.available', { version: update.version })}
       >
-        <span aria-hidden="true">↓</span>{wide && '更新'}
+        <span aria-hidden="true">↓</span>{wide && t('update.label')}
       </a>
       {active && (
         <section className={css.progressCard} role="status" aria-live="polite">
           <div className={css.progressHeader}>
             <div className={css.progressCopy}>
               <strong>{status}</strong>
-              <span>{transfer === undefined ? `DeepSeek Harness ${update.version}` : `DeepSeek Harness ${transfer.version}`}</span>
+              <span>{t('update.productVersion', { version: transfer?.version ?? update.version })}</span>
             </div>
             <a
               className={css.cancelButton}
               href={DESKTOP_UPDATE_CANCEL_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="取消更新下载"
-              title="取消下载"
+              aria-label={t('update.cancel.aria')}
+              title={t('update.cancel')}
             >
               <span aria-hidden="true">×</span>
             </a>
@@ -93,13 +94,13 @@ export function DesktopUpdateBadge({ wide }: { wide: boolean }) {
           {transfer !== undefined && (
             <>
               <div className={css.progressMeta}>
-                <span>{formatBytes(transfer.received)} / {formatBytes(transfer.total)}</span>
+                <span>{formatBytes(transfer.received, t)} / {formatBytes(transfer.total, t)}</span>
                 <span>{progress}%</span>
               </div>
               <div
                 className={css.progressTrack}
                 role="progressbar"
-                aria-label="更新下载进度"
+                aria-label={t('update.progress')}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={progress}
@@ -115,8 +116,8 @@ export function DesktopUpdateBadge({ wide }: { wide: boolean }) {
 }
 
 /** Compact byte totals for the desktop update progress card. */
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
+function formatBytes(bytes: number, t: SettingsRootComponentProps['t']): string {
+  if (bytes < 1024) return t('update.size.bytes', { value: bytes })
+  if (bytes < 1024 * 1024) return t('update.size.kib', { value: (bytes / 1024).toFixed(1) })
+  return t('update.size.mib', { value: (bytes / 1024 / 1024).toFixed(1) })
 }

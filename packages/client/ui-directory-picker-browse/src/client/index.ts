@@ -9,9 +9,8 @@
  * package owns its own strings.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: pulls the connection service merge used to distinguish the
-// desktop window from a portal-hosted remote browser.
-import type {} from '@deepseek-ai/dsh-client-connection/client'
+// Type-only: pulls the generated Remote service and fixed Host facts.
+import type {} from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: pulls the SlotMap merge declaring the directory-flow holes.
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
@@ -29,7 +28,7 @@ export interface Config {
 const LOCALE_NS = 'directory-browser'
 
 /** Required services (cordis fiber inject): the slot registry, workspace UI service, and locale. */
-export const inject = ['slots', 'uiWorkspace', 'locale', 'connection']
+export const inject = ['slots', 'uiWorkspace', 'locale', 'remote']
 
 /**
  * Client plugin body: register the dialog's dictionaries and the browse flow
@@ -88,7 +87,7 @@ export function apply(ctx: ClientContext, config: Config = {}): void {
     listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
     createDirectory: (path, name) => ctx.uiWorkspace.createDirectory(path, name),
     pick: () => ctx.uiWorkspace.pickDirectory(),
-    isLoopback: ctx.connection.isLoopback,
+    isLoopback: ctx.remote.$host.isLoopback,
     nativeOnLoopback: config.nativeOnLoopback === true,
     t: ctx.locale.bind(LOCALE_NS),
   })

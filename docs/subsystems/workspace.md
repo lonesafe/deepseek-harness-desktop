@@ -123,7 +123,7 @@ Sessions get their cwd at create time from whoever creates them, not from this r
 
 ## Consumers
 
-[`dsh-workspace-controller`](../../packages/api/workspace-controller) serves workspace CRUD to GUI clients over `ctx.workspaceRegistry`, and [`dsh-session-controller`](../../packages/api/session-controller) performs the create-session-then-attach flow above. [dsh-agent-instructions](../../packages/context/agent-instructions) is **not** a consumer despite the name: it discovers AGENTS.md-style instruction files under an agent's own cwd and never touches `ctx.workspaceRegistry` — the shared word refers to the user's working directory, not to this registry's entities.
+[`dsh-workspace-controller`](../../packages/api/workspace-controller) serves workspace CRUD to GUI clients over `ctx.workspaceRegistry`. Its `listFiles` Remote returns one bounded directory level as `WorkspaceFileListing`, whose `WorkspaceFileEntry` rows contain portable relative paths, type, size, and modification time without Host absolute paths. `readFile` returns a bounded `WorkspaceFilePreview` classified as Markdown, text, image, PDF, binary, or unsupported; `WorkspaceListFilesRequest` and `WorkspaceReadFileRequest` accept only paths relative to the registered root, and symlinks resolving outside that root are rejected. [`dsh-session-controller`](../../packages/api/session-controller) performs the create-session-then-attach flow above. [dsh-agent-instructions](../../packages/context/agent-instructions) is **not** a consumer despite the name: it discovers AGENTS.md-style instruction files under an agent's own cwd and never touches `ctx.workspaceRegistry` — the shared word refers to the user's working directory, not to this registry's entities.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -231,6 +231,22 @@ Host service backing the generated `ctx.remote.workspace` namespace.
  * @returns the complete resulting archive set.
  */
 @Remote('archiveSession') archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue>
+
+/**
+ * List one bounded directory level without exposing Host absolute paths.
+ * @param request - Workspace identity and portable relative directory.
+ * @param signal - caller cancellation for filesystem iteration.
+ * @returns direct children in directory-first order.
+ */
+@Remote('listFiles') async listFiles( request: WorkspaceListFilesRequest, signal: AbortSignal, ): Promise<WorkspaceFileListing>
+
+/**
+ * Read one bounded regular file for preview or download.
+ * @param request - Workspace identity and portable relative file path.
+ * @param signal - caller cancellation checked before projection.
+ * @returns typed UTF-8 or Base64 preview content.
+ */
+@Remote('readFile') async readFile( request: WorkspaceReadFileRequest, signal: AbortSignal, ): Promise<WorkspaceFilePreview>
 
 /**
  * Stream a complete Workspace baseline followed by ordered increments.

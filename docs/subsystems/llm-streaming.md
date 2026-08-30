@@ -963,7 +963,7 @@ async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, sig
  * @param request - endpoint, protocol, and one-shot credential to use.
  * @param signal - caller cancellation supplied by the Remote carrier.
  * @returns advertised models in endpoint order.
- * @throws TypertRemoteFailure with `model-discovery-failed` when discovery refuses or fails.
+ * @throws RemoteError with `llm/model-discovery-rejected` when discovery refuses or fails.
  */
 @Remote('discoverModels') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>
 
@@ -1001,6 +1001,15 @@ async listModels(provider: string): Promise<LlmModelInfo[]>
  * @returns validated, detached provider account-balance metadata.
  */
 async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>
+
+/**
+ * Read one registered provider's account balance over the Client Remote.
+ * @param provider - registered provider route to inspect.
+ * @param signal - cancellation supplied by the Remote carrier.
+ * @returns exact decimal balance strings and provider availability.
+ * @throws RemoteError with `llm/balance-failed` when the route or provider refuses the request.
+ */
+@Remote('balance') async remoteAccountBalance(provider: string, signal: AbortSignal): Promise<LlmAccountBalance>
 
 /**
  * Resolve and validate all metadata from the adapter that owns one exact

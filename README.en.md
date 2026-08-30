@@ -46,7 +46,7 @@ To use DSH on your computer from a phone or another browser outside its network:
 
 1. On the first launch, or whenever no account has been authorized, the desktop client offers sign-in or registration and explains that signing in lets you use this computer remotely from a phone or another device. You can skip sign-in and continue using the application locally. Sign-in and registration happen on the portal in the system browser, and the desktop client never reads the portal password.
 2. After the Web page approves the device, return to the desktop client and choose whether to **Enable remote control**. This setting is off by default. When enabled, the computer creates an encrypted outbound connection without requiring a public IP, port forwarding, or router changes. You can later manage it from **Settings → General → Remote control**, or change the setting and authorize another account from **Remote Access…** in the **DeepSeek Harness** or **Application** menu. If a signed-out user tries to enable remote control, the application asks for login and authorization again; remote control remains unavailable until authorization succeeds.
-3. Sign in to the portal's device center, choose an online computer owned by the current account, and select **连接**.
+3. Sign in to the portal's device center, choose an online computer owned by the current account, and select **Connect**.
 
 ## Why it is zero setup
 

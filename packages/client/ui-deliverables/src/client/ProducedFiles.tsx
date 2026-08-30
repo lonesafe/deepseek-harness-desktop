@@ -112,7 +112,7 @@ export function ProducedFiles({
     <div className={css.root}>
       <span className={css.label}>{t('produced.label')}</span>
       <div ref={rowRef} className={css.row} data-produced-files-row>
-        {shown.map(path => canOpenPath && openFile !== undefined
+        {shown.map(path => canOpenPath
           ? (
             <button
               key={path}
@@ -130,7 +130,7 @@ export function ProducedFiles({
           : <span key={path} className={css.file} title={path}>{basename(path)}</span>)}
         {hidden > 0 && <span className={css.more}>{moreLabel(t, hidden)}</span>}
       </div>
-      {hidden > 0 && canOpenPath && openFile !== undefined && (
+      {hidden > 0 && canOpenPath && (
         <button type="button" className={css.showFolder} onClick={() => { openFile('.') }}>
           {t('produced.showInFolder')}
         </button>

@@ -3,7 +3,7 @@ import {
   type CSSProperties, type KeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import type { JobView } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionJob as JobView } from '@deepseek-ai/dsh-api-session-controller/types'
 import { IconChevronDownOutline14, StateDot, useDismissOnOutsidePointer, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import { NS } from './locales.ts'
@@ -115,11 +115,6 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
 
   useDismissOnOutsidePointer(rootRef, open, setOpen, menuRef)
 
-  // The mobile header deliberately clips its action row to keep long titles
-  // and utilities from widening the page. Render the list at document level
-  // and anchor it with fixed coordinates so that clipping cannot hide it.
-  // Placement is recalculated for rotation, dynamic browser chrome, and any
-  // nested scroll container that moves the trigger.
   useLayoutEffect(() => {
     if (!open) {
       setMenuStyle(null)

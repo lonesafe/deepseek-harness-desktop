@@ -14,11 +14,11 @@ The host's cut rule was never the obstacle. An aborted turn ends with a logged `
 
 ## Decision
 
-`SessionRuntime.fork` floors `atSeq` before the RPC. The fractional-seq convention belongs to `dsh-client-runtime`, which mints it in both the live and replay projections, so the same package converts it back to a real event seq at the wire boundary instead of every UI caller remembering to. Integer anchors are unaffected.
+`ClientSessions.fork` floors `atSeq` before the RPC. The fractional-seq convention is consumed by `dsh-api-session-controller`, which owns both live and replay Session projections, so that package converts it back to a real event seq at the wire boundary instead of every UI caller remembering to. Integer anchors are unaffected.
 
 Flooring lands inside the anchor's own turn rather than clipping backward: every turn opens with `turn/start`, so `turnEnd.seq - 1` cannot itself be an earlier turn's `turn/end`. The host's first-`turn/end`-at-or-after rule then closes on the turn the reader clicked, matching the whole-turn semantics the message-level fork button already promised for completed turns.
 
-The apiproxy fork suite pins the host half of the contract: a floored anchor inside an aborted turn cuts through that turn and seeds the child with it.
+The Session Controller fork suite pins the host half of the contract: a floored anchor inside an aborted turn cuts through that turn and seeds the child with it.
 
 ## Alternatives considered
 
@@ -26,7 +26,7 @@ The apiproxy fork suite pins the host half of the contract: a floored anchor ins
 
 **Hide the fork button on interrupted messages.** Rejected because forking a turn the reader deliberately stopped is one of the strongest reasons to fork at all, and the capability worked host-side the whole time.
 
-**Floor in the chat entry's `forkAt` adapter.** Rejected because `ui-conversation` consumes the fractional convention without owning it; any second fork entry point would have to rediscover the same conversion.
+**Floor in the chat entry's `forkAt` adapter.** Rejected because `ui-chat` consumes the fractional convention without owning the Session wire call; any second fork entry point would have to rediscover the same conversion.
 
 ## Consequences
 

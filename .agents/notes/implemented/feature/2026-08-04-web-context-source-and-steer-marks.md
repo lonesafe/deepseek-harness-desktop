@@ -18,7 +18,7 @@ The Chat Message Definition attaches a `provenance` view containing the producer
 
 **The label is read out of the log, never from a client-side table of producer names.** `agent-instructions` is named by the distinct instruction paths it reconciled, `session-reference` by the titles of the sessions it read, a plugin source by its logged plugin id, and any other source by its own `kind` — the documented default arm for a merge-extensible union. A source carrying no readable kind degrades to an unnamed injection. A new or renamed producer is therefore identifiable without a client release, no label can go stale against the code, and a resumed, forked, or foreign log projects exactly like a live session.
 
-`recall` covers `session-reference` because that is the one shipped source that lifts another session's material into this one. No Web leaf mounts `dsh-session-reference` today — it had only a terminal host — so the arm exists for log portability rather than for a bundled producer, and it is exercised by unit coverage rather than an assembled Web scenario.
+`recall` covers `session-reference` because that is the one shipped source that lifts another session's material into this one. No Web leaf mounts `dsh-session-reference` — it had only a terminal host — so the arm exists for log portability rather than for a bundled producer, and it is exercised by unit coverage rather than an assembled Web scenario.
 
 `MessageItem` captions durable and pending steering bubbles with `插话`. The Chat Inbox and Message Definitions replay durable `agent/inbox/spliced` events and project a user-origin `user/message` as `SteeringMessageNode` when that same message identity was claimed from `next-step`; a queued-turn claim stays a `UserMessageNode`, and a non-user next-step message stays context. This reverses one clause of the [archived no-steer decision](../../archived/simplification/2026-07-31-web-ui-no-steer-entry-or-interjection-chrome.md), which removed the badge because the composer could not steer and the label named a gesture users could not perform. The composer gained a Steer gesture afterwards without amending that note; this decision supplies the product decision its reintroduction clause required, and corrects the stale facts left in it. The caption is the only steering chrome here: composer modes, the Queue dock's strict-steer action, and pending-steering lifecycle stay with their own owners.
 
@@ -36,8 +36,8 @@ The Chat Message Definition attaches a `provenance` view containing the producer
 
 ## Testing
 
-- `packages/client/runtime` unit coverage pins each source kind, the label fallbacks when a name field is missing, empty, or wrongly typed, the unnamed degradation for a source with no readable kind, and steering reconstruction on reset and live append paths.
-- `packages/client/ui-conversation` jsdom coverage pins the role title, the producer label beside it, the label's survival while expanded, and the roleless header.
+- `packages/client/ui-chat` and `packages/client/ui-trajectory` unit coverage pin each source kind, the label fallbacks when a name field is missing, empty, or wrongly typed, the unnamed degradation for a source with no readable kind, and durable steering reconstruction.
+- `packages/client/ui-chat` jsdom coverage pins the role title, the producer label beside it, the label's survival while expanded, and the roleless header.
 - The keyless assembled-Web goldens carry the named header, so the assembled transcript — not only component tests — proves the marks.
 
 ## Consequences

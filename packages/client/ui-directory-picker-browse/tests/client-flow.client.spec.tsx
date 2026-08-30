@@ -2,8 +2,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
-import type { DirectoryListing } from '@deepseek-ai/dsh-client-runtime/client'
+import type { DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import type { DirectoryFlowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -34,15 +34,13 @@ async function bench() {
   ctx.provide('locale', new LocaleRuntime(ctx))
   const listDirectory = vi.fn(async (): Promise<DirectoryListing> => homeListing)
   const createDirectory = vi.fn(async (path: string, name: string) => `${path}/${name}`)
-  const pickDirectory = vi.fn(async (): Promise<string | null> => '/tmp/picked')
-  ctx.provide('workspaces', { listDirectory, createDirectory, pickDirectory } as never)
-  ctx.provide('connection', { isLoopback: false } as never)
+  ctx.provide('uiWorkspace', { listDirectory, createDirectory } as never)
   const slots = ctx.get('slots') as SlotRegistry
   const declare = () => slots.register({
     name: 'root',
     children: Object.fromEntries(HOLES.map(name => [name, { kind: 'single', scope: 'root' }])),
   } as never, () => null)
-  return { ctx, slots, listDirectory, createDirectory, pickDirectory, declare }
+  return { ctx, slots, listDirectory, createDirectory, declare }
 }
 
 function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowOwnerProps {
@@ -55,7 +53,7 @@ function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowO
 
 describe('directory-picker-browse client half', () => {
   it('declares the services it drives', () => {
-    expect(inject).toEqual(['slots', 'workspaces', 'locale', 'connection'])
+    expect(inject).toEqual(['slots', 'uiWorkspace', 'locale'])
   })
 
   it('fills both directory-flow holes for declarations before or after apply, and leaves with its fiber', async () => {
@@ -199,9 +197,6 @@ describe('directory-picker-browse client half', () => {
         {...props}
         listDirectory={listDirectory}
         createDirectory={vi.fn(async () => '')}
-        pick={vi.fn(async () => null)}
-        isLoopback={false}
-        nativeOnLoopback={false}
         t={t}
       />,
     )
@@ -215,36 +210,12 @@ describe('directory-picker-browse client half', () => {
     expect(props.onError).not.toHaveBeenCalled()
   })
 
-  it('uses the native chooser only for an adaptive loopback page', async () => {
-    const props = owner()
-    const pick = vi.fn(async (): Promise<string | null> => '/tmp/local-project')
-    const listDirectory = vi.fn(async (): Promise<DirectoryListing> => homeListing)
-    render(
-      <BrowseDirectoryFlow
-        {...props}
-        listDirectory={listDirectory}
-        createDirectory={vi.fn(async () => '')}
-        pick={pick}
-        isLoopback
-        nativeOnLoopback
-        t={key => key}
-      />,
-    )
-    await waitFor(() => { expect(props.onPicked).toHaveBeenCalledWith('/tmp/local-project') })
-    expect(pick).toHaveBeenCalledOnce()
-    expect(listDirectory).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
-
   it('renders nothing while the flow is closed', () => {
     const view = render(
       <BrowseDirectoryFlow
         {...owner({ open: false })}
         listDirectory={vi.fn(async () => homeListing)}
         createDirectory={vi.fn(async () => '')}
-        pick={vi.fn(async () => null)}
-        isLoopback={false}
-        nativeOnLoopback={false}
         t={key => key}
       />,
     )

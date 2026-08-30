@@ -16,7 +16,7 @@ Status: implemented
 
 官网先认证中转 session、把浏览器 Origin 与中转 authority 比较，并确认当前设备归属和在线状态，然后才 upgrade `/api/rpc`。它会把每项完整的浏览器 JSON 请求转换为现有桌面隧道 `http_request` 帧，而不是打开本地 RPC WebSocket。因此桌面端继续作为策略真源，负责规范化 RPC 路径检查、特权方法拒绝、敏感 header 移除、固定回环目标，以及[远程中转决策](../feature/2026-08-15-account-device-remote-relay.zh.md)所述的只读设置与凭据投影。浏览器取消会释放官网等待，socket 断开会取消全部在途官网操作。带标记的远程客户端不会静默回退到 HTTP；兼容发布期间，现有 HTTP 中转仍可供较旧的导出壳使用。
 
-两条业务事件流继续遵守[浏览器下行决策](2026-08-04-websocket-downlink-carrier.zh.md)，保持彼此独立且只下行。一个远程页面因此持有三条 socket：一条复用的客户端发起 RPC 载体，加上 mux 与 host 下行。它们的逻辑 schema、就绪行为和跨流无序属性均不改变。
+两条业务事件流继续遵守[浏览器下行决策](../../archived/architecture/2026-08-04-websocket-downlink-carrier.md)，保持彼此独立且只下行。一个远程页面因此持有三条 socket：一条复用的客户端发起 RPC 载体，加上 mux 与 host 下行。它们的逻辑 schema、就绪行为和跨流无序属性均不改变。
 
 ## Verification
 

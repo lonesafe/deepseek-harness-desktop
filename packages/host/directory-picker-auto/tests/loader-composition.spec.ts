@@ -98,7 +98,6 @@ async function loadComposition(
     '  config:',
     `    host: '${bindHost}'`,
     '    port: 0',
-    "    accessToken: 'a-secure-24-character-token'",
     `- name: '${AUTO}'`,
     '',
   ].join('\n'))
@@ -135,6 +134,14 @@ async function loadComposition(
 /** Entry names currently present in the loader store (root tree plus subtrees). */
 function entryNames(ctx: Context): string[] {
   return [...ctx.loader.entries()].map(entry => entry.options.name)
+}
+
+/** The Include tree that backs the booted `cordis.yml` file. */
+function includeTree(ctx: Context): Include {
+  const include = [...ctx.loader.entries()]
+    .find(entry => entry.options.name === 'cordis:include')?.subtree as Include | undefined
+  if (include === undefined) throw new Error('expected the root Include tree')
+  return include
 }
 
 /**
@@ -188,10 +195,10 @@ describe('real Loader composition', () => {
     // behavior, not the chooser's); await that debounced write so it cannot
     // race the temp-dir removal, and pin that the persisted row is the
     // chooser itself — the resolved backend still never reaches the file.
-    await expect.poll(
-      async () => await readFile(configPath, 'utf8'),
-      { timeout: 15_000 },
-    ).toContain('disabled: true')
+    // stop() drains the Include write queue, so this assertion does not depend
+    // on the debounce timer racing Windows coverage load.
+    await includeTree(ctx).stop()
+    expect(await readFile(configPath, 'utf8')).toContain('disabled: true')
     expect(await readFile(configPath, 'utf8')).not.toContain(NATIVE)
   })
 
@@ -238,8 +245,10 @@ describe('real Loader composition', () => {
     await expect(autoEntry.fiber!.dispose()).resolves.not.toThrow()
     expect(entryNames(ctx)).not.toContain(NATIVE)
     expect(entryNames(ctx)).not.toContain(BROWSE_SURFACE)
-    // Same self-dispose persistence as above: let the write land before teardown.
-    await expect.poll(async () => await readFile(configPath, 'utf8')).toContain('disabled: true')
+    // Same self-dispose persistence as above: drain the Include write queue
+    // deterministically before asserting the persisted row.
+    await includeTree(ctx).stop()
+    expect(await readFile(configPath, 'utf8')).toContain('disabled: true')
     expect(renameControl.injectedFailures).toBe(1)
     expect(renameControl.remainingFailures).toBe(0)
     expect(renameControl.attempts).toBeGreaterThanOrEqual(2)
@@ -249,9 +258,7 @@ describe('real Loader composition', () => {
     stubAttendedHost()
     const { ctx } = await loadComposition('127.0.0.1')
     const autoEntry = [...ctx.loader.entries()].find(entry => entry.options.name === AUTO)!
-    const include = [...ctx.loader.entries()]
-      .find(entry => entry.options.name === 'cordis:include')?.subtree as Include | undefined
-    if (include === undefined) throw new Error('expected the root Include tree')
+    const include = includeTree(ctx)
     renameControl.failureCode = 'EIO'
     renameControl.remainingFailures = 1
 

@@ -1,29 +1,107 @@
+---
+description: "dsh Web 客户端的设置外壳、无特定功能归属文案与持久化产品引导命名空间：「通用」分区、触发控件界面框架与引导账本投影。"
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-client-ui-settings-general
 
 [English](README.md) | 中文
 
-设置外壳、无特定功能归属文案与持久化产品引导 namespace。它以触发控件和模态设置面板占用 `sidebar.settings`，在触发器与桌面版本／更新控件之间渲染有序的 `settings.footer.utility` 控件，把 `settings.section` 账本投影成导航、把 `settings.onboarding` 账本投影成每次只挂载一个步骤的引导流程，并在设置页面上注册所有不属于单一功能的内容：触发器、标题栏与关闭控件内容、本地配置文件操作，「通用」分区及其 `settings.general.item` slot，以及 `settings` 字典。它渲染进的那些 slot 类型归 ui-settings——设置领域底座——所有；只有外壳自身的契约类型放在这里，因为它们引用 ui-sidebar 的 slot 类型，而底座不得依赖任何 `ui-*` 包。归具体功能所有的页脚控件、设置行（「权限」、「语言」、「外观」）、分区（「模型」）和条件式首次使用引导步骤仍由各自的功能包提供。
+## 概述
 
-在手机宽度下，设置标题与操作位于可横向滚动的分区导航上方，当前分区占用面板完整宽度并在弹窗内滚动。打开的面板会 portal 到 document body，因此响应式侧栏折叠不会裁掉面板或让会话层接收指针输入。桌面宽度仍保留导航与内容双栏布局。
+`dsh-client-ui-settings-general` 是 dsh Web 客户端的设置外壳：Settings 面板从侧边栏底部的控件打开，带触发控件与模态外壳；导航由各功能贡献的分区构建；首次运行的用户一次只走一个引导步骤。它还注册设置页面上所有不属于单一功能的内容：触发器、标题栏与关闭控件界面框架、「本地配置文件」操作、「通用」分区及其 `settings.general.item` slot，以及 `settings` 字典。归具体功能所有的行（「权限」、「语言」、「外观」）、分区（「模型」）与条件式首次使用引导步骤仍由各自的功能包提供；外壳本身不自带任何引导文案。
 
-当 Electron 在受管回环 URL 上提供非敏感的桌面版本、目标信息和已验证官网 origin 时，外壳会立即检查官网，之后每十分钟执行一次且检查不会重叠。官网存在较新的兼容资产时，「设置」触发器右侧出现**更新**标识；该标识调用桌面端拥有的更新动作。普通局域网页和远程页不会收到桌面信息，不执行检查，也不渲染标识。
+## 目录
 
-同一组受信任的桌面事实还会在「通用设置」中增加**远程控制**行。其**管理**操作打开 Electron 持有的远程访问弹窗，用于浏览器授权、开关控制、查看连接状态和进入官网设备中心。局域网页和官网远程页不显示该行；原生应用菜单仍提供等价入口。
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [进一步探索](#further-exploration)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
-外壳不自带引导文案：所有文本都来自注册方。导航 label 可以是跟随语言的 thunk，因此导航投影经 `resolveSlotLabel` 解析，并在分区账本更新或 locale revision 变化时重新渲染（`ctx.get('locale')` 可选读取，无硬 locale 依赖）。首次使用引导记录按升序投影，每次只挂载一个步骤；可见步骤自行持有弹窗框架和应用根节点 `inert` 生命周期。已挂载但仍在判定私有事实的步骤渲染 null，因此判定期间不绘制也不阻塞任何内容。当前注册方会收到该条目的 id、`complete()` 和 `openSection(id)` 回调；完成或跳过当前步骤后，所有权转交给下一项。持久化完成状态、能力就绪状态、文案、变更操作以及可见包装均由注册方持有，因此独立注册的流程无法堆叠，外壳也不会成为第二个配置事实来源。
+-----
 
-回环浏览器通过 `settings.describe` 加载提供方的 `hasDocument` 能力，且只有在 Host 确认可准备好一份由提供方持有的本地文档时才渲染**打开配置文件**。该操作发送无路径参数且仅限回环访问的 `settings.openDocument` 请求；Host 会再次解析提供方路径、在文档缺失时将其创建出来，并交给原生文本编辑器（macOS 上使用 `open -t`，绕过浏览器文件关联；Linux 和 Windows 上使用桌面文件关联；WSL 上经 `wslpath -w` 转换后使用 Windows 文件关联）。打开失败时该操作仍可使用，并渲染本地化错误。临时读取失败或 Host 拓扑变化后，重新打开对话框或重新连接会刷新可用性。远程浏览器从不注册该操作，也从不发起这项特权设置读取。
+<a id="use-this-package"></a>
+## 使用本包
+
+用户通过侧边栏底部的 Settings 控件进入外壳；功能插件通过本外壳所投影的 slot 账本贡献自己的页面与引导步骤。外壳渲染模态面板、由 `settings.section` 条目构建的导航，以及每次只挂载一个的引导步骤。
+
+### 「通用」分区
+
+「通用」分区承载由功能包注册进 `settings.general.item` 的行——它没有内置行。功能插件拥有行文案与行为；外壳只提供分区及其 slot。例如「外观」行位于 ui-theme。
+
+### 打开配置文件
+
+在回环浏览器上，只有当宿主确认可准备好一份由提供方持有的本地文档时，外壳才渲染**打开配置文件**。该操作会在原生文本编辑器中打开该文档（macOS 上绕过浏览器文件关联）。远程浏览器从不注册该操作，也从不发起这项特权设置读取。
+
+### 引导步骤
+
+引导账本按升序投影，每次只挂载一个步骤。注册方持有持久化完成状态、能力就绪状态、文案、变更操作与可见包装，因此独立注册的流程无法堆叠，外壳也不会成为第二个配置事实来源。可见步骤自行持有弹窗框架与应用根节点 `inert` 生命周期。
+
+-----
+
+<a id="understand-the-implementation"></a>
+## 理解实现
+
+<details>
+<summary>实现细节——点击展开</summary>
+
+外壳拥有界面框架与投影；每段内容与文案都属于某个注册方。
+
+### 账本投影
+
+导航是 `settings.section` 账本的投影；导航 label 可以是跟随语言的 thunk，经 `resolveSlotLabel` 解析，并在分区账本更新或 locale revision 变化时重新渲染（`ctx.get('locale')` 可选读取，无硬 locale 依赖）。引导账本按升序投影；当前注册方会收到该条目的 id、`complete()` 与 `openSection(id)` 回调，完成或跳过当前步骤后，所有权转交给下一项。
+
+### 文档可用性
+
+在 loopback 页面上，Client 通过 `settings/describe` 加载提供方的 `hasDocument` 能力，且只有在 Host 确认可准备好一份由提供方持有的本地文档时才渲染配置文件操作。该操作调用无路径参数且经浏览器认证的 `settings/openSettingsDocument` Remote；Host 会再次解析提供方路径、在文档缺失时将其创建出来，并交给原生文本编辑器（macOS 上使用 `open -t`，绕过浏览器文件关联；Linux 和 Windows 上使用桌面文件关联；WSL 上经 `wslpath -w` 转换后使用 Windows 文件关联）。打开失败时该操作仍可使用，并渲染本地化错误。临时读取失败或 Host 拓扑变化后，重新打开对话框或重新连接会刷新可用性。非 loopback 页面保留 Client 策略，不提供该原生操作及其 settings 读取。
+
+### 宿主端
 
 宿主端在用户设置 seam 中注册 `ui-onboarding`。`ui-settings-models` 提供的欢迎步骤通过既有公开 settings 边界读写其中的 `welcomeNoticeVersion`；外壳本身仍不持有产品策略。
 
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## 进一步探索
+
+以下页面覆盖设置界面家族与组合模型。
+
+- [ui-settings](../ui-settings/README.zh.md)——本外壳所依赖 slot 类型与 scope 服务所在的领域底座。
+- [ui-sidebar](../ui-sidebar/README.zh.md)——承载 `sidebar.settings` 席位的侧边栏外壳。
+- [ui-settings-models](../ui-settings-models/README.zh.md)——贡献 DeepSeek 引导步骤的功能包。
+- [settings](../../settings/README.zh.md)——持久化用户设置 seam 及其文件提供方。
+- [slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)——账本背后的组合模型。
+
+-----
+
+<a id="model-experience"></a>
 ## 模型体验
 
-无。该插件渲染浏览器设置 UI；这里没有任何内容进入模型请求。
+无。该包是浏览器端 UI 插件层，不注册任何面向模型的内容。
 
 #### KV Cache 影响
 
 无；该包既不组装也不发送提供方请求。
 
-## 已知限制与暂缓事项
+## 已知限制与延期工作
 
-- 多数「通用」行只在其所属功能插件挂载时出现；桌面专用的「远程控制」行还要求存在受信任的 Electron URL 事实。
+<a id="known-limitations-and-deferred-work"></a>
+
+
+这些限制说明外壳自身提供什么、功能包必须提供什么；它们是当前包约束。
+
+- **「通用」分区没有内置行**：每一行仅在其所属功能插件挂载时出现；外壳单独无法填满该分区。
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者的工作上下文——点击展开</summary>
+
+无。
+
+</details>

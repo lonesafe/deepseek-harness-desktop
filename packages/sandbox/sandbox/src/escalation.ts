@@ -99,7 +99,7 @@ export type EscalationOutcome = 'allowed-once' | 'allowed-always' | 'rejected' |
  * structurally the approval seam's `ApprovalService`, generic over the agent
  * type `A` and call-id type `C` so this package resolves escalations through
  * `ctx.approval` without importing the approval or agent packages (the tool
- * layer infers `A`/`C` as its own `Agent`/`CallId`).
+ * layer infers `A`/`C` as its own `Agent`/`ToolCallId`).
  */
 export interface EscalationApprover<A = object, C = string> {
   /**

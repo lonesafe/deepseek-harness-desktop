@@ -2,8 +2,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type {
-  SessionId, WorkspaceFileListing, WorkspaceId, WorkspaceListState, WorkspaceView,
-} from '@deepseek-ai/dsh-client-runtime/client'
+  WorkspaceFileListing, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
+} from '@deepseek-ai/dsh-api-workspace-controller/client'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { WorkspaceFilesProps as ViewProps } from '../src/client/contract/slots.ts'
@@ -13,7 +14,7 @@ import { zh } from '../src/client/locales.ts'
 afterEach(cleanup)
 
 const t: ViewProps['t'] = makeTranslate(zh, commonZh)
-const sessionId = 'session-files' as SessionId
+const sessionId = SessionId('session-files')
 const workspaceId = 'workspace-files' as WorkspaceId
 const workspace: WorkspaceView = {
   workspaceId,
@@ -23,9 +24,8 @@ const workspace: WorkspaceView = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
-const workspaceState = (items: readonly WorkspaceView[]): WorkspaceListState => ({
+const workspaceState = (items: readonly WorkspaceView[]): WorkspaceSnapshot => ({
   items, archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
-  baselinesReady: true, recentWorkspaceId: items[0]?.workspaceId,
 })
 function hook<T>(snapshot: T) {
   return function select<S>(selector: (state: T) => S): S { return selector(snapshot) }

@@ -51,7 +51,7 @@ Status: implemented
 
 **在客户端把来源 kind 映射到渲染器。** 写起来最省，也不用改格式，但它把生产方知识放回了客户端：此后每新增一个 kind 都要客户端发版才能渲染成 opaque 以外的东西，而外部日志根本无法分类。它还会重新引入[来源与 steer 标识决策](2026-08-04-web-context-source-and-steer-marks.zh.md)刚为名称去掉的那种耦合。
 
-**复用 `kind` 充当形态。** 单一判别字段更简单，`agent-instructions` 本来也与它的形态一一对应。但多个生产方共享同一形态时，这种设计无法保留完整信息：今天有三个生产方发出运行时快照，把它们并成一个 kind 后，将无法分辨每条消息由哪个生产方提供。独立的 `kind` 和 `form` 字段会记录生产方，同时允许多个生产方共用一种呈现方式。
+**复用 `kind` 充当形态。** 单一判别字段更简单，`agent-instructions` 本来也与它的形态一一对应。但多个生产方共享同一形态时，这种设计无法保留完整信息：三个已交付生产方发出运行时快照，把它们并成一个 kind 后，将无法分辨每条消息由哪个生产方提供。独立的 `kind` 和 `form` 字段会记录生产方，同时允许多个生产方共用一种呈现方式。
 
 **让客户端解析面向模型的散文。** 条目与文件分节在文本里确实有可见结构。解析它们会把呈现耦合到提示词措辞上，于是每改一次文案就会悄悄破坏一张卡片——这也正是目录身份从文本上迁走的原因。
 
@@ -59,8 +59,8 @@ Status: implemented
 
 ## 测试
 
-- `packages/client/runtime` 钉住形态投影，包括必须降级为 opaque 的未知值、空值、类型不符与缺失。
-- `packages/client/ui-conversation` 逐个钉住内容区：opaque 的换行留存与来源字段、instructions 的文件列表与原样包装、catalog 的条目列表，以及条目不可用的 catalog 回落到 opaque。
+- `packages/client/ui-chat` 与 `packages/client/ui-trajectory` 钉住形态投影，包括必须降级为 opaque 的未知值、空值、类型不符与缺失。
+- `packages/client/ui-chat` 逐个钉住内容区：opaque 的换行留存与来源字段、instructions 的文件列表与原样包装、catalog 的条目列表，以及条目不可用的 catalog 回落到 opaque。
 - `packages/skill/tool-skill` 钉住首次发布与替换时的新来源、由持久条目驱动的重新发布行为，以及畸形持久目录不打断步骤观察。
 - 无密钥的组装 Web seeded-history 场景在 Chromium 中展开一条真实的 `instructions` 上下文，断言其文件列表、原样包装与未改动的展开项几何。`catalog` 没有组装态覆盖：隔离脚手架不发布任何 skill，因此没有目录能进入浏览器场景。
 

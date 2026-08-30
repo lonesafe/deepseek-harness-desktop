@@ -5,7 +5,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   WorkspaceFileEntry, WorkspaceFileListing, WorkspaceFilePreview,
-} from '@deepseek-ai/dsh-client-runtime/client'
+} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { WorkspaceFilesProps } from './contract/slots.ts'
 import css from './WorkspaceFilesView.module.css'
 

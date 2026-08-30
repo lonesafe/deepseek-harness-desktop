@@ -1,7 +1,8 @@
 /** DeepSeek account-balance state shared by the desktop and remote settings footer. */
 
-import type { BalanceView, IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { LlmBalanceInfo } from '@deepseek-ai/dsh-api-remotes/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ModelsLlm } from './store.ts'
 
 /** Official DeepSeek route whose configured credential owns the balance. */
 export const DEEPSEEK_OFFICIAL_PROVIDER = 'deepseek-official'
@@ -10,7 +11,7 @@ export const DEEPSEEK_OFFICIAL_PROVIDER = 'deepseek-official'
 export interface BalanceState {
   status: 'loading' | 'ready' | 'error'
   isAvailable: boolean
-  balances: readonly BalanceView[]
+  balances: readonly LlmBalanceInfo[]
   error: string | null
 }
 
@@ -23,7 +24,7 @@ export class BalanceStore {
 
   private generation = 0
 
-  constructor(private readonly api: Pick<IApiClient, 'llm'>) {}
+  constructor(private readonly llm: Pick<ModelsLlm, 'balance'>) {}
 
   /** Refresh from the currently configured official DeepSeek credential. */
   async load(): Promise<void> {
@@ -33,9 +34,9 @@ export class BalanceStore {
       state.error = null
     })
     try {
-      const response = await this.api.llm.balance({ provider: DEEPSEEK_OFFICIAL_PROVIDER })
-      if (!response.result.ok) throw new Error(response.result.error.message)
-      const value = response.result.value
+      const response = await this.llm.balance(DEEPSEEK_OFFICIAL_PROVIDER)
+      if (!response.ok) throw new Error(response.error.message)
+      const value = response.value
       if (generation !== this.generation) return
       this.store.update((state) => {
         state.status = 'ready'

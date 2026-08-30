@@ -51,7 +51,7 @@ The tool presentation contract pairs its vocabulary with `presentCall(args)`, a 
 
 **Map source kinds to renderers in the client.** Cheapest to write and requires no format change, but it puts producer knowledge back in the client: every new kind then needs a client release to render as anything but opaque, and a foreign log cannot be classified at all. It also reintroduces exactly the coupling the [source and steer marks decision](2026-08-04-web-context-source-and-steer-marks.md) removed for labels.
 
-**Reuse `kind` as the form.** One discriminant is simpler, and `agent-instructions` is already 1:1 with its form. This design loses information when several producers share one form: three producers emit runtime snapshots today, and combining them into one kind would make it impossible to tell which producer supplied each message. Separate `kind` and `form` fields record the producer while allowing several producers to share one presentation.
+**Reuse `kind` as the form.** One discriminant is simpler, and `agent-instructions` is already 1:1 with its form. This design loses information when several producers share one form: three shipped producers emit runtime snapshots, and combining them into one kind would make it impossible to tell which producer supplied each message. Separate `kind` and `form` fields record the producer while allowing several producers to share one presentation.
 
 **Let the client parse the model-facing prose.** The entries and file sections are visibly structured in the text. Parsing them couples the presentation to prompt wording, so every reword silently breaks a card — the same reason catalog identity moved off the text.
 
@@ -59,8 +59,8 @@ The tool presentation contract pairs its vocabulary with `presentCall(args)`, a 
 
 ## Testing
 
-- `packages/client/runtime` pins the form projection, including the unknown, empty, wrongly-typed, and absent values that must degrade to opaque.
-- `packages/client/ui-conversation` pins each body: the opaque body's preserved line breaks and source fields, the instructions body's file list and verbatim framing, the catalog body's entry list, and a catalog with unusable entries falling back to opaque.
+- `packages/client/ui-chat` and `packages/client/ui-trajectory` pin the form projection, including the unknown, empty, wrongly-typed, and absent values that must degrade to opaque.
+- `packages/client/ui-chat` pins each body: the opaque body's preserved line breaks and source fields, the instructions body's file list and verbatim framing, the catalog body's entry list, and a catalog with unusable entries falling back to opaque.
 - `packages/skill/tool-skill` pins the new source on first publication and replacement, republish behavior driven by the durable entries, and a malformed durable catalog leaving step observation intact.
 - The keyless assembled-Web seeded-history scenario expands a real `instructions` context in Chromium and asserts its file list, verbatim framing, and the unchanged disclosure geometry. `catalog` has no assembled coverage: the hermetic scaffold publishes no skills, so no catalog reaches a browser scenario.
 

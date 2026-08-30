@@ -2,19 +2,24 @@
  * Browser half of the browse directory-picker backend: fills ui-workspace's
  * two directory-flow holes with the in-app Select Workspace Directory dialog
  * (figma `Harness` 813-23126 family), driving the node half's
- * `host.listDirectory`/`host.createDirectory` primitives. Mounting this
- * package therefore composes both sides of the browse interaction with one
- * cordis.yml row; no client code branches on a capability kind. The dialog's
- * copy is locale-registered here — the flow package owns its own strings.
+ * `directoryPicker/list`/`directoryPicker/createDirectory` primitives.
+ * Mounting this package therefore composes both sides of the browse
+ * interaction with one cordis.yml row; no client code branches on a
+ * capability kind. The dialog's copy is locale-registered here — the flow
+ * package owns its own strings.
  */
-import type { ConnectionHandle } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+// Type-only: pulls the connection service merge used to distinguish the
+// desktop window from a portal-hosted remote browser.
+import type {} from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: pulls the SlotMap merge declaring the directory-flow holes.
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+// Type-only: pulls the SlotRegistry service merge (ctx.slots).
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { BrowseFlowInjected } from './flow.ts'
 import { BrowseDirectoryFlow } from './flow.ts'
 
-/** Client-side interaction selection supplied by the auto host chooser. */
+/** Client-side interaction selection supplied by the auto Host chooser. */
 export interface Config {
   /** Use the OS chooser for loopback pages; remote pages always browse in-app. */
   nativeOnLoopback?: boolean
@@ -23,8 +28,8 @@ export interface Config {
 /** Locale namespace owning the browser dialog's copy. */
 const LOCALE_NS = 'directory-browser'
 
-/** Required services (cordis fiber inject): the slot registry, the wire-facing workspace service, and locale. */
-export const inject = ['slots', 'workspaces', 'locale', 'connection']
+/** Required services (cordis fiber inject): the slot registry, workspace UI service, and locale. */
+export const inject = ['slots', 'uiWorkspace', 'locale', 'connection']
 
 /**
  * Client plugin body: register the dialog's dictionaries and the browse flow
@@ -33,7 +38,6 @@ export const inject = ['slots', 'workspaces', 'locale', 'connection']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext, config: Config = {}): void {
-  const connection = ctx.get('connection') as ConnectionHandle
   ctx.effect(() => {
     // The two dictionaries land as a unit: if the second registration hits a
     // rival owner of the namespace, the first rolls back before the throw —
@@ -81,10 +85,10 @@ export function apply(ctx: ClientContext, config: Config = {}): void {
   }, 'directory-picker-browse: dialog dictionaries')
 
   const injected = (): BrowseFlowInjected => ({
-    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
-    createDirectory: (path, name) => ctx.workspaces.createDirectory(path, name),
-    pick: () => ctx.workspaces.pickDirectory(),
-    isLoopback: connection.isLoopback,
+    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
+    createDirectory: (path, name) => ctx.uiWorkspace.createDirectory(path, name),
+    pick: () => ctx.uiWorkspace.pickDirectory(),
+    isLoopback: ctx.connection.isLoopback,
     nativeOnLoopback: config.nativeOnLoopback === true,
     t: ctx.locale.bind(LOCALE_NS),
   })

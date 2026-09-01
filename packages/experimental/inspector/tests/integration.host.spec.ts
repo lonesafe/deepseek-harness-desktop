@@ -252,7 +252,8 @@ describe('experimental Inspector real Worker', () => {
   })
 
   it('cancels Client Runtime work when the Worker deadline expires', async () => {
-    inspector = await startInspector({ port: 0, captureFetch: false, clientRuntimeTimeoutMs: 20 })
+    const runtimeTimeoutMs = 500
+    inspector = await startInspector({ port: 0, captureFetch: false, clientRuntimeTimeoutMs: runtimeTimeoutMs })
     client = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Timeout Client' })
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
     await cdp.call('Runtime.enable')
@@ -263,7 +264,7 @@ describe('experimental Inspector real Worker', () => {
       contextId,
       awaitPromise: true,
     })
-    expect(timedOut.error?.message).toContain('timed out after 20ms')
+    expect(timedOut.error?.message).toContain(`timed out after ${String(runtimeTimeoutMs)}ms`)
     expect((await cdp.call('Runtime.evaluate', {
       expression: '42',
       contextId,

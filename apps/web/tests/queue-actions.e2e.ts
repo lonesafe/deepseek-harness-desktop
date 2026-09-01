@@ -92,6 +92,7 @@ describe('web e2e: queue row actions', () => {
     await input.fill(ACTIVE_PROMPT)
     await input.press('Enter')
     await expect.poll(() => existsSync(readyFile), { timeout: 15_000 }).toBe(true)
+    await page.getByText('partial', { exact: true }).waitFor({ timeout: 10_000 })
 
     for (const text of [REMOVE, EDIT]) {
       // A just-submitted composer is read-only for the prompt round-trip.
@@ -102,6 +103,8 @@ describe('web e2e: queue row actions', () => {
     const queueHeader = page.getByRole('button', { name: '2 queued messages' })
     await expect.poll(() => queueHeader.getAttribute('aria-expanded'), { timeout: 10_000 })
       .toBe('false')
+    await page.getByRole('textbox', { name: 'Cmd/Ctrl+Enter steers all queued messages' })
+      .waitFor({ timeout: 10_000 })
     const collapsedSnapshot = await captureStableAria(
       page,
       '[class*="centerCol"]',
@@ -167,6 +170,14 @@ describe('web e2e: queue row actions', () => {
     await expect.poll(() => page.getByRole('button', { name: 'Remove queued message' }).count())
       .toBe(2)
 
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    const editButtons = page.getByRole('button', { name: 'Edit queued message', exact: true })
+    for (let index = 0; index < await editButtons.count(); index++) {
+      await editButtons.nth(index).hover()
+    }
+    await page.getByRole('button', { name: 'Send message', exact: true }).hover({ force: true })
+    await page.getByRole('tooltip').filter({ hasText: 'Send message' }).waitFor({ timeout: 10_000 })
+    expect(await page.getByRole('tooltip').allTextContents()).toEqual(['Send message'])
     const preservedSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(PRESERVED_EXPECTED, preservedSnapshot, MODE)
     const expanded = await captureExpandedTurnProcessAria(
@@ -211,6 +222,7 @@ describe('web e2e: queue row actions', () => {
     await input.fill('/goal Keep the composer context panels aligned')
     await input.press('Enter')
     await expect.poll(() => existsSync(readyFile), { timeout: 15_000 }).toBe(true)
+    await page.getByText('partial', { exact: true }).waitFor({ timeout: 10_000 })
     await page.locator('[data-goal-bar]').waitFor({ timeout: 10_000 })
 
     const sessions = scaffold.ctx.sessions.list()
@@ -232,6 +244,8 @@ describe('web e2e: queue row actions', () => {
     const queueHeader = page.getByRole('button', { name: '2 queued messages' })
     await expect.poll(() => queueHeader.getAttribute('aria-expanded'), { timeout: 10_000 })
       .toBe('false')
+    await page.getByRole('textbox', { name: 'Cmd/Ctrl+Enter steers all queued messages' })
+      .waitFor({ timeout: 10_000 })
 
     const layoutSnapshot = await captureStableAria(
       page,

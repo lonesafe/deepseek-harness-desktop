@@ -93,6 +93,11 @@ describe('ui-settings-models apply', () => {
     const utility = before.slots.entries('settings.footer.utility')[0]!
     expect(utility.component).toBe(BalanceIndicator)
     expect(utility.options).toMatchObject({ id: 'deepseek-balance', order: 0 })
+    const utilityInjected = (
+      utility.inject as unknown as () => import('../src/client/BalanceIndicator.tsx').BalanceIndicatorInjected
+    )()
+    expect(utilityInjected.hooks.balance.getSnapshot().status).toBe('error')
+    expect(() => { utilityInjected.refresh() }).not.toThrow()
     expect(onboarding.find(entry => entry.options.id === 'welcome-notice')).toMatchObject({
       component: WelcomeNotice,
       options: { id: 'welcome-notice', order: -100 },
@@ -217,6 +222,21 @@ describe('ui-settings-models apply', () => {
 })
 
 describe('pushed invalidations', () => {
+  it('reloads balance only for DeepSeek settings and credential invalidations', async () => {
+    const balance = vi.fn(() => Promise.resolve({ ok: true as const, value: { isAvailable: true, balances: [] } }))
+    const b = await bench(true, undefined, { balance })
+    declare(b.slots)
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    await vi.waitFor(() => { expect(balance).toHaveBeenCalledTimes(1) })
+
+    b.remote.emit('settings/document-updated', ['llm-pi-ai', 1])
+    b.remote.emit('credentials/reference-updated', ['OPENAI_API_KEY'])
+    expect(balance).toHaveBeenCalledTimes(1)
+    b.remote.emit('settings/document-updated', ['llm-deepseek', 2])
+    b.remote.emit('credentials/reference-updated', ['DEEPSEEK_API_KEY'])
+    await vi.waitFor(() => { expect(balance).toHaveBeenCalledTimes(3) })
+  })
+
   it('ignores invalidations before the page ever loaded', async () => {
     const b = await bench()
     declare(b.slots)

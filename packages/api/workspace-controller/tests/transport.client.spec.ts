@@ -192,9 +192,20 @@ class CommandWorkspaceRemote implements WorkspaceRemote {
     archivedSessionIds: [request.sessionId],
   })))
 
-  readonly listFiles = vi.fn<WorkspaceRemote['listFiles']>(() => Promise.reject(new Error('unused')))
+  readonly listFiles = vi.fn<WorkspaceRemote['listFiles']>(request => Promise.resolve(remoteOk({
+    path: request.path ?? '', entries: [], truncated: false,
+  })))
 
-  readonly readFile = vi.fn<WorkspaceRemote['readFile']>(() => Promise.reject(new Error('unused')))
+  readonly readFile = vi.fn<WorkspaceRemote['readFile']>(request => Promise.resolve(remoteOk({
+    path: request.path,
+    name: request.path.split('/').at(-1) ?? request.path,
+    mime: 'text/plain',
+    size: 0,
+    modifiedAt: '2026-01-01T00:00:00.000Z',
+    kind: 'text',
+    encoding: 'utf8',
+    content: '',
+  })))
 
   async *follow(_signal?: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {}
 }
@@ -477,6 +488,12 @@ describe('WorkspaceController', () => {
     await expect(controller.insertSessionBefore(wid('one'), sid('session'))).resolves.toMatchObject({
       sessionIds: ['session'],
     })
+    await expect(controller.listFiles(wid('one'), 'docs')).resolves.toEqual({
+      path: 'docs', entries: [], truncated: false,
+    })
+    await expect(controller.readFile(wid('one'), 'README.md')).resolves.toMatchObject({
+      path: 'README.md', name: 'README.md', kind: 'text',
+    })
     await expect(controller.archiveSession(sid('session'))).resolves.toBeUndefined()
     await expect(controller.delete(wid('one'))).resolves.toBeUndefined()
   })
@@ -506,5 +523,11 @@ describe('WorkspaceController', () => {
     )))
     await expect(controller.insertSessionBefore(wid('missing'), sid('session')))
       .rejects.toThrow('workspace move failed: workspace/move-invalid: invalid move')
+    remote.listFiles.mockResolvedValueOnce(remoteFailure(missingWorkspace))
+    await expect(controller.listFiles(wid('missing'), 'docs'))
+      .rejects.toThrow('workspace file listing failed: workspace/not-found: gone')
+    remote.readFile.mockResolvedValueOnce(remoteFailure(missingWorkspace))
+    await expect(controller.readFile(wid('missing'), 'README.md'))
+      .rejects.toThrow('workspace file preview failed: workspace/not-found: gone')
   })
 })

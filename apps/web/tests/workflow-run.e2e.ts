@@ -53,7 +53,7 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
     scaffold = await launchWebScaffold({
       replayFixture: PARENT_FIXTURE,
       replayChildFixtures: [CHILD_FIXTURE],
-      paceMs: 50,
+      paceMs: 100,
       compareReplaySession: false,
     })
     browser = await chromium.launch()
@@ -89,6 +89,12 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
     expect(await runDisclosure.evaluate(element => getComputedStyle(element).cursor)).toBe('pointer')
     expect(await phaseDisclosure.evaluate(element => getComputedStyle(element).cursor)).toBe('pointer')
     const member = page.getByRole('button', { name: /^Open Reply with exactly the word/ })
+    await member.waitFor({ timeout: 15_000 })
+    await member.click()
+    await page.getByText(CHILD_PROMPT, { exact: true }).waitFor({ timeout: 15_000 })
+
+    const sessions = page.getByRole('tree', { name: 'Sessions' })
+    await sessions.getByRole('treeitem', { name: /Use the workflow tool exactly/ }).click()
     await member.waitFor({ timeout: 15_000 })
 
     await phaseDisclosure.click()
@@ -154,12 +160,9 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
       document.body.removeAttribute('data-ds-dark-theme')
     })
     await page.setViewportSize({ width: 1280, height: 800 })
+    await runDisclosure.click()
+    expect(await runDisclosure.getAttribute('aria-expanded')).toBe('false')
 
-    await member.click()
-    await page.getByText(CHILD_PROMPT, { exact: true }).waitFor({ timeout: 15_000 })
-
-    const sessions = page.getByRole('tree', { name: 'Sessions' })
-    await sessions.getByRole('treeitem', { name: /Use the workflow tool exactly/ }).click()
     await settled
     await expandTurnProcesses(page)
     await page.locator('[data-workflow-run][data-run-status="completed"]').waitFor()

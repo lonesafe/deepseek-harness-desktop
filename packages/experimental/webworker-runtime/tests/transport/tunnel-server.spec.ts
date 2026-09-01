@@ -25,6 +25,30 @@ function seams(openStream: TunnelSeams['openStream']): TunnelSeams {
 }
 
 describe('worker tunnel unary authentication', () => {
+  it('presents ordinary routed requests as loopback traffic', async () => {
+    const frames: TunnelOutboundFrame[] = []
+    const seen: unknown[] = []
+    const server = new TunnelServer({
+      port: { postMessage: (frame) => { frames.push(frame) } },
+      requestListener: () => Promise.resolve((request, response) => {
+        const req = request as { headers: Record<string, string>; socket: { remoteAddress: string }; url: string }
+        const res = response as { writeHead(status: number): void; end(): void }
+        seen.push(req.url, req.headers.host, req.socket.remoteAddress)
+        res.writeHead(204)
+        res.end()
+      }),
+    })
+    server.serve(seams(async () => (async function *(): AsyncGenerator { yield undefined })()))
+
+    server.handleMessage({
+      t: 'req', id: 40, method: 'GET', url: 'https://preview.example/plugins/example.js',
+      headers: { host: 'preview.example' },
+    })
+
+    await vi.waitFor(() => { expect(frames).toEqual([{ t: 'res', id: 40, status: 204, headers: {} }]) })
+    expect(seen).toEqual(['/plugins/example.js', '127.0.0.1', '127.0.0.1'])
+  })
+
   it.each([401, 403])('retries a route-lane HTTP %s through the worker-local direct lane', async (status) => {
     const frames: TunnelOutboundFrame[] = []
     const directFetch = vi.fn(async () => new Response('direct answer', {

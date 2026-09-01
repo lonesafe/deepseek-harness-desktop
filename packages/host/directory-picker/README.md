@@ -1,5 +1,5 @@
 ---
-description: "Workspace-directory picking seam for the web GUI host: the service contract, capability vocabulary, and error codes the native and browse backends implement."
+description: "Workspace-directory picking seam for the web GUI Host: fixed native and browse interactions, the adaptive desktop capability, and typed browse errors."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The web GUI host lets an operator choose a workspace directory through one contract: a single service whose one method reports which interaction the composed backend provides. Backends differ in interaction shape, not just mechanism — the native backend opens an OS chooser on the host display, while the browse backend serves listing and creation primitives for an in-app browser that also works for remote clients. Consumers switch on the reported capability kind; a new backend extends the capability vocabulary without editing this package. This seam is GUI-host only and never reaches the agent loop; the backends and the wire mapping live beside it.
+The web GUI Host lets an operator choose a workspace directory through one service whose single method reports the composed interaction. A fixed native provider opens an OS chooser, a fixed browse provider serves listing and creation for an in-app browser, and an attended desktop exposes both as one stable adaptive capability so its loopback window and authenticated remote pages use reachable interactions without replacing the Host service. Consumers switch on the capability kind. This seam is GUI-Host only and never reaches the agent loop.
 
 ## Table of Contents
 
@@ -29,11 +29,11 @@ Mount exactly one directory-picker backend and let the workspace flow drive it: 
 
 ### Choosing a backend
 
-The [native backend](../directory-picker-native/README.md) is the right choice when the operator sits at the host's display: `directoryPicker/pick` opens one OS chooser and returns the chosen absolute path, or `null` on cancel. The [browse backend](../directory-picker-browse/README.md) works everywhere — it lists one directory level and creates child directories from the browser, so remote clients that cannot reach an OS dialog still pick a workspace. When the host situation varies between boots, compose the [adaptive chooser](../directory-picker-auto/README.md), which resolves the situation once at boot and mounts the matching backend.
+The [attended-desktop backend](../directory-picker-native/README.md) exposes native selection to loopback pages and browse operations to remote pages. The [browse backend](../directory-picker-browse/README.md) works everywhere and is the fixed choice for headless or remote-only Hosts. Compose the [adaptive chooser](../directory-picker-auto/README.md) when the same application composition must resolve that Host-level choice at boot.
 
 ### The capability contract
 
-`capability()` returns a discriminated union describing how an operator selects a directory: `{ kind: 'native', pick(signal) }` for the OS chooser, or `{ kind: 'browse', list(path?), createDirectory(path, name) }` for the in-app browser. Consumers switch on `kind`; a capability kind no composition implements means the UI hides the picking affordance rather than failing. Browse failures throw the typed `DirectoryPickerError` with a closed code set — `directory-unreadable`, `directory-exists`, or `directory-create-failed` — each carrying the subject path, which the picking Remote controller maps onto wire failure codes.
+`capability()` returns a discriminated union describing how an operator selects a directory: `{ kind: 'native', pick(signal) }` for a fixed OS chooser, `{ kind: 'browse', list(path?), createDirectory(path, name) }` for a fixed in-app browser, or `{ kind: 'adaptive', pick(signal), list(path?), createDirectory(path, name) }` for an attended desktop. Consumers switch on `kind`; an unknown capability hides the affordance rather than failing. Browse failures throw `DirectoryPickerError` with the closed codes `directory-unreadable`, `directory-exists`, and `directory-create-failed`.
 
 ### What rows carry
 
@@ -53,7 +53,7 @@ The seam is built on one separation: the interaction shape a backend provides is
 
 ### The merge-extensible vocabulary
 
-`DirectoryPickerCapabilities` is a merge-extensible map keyed by capability kind, and `DirectoryPickerCapability` derives the union from it. A new backend declaration-merges its shape here (the entry's `kind` literal must equal its key) instead of editing this package. Each backend package also ships a browser entrypoint that registers the matching interaction in ui-workspace's directory-flow slots, so one composition row selects both the host capability and the client flow.
+`DirectoryPickerCapabilities` is a merge-extensible map keyed by capability kind, and `DirectoryPickerCapability` derives the union from it. The shipped map contains `native`, `browse`, and `adaptive`; a future provider declaration-merges its entry instead of replacing the union. Client surfaces are separate packages mounted beside the Host backend: the auto chooser pairs an adaptive backend with the browse surface configured to choose native only for loopback pages.
 
 ### Source map
 
@@ -75,9 +75,9 @@ The seam is built on one separation: the interaction shape a backend provides is
 Read these when the seam contract is not enough: the decision record first, then the two backends and the adaptive chooser that compose it.
 
 - [Directory-picker capability seam decision](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.md) — design rationale, the `ctx.fs` separation, and the policy decisions.
-- [Native backend](../directory-picker-native/README.md) — the OS-chooser interaction and its platform tooling.
+- [Attended-desktop backend](../directory-picker-native/README.md) — the adaptive interaction and its native platform tooling.
 - [Browse backend](../directory-picker-browse/README.md) — the in-app listing and creation interaction for remote clients.
-- [Adaptive chooser](../directory-picker-auto/README.md) — boot-time resolution between the two backends.
+- [Adaptive chooser](../directory-picker-auto/README.md) — Host-level boot resolution plus page-level interaction selection.
 - [Workspace subsystem](../../../docs/subsystems/workspace.md) — the workspace records the picked directory feeds.
 
 -----

@@ -1,11 +1,12 @@
 import {
-  mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync,
+  chmodSync, mkdirSync, mkdtempSync, symlinkSync, truncateSync, writeFileSync,
 } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  listWorkspaceFiles, readWorkspaceFile, WORKSPACE_FILE_PREVIEW_MAX_BYTES,
+  listWorkspaceFiles, readWorkspaceFile, WORKSPACE_FILE_ENTRY_LIMIT, WORKSPACE_FILE_PREVIEW_MAX_BYTES,
 } from '../src/workspace-files.ts'
 
 function workspace(): string {
@@ -56,6 +57,92 @@ describe('Workspace Controller file projection', () => {
     })
   })
 
+  it('projects declared text, PDF, binary, and extensionless text content', async () => {
+    const root = workspace()
+    writeFileSync(join(root, 'script.ts'), 'export {}\n')
+    writeFileSync(join(root, 'Makefile'), 'all:\n')
+    writeFileSync(join(root, 'manual.pdf'), Buffer.from('%PDF'))
+    writeFileSync(join(root, 'opaque.bin'), Buffer.from([0, 255]))
+
+    await expect(readWorkspaceFile(root, 'script.ts', signal())).resolves.toMatchObject({
+      kind: 'text', encoding: 'utf8', mime: 'text/typescript',
+    })
+    await expect(readWorkspaceFile(root, 'Makefile', signal())).resolves.toMatchObject({
+      kind: 'text', encoding: 'utf8', mime: 'application/octet-stream',
+    })
+    await expect(readWorkspaceFile(root, 'manual.pdf', signal())).resolves.toMatchObject({
+      kind: 'pdf', encoding: 'base64', mime: 'application/pdf',
+    })
+    await expect(readWorkspaceFile(root, 'opaque.bin', signal())).resolves.toMatchObject({
+      kind: 'binary', encoding: 'base64', mime: 'application/octet-stream',
+    })
+  })
+
+  it('rejects missing roots, missing paths, empty previews, and directory previews', async () => {
+    const root = workspace()
+    mkdirSync(join(root, 'docs'))
+    await expect(listWorkspaceFiles(join(root, 'missing-root'), '', signal())).rejects.toMatchObject({
+      code: 'workspace/file-unreadable',
+    })
+    await expect(listWorkspaceFiles(root, 'missing', signal())).rejects.toMatchObject({
+      code: 'workspace/file-unreadable',
+    })
+    writeFileSync(join(root, 'file.txt'), 'x')
+    await expect(listWorkspaceFiles(root, 'file.txt', signal())).rejects.toMatchObject({
+      code: 'workspace/file-unreadable',
+    })
+    await expect(listWorkspaceFiles(root, 'docs/../missing', signal())).rejects.toMatchObject({
+      code: 'workspace/file-invalid-path',
+    })
+    await expect(readWorkspaceFile(root, '', signal())).rejects.toMatchObject({
+      code: 'workspace/file-invalid-path',
+    })
+    await expect(readWorkspaceFile(root, 'missing.txt', signal())).rejects.toMatchObject({
+      code: 'workspace/file-unreadable',
+    })
+    await expect(readWorkspaceFile(root, 'docs', signal())).rejects.toMatchObject({
+      code: 'workspace/file-not-file',
+    })
+  })
+
+  it('marks a directory listing truncated at the configured row bound', async () => {
+    const root = workspace()
+    for (let index = 0; index <= WORKSPACE_FILE_ENTRY_LIMIT; index++) {
+      writeFileSync(join(root, `file-${String(index).padStart(4, '0')}.txt`), 'x')
+    }
+    const listing = await listWorkspaceFiles(root, '', signal())
+    expect(listing.entries).toHaveLength(WORKSPACE_FILE_ENTRY_LIMIT)
+    expect(listing.truncated).toBe(true)
+  })
+
+  it.runIf(process.platform !== 'win32')('maps an unreadable directory iteration', async () => {
+    const root = workspace()
+    const locked = join(root, 'locked')
+    mkdirSync(locked)
+    chmodSync(locked, 0)
+    try {
+      await expect(listWorkspaceFiles(root, 'locked', signal())).rejects.toMatchObject({
+        code: 'workspace/file-unreadable',
+      })
+    } finally {
+      chmodSync(locked, 0o700)
+    }
+  })
+
+  it.runIf(process.platform !== 'win32')('maps a file that becomes unreadable before opening', async () => {
+    const root = workspace()
+    const locked = join(root, 'locked.txt')
+    writeFileSync(locked, 'secret')
+    chmodSync(locked, 0)
+    try {
+      await expect(readWorkspaceFile(root, 'locked.txt', signal())).rejects.toMatchObject({
+        code: 'workspace/file-unreadable',
+      })
+    } finally {
+      chmodSync(locked, 0o600)
+    }
+  })
+
   it.each(['../outside', '/absolute', 'nested\\windows', './dot'])(
     'rejects non-portable or escaping path %s',
     async (path) => {
@@ -76,6 +163,20 @@ describe('Workspace Controller file projection', () => {
     await expect(readWorkspaceFile(root, 'outside/secret.txt', signal())).rejects.toMatchObject({
       code: 'workspace/file-invalid-path',
     })
+  })
+
+  it.runIf(process.platform !== 'win32')('skips dangling symlinks while listing', async () => {
+    const root = workspace()
+    symlinkSync(join(root, 'missing'), join(root, 'dangling'))
+    await expect(listWorkspaceFiles(root, '', signal())).resolves.toMatchObject({ entries: [] })
+  })
+
+  it.runIf(process.platform !== 'win32')('skips unsupported directory entries and symlink targets', async () => {
+    const root = workspace()
+    const fifo = join(root, 'pipe')
+    execFileSync('mkfifo', [fifo])
+    symlinkSync(fifo, join(root, 'pipe-link'))
+    await expect(listWorkspaceFiles(root, '', signal())).resolves.toMatchObject({ entries: [] })
   })
 
   it('honors an already-aborted request', async () => {

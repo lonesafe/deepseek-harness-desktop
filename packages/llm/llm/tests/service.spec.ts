@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import LlmRuntime, {
@@ -580,6 +580,64 @@ describe('LlmRuntime', () => {
     expect(result).toEqual(source)
     ;(result.balances[0] as { totalBalance: string }).totalBalance = 'mutated'
     expect(source.balances[0]!.totalBalance).toBe('10.2500')
+  })
+
+  it.each([
+    null,
+    'not-an-object',
+    {},
+    { isAvailable: true, balances: 'not-an-array' },
+    { isAvailable: true, balances: [null] },
+    { isAvailable: true, balances: [{ currency: '', totalBalance: '1', grantedBalance: '0', toppedUpBalance: '1' }] },
+    { isAvailable: true, balances: [{ currency: 'USD', totalBalance: 1, grantedBalance: '0', toppedUpBalance: '1' }] },
+    { isAvailable: true, balances: [{ currency: 'USD', totalBalance: 'bad', grantedBalance: '0', toppedUpBalance: '1' }] },
+    { isAvailable: true, balances: [{ currency: 'USD', totalBalance: '1', grantedBalance: 0, toppedUpBalance: '1' }] },
+    { isAvailable: true, balances: [{ currency: 'USD', totalBalance: '1', grantedBalance: 'bad', toppedUpBalance: '1' }] },
+    { isAvailable: true, balances: [{ currency: 'USD', totalBalance: '1', grantedBalance: '0', toppedUpBalance: 1 }] },
+    { isAvailable: true, balances: [{ currency: 'USD', totalBalance: '1', grantedBalance: '0', toppedUpBalance: 'bad' }] },
+    {
+      isAvailable: true,
+      balances: [
+        { currency: 'USD', totalBalance: '1', grantedBalance: '0', toppedUpBalance: '1' },
+        { currency: 'USD', totalBalance: '2', grantedBalance: '0', toppedUpBalance: '2' },
+      ],
+    },
+  ])('rejects invalid provider balance metadata %#', async (value) => {
+    const adapter = new class extends ScriptedAdapter {
+      override accountBalance(): Promise<LlmAccountBalance> {
+        return Promise.resolve(value as unknown as LlmAccountBalance)
+      }
+    }(SCRIPT)
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['route'], adapter)
+    await expect(ctx.llm.accountBalance('route')).rejects.toMatchObject({ code: 'INVALID_BALANCE' })
+  })
+
+  it('projects account balance through the Remote and maps provider failures', async () => {
+    const signal = new AbortController().signal
+    const accountBalance = vi.fn(() => Promise.resolve({ isAvailable: false, balances: [] }))
+    const adapter = new class extends ScriptedAdapter {
+      override accountBalance(provider: string, received?: AbortSignal): Promise<LlmAccountBalance> {
+        expect(provider).toBe('route')
+        expect(received).toBe(signal)
+        return accountBalance()
+      }
+    }(SCRIPT)
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['route'], adapter)
+    await expect(ctx.llm.remoteAccountBalance('route', signal)).resolves.toEqual({
+      isAvailable: false, balances: [],
+    })
+    accountBalance.mockRejectedValueOnce(new Error('balance offline'))
+    await expect(ctx.llm.remoteAccountBalance('route', signal)).rejects.toMatchObject({
+      code: 'llm/balance-failed', message: 'balance offline', details: { provider: 'route' },
+    })
+    accountBalance.mockRejectedValueOnce('plain failure')
+    await expect(ctx.llm.remoteAccountBalance('route', signal)).rejects.toMatchObject({
+      code: 'llm/balance-failed', message: 'plain failure', details: { provider: 'route' },
+    })
   })
 
   it.each([

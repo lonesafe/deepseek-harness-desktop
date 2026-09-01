@@ -64,6 +64,9 @@ export function createSyntheticExchange(frame: TunnelRequestFrame, sink: Respons
     url: frame.url,
     method: frame.method,
     headers: frame.headers,
+    // The page and worker share one process-local deployment. Host middleware
+    // reads this socket fact before dispatching plugin bundles.
+    socket: { remoteAddress: '127.0.0.1' },
     destroy: (): void => { aborted = true },
     async *[Symbol.asyncIterator](): AsyncGenerator<Uint8Array> {
       if (frame.body === undefined || frame.body.byteLength === 0) return

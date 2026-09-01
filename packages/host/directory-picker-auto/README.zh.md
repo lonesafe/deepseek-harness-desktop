@@ -1,5 +1,5 @@
 ---
-description: "目录选择 seam 的自适应选择器：在启动时判定一次 web GUI 宿主的处境，并挂载匹配的原生或浏览后端。"
+description: "目录选择 seam 的自适应选择器：启动时判定一次 Host 后端，再让回环与远程桌面页面使用各自可达的交互。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-host-directory-picker-auto` 为每次启动选出正确的目录选择交互：它在启动时一次性判定宿主处境，并把匹配的后端——[原生](../directory-picker-native/README.zh.md)或[浏览](../directory-picker-browse/README.zh.md)——连同其 browser 半侧一起，作为真实的 Loader 条目挂进内存根树。判定是一次纯函数的启动时采样：`native` 要求仅回环绑定、非 SSH 启动与可服务的显示会话；任何含糊情形都判定为处处可用的 `browse`。固定某种交互就是直接组合那个后端。挂载的能力在服务生命周期内保持稳定，符合 seam 的要求。
+`dsh-host-directory-picker-auto` 每次启动判定一次 Host 后端，并把它与 client 界面作为真实 Loader 条目挂进内存根树。判定为 browse 时，所有页面都使用应用内浏览器。判定为 native 时，挂载有人值守桌面后端，并把同一 browse 界面配置为：回环页面使用 OS 选择器，远程页面仍使用应用内浏览器。Host 能力在服务生命周期内保持稳定；页面 authority 只决定当前浏览器使用该能力公开的哪一种操作。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当同一份组合必须服务处境不同的宿主时，用本插件代替具体的后端：本地工作站会话里原生选择器可用，远程或无头会话里只有应用内浏览器可用。选择器在启动时检查一次宿主，并挂载匹配的交互。
+当一个桌面进程既可能服务本地窗口又可能服务已认证远程页面，或同一组合还要运行于远程与无头环境时，用本插件代替具体后端。选择器在启动时检查一次 Host，并挂载匹配的能力与一套 client 界面。
 
 ### 选择是如何作出的
 
@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 你会得到什么
 
-判定出的交互以普通 Loader 条目的形式到达：后端注册 `ctx.directoryPicker`，其 browser 半侧被 client 模块表发现的方式与配置行完全相同，因此 seam 的「一行同时换两面」不变式依然成立。卸载该选择器会移除该条目，连同两面一起卸载。采样每次启动恰好发生一次，因此挂载的能力在服务生命周期内保持稳定。
+后端与 client 界面以普通 Loader 条目的形式到达。判定为 browse 时，后端公开列举与创建，界面始终渲染应用内浏览器。判定为 native 时，后端公开稳定的 `adaptive` 能力，界面按 `ctx.remote.$host.isLoopback` 选择：本地窗口用原生 `pick`，远程页面用列举与创建。client 模块表发现该界面的方式与配置行完全相同。卸载选择器会移除两个条目并汇入其拆卸。
 
 ### 固定某种交互
 
@@ -41,7 +41,7 @@ kind: "package-reference"
 
 ### 可观察的失败
 
-错误的 `native` 选择会退化为后端既有的可重试失败对话框，而不是坏掉的组合；对探查无法证明其处境的部署，直接组合 `-browse` 即选择安全的交互。
+本地原生选择失败会进入既有的可重试失败对话框。远程页面绝不会尝试特权 native 调用，仍使用应用内浏览器。Host 探查无法确认显示可用时，直接组合 `-browse` 即让所有页面都使用该交互。
 
 -----
 
@@ -53,7 +53,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-选择器是一次纯决策加一次挂载：`resolveDirectoryPickerBackend` 在启动时采样宿主事实并返回一个后端类型，`apply` 把匹配的后端与界面包作为真实 Loader 条目挂进内存根树——绝不持久化到配置文件，因为根树的 `write()` 是 no-op。该 effect 的 disposer 会移除两个条目并汇合其 fiber 的拆除，因此卸载只在所挂载交互的两面（及其依赖方）完全停稳后返回。
+选择器是一次纯决策加一次挂载：`resolveDirectoryPickerBackend` 在启动时采样 Host 事实并返回后端类型，`apply` 把后端与界面作为真实 Loader 条目挂进内存根树——绝不持久化到配置文件，因为根树的 `write()` 是 no-op。两种判定都使用 `dsh-client-ui-directory-picker-browse`；仅 native 判定传入 `nativeOnLoopback: true`。该 effect 的 disposer 会移除两个条目并汇入其 fiber 的拆除。
 
 ### 判定表
 
@@ -105,9 +105,9 @@ kind: "package-reference"
 
 这些限制说明启动时采样何时会误判宿主。它们是当前包约束，不是任务积压。
 
-- **探测是从启动上下文推断操作者位置，而任何启动侧信号都无法证明这一点**——从 SSH 启动中脱离的 tmux 会话会丢失 `SSH_*` 标记；Aqua 会话之外的 Darwin 进程仍被算作有显示；在工作站本地启动、之后经 `ssh -L` 访问时，请求会从 `127.0.0.1` 到达，系统会判定 `native`，并把选择器弹在无人值守的工作站上。错误的 `native` 选择会退化为后端既有的可重试失败对话框，而对这类部署，直接组合 `-browse` 即选择安全的交互。
+- **探测可能高估显示可用性**——从 SSH 启动中脱离的 tmux 会话会丢失 `SSH_*` 标记；Aqua 会话之外的 Darwin 进程仍被算作有显示。这只影响回环页面：即使 Host 判定为 `native`，远程页面也使用应用内浏览器。错误的本地选择会进入可重试失败对话框；直接组合 `-browse` 可让所有页面都选择安全交互。
 - **Linux 选择器探查只读 `PATH`**——以其他途径可用的 zenity／kdialog（shell 别名、未装在 PATH 上）仍判定为 `browse`；把任一二进制装到 `PATH` 上，下次启动即恢复 `native` 资格。
-- **仅在启动时判定**——一次判定服务本次启动的所有客户端；按连接自适应（同一台服务器，本地浏览器用 native、远程浏览器用 browse）需要按客户端的能力对象以及 seam 未携带的协议通告，等到出现同时服务两种形态的部署再做。
+- **Host 只在启动时判定**——显示与 SSH 状态变化不会在重启前替换已挂载能力。页面级可达性仍是动态的：每个页面各自使用现有回环 authority 选择 native 或 browse，而不改变 Host 服务。
 
 <a id="dev-note"></a>
 ### 开发备注

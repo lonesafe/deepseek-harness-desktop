@@ -1,5 +1,5 @@
 ---
-description: "Adaptive chooser of the directory-picker seam: resolves the web GUI host's situation once at boot and mounts the matching native or browse backend."
+description: "Adaptive chooser of the directory-picker seam: resolves the Host backend once at boot, then serves loopback and remote desktop pages through their reachable interactions."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-host-directory-picker-auto` picks the right directory-picking interaction for every boot: it resolves the host's situation once at boot and mounts the matching backend — [native](../directory-picker-native/README.md) or [browse](../directory-picker-browse/README.md) — together with its browser half, as real Loader entries in the in-memory root tree. The resolution is one pure boot-time sample: `native` requires a loopback-only bind, a non-SSH launch, and a servable display session; anything ambiguous resolves to `browse`, which works everywhere. Pinning an interaction means composing that backend directly. The mounted capability stays stable for the service lifetime, as the seam requires.
+`dsh-host-directory-picker-auto` resolves the Host backend once per boot and mounts it with the client surface as real Loader entries in the in-memory root tree. A browse resolution serves every page through the in-app browser. A native resolution mounts the attended-desktop backend and configures the same browse surface to use the OS chooser on a loopback page while a remote page keeps the in-app browser. The Host capability stays stable for the service lifetime; page authority selects only which operation that capability exposes to the current browser.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this plugin instead of a concrete backend when the same composition must serve hosts that differ: local workstation sessions where a native chooser works, and remote or headless sessions where only the in-app browser works. The chooser inspects the host once at boot and mounts the matching interaction.
+Compose this plugin instead of a concrete backend when one desktop process may serve its local window and authenticated remote pages, or when the same composition also runs in remote and headless environments. The chooser inspects the Host once at boot and mounts the matching capability plus one client surface.
 
 ### How the choice is made
 
@@ -33,7 +33,7 @@ Compose this plugin instead of a concrete backend when the same composition must
 
 ### What you get
 
-The resolved interaction arrives as an ordinary Loader entry: the backend registers `ctx.directoryPicker`, and its browser half is discovered by the client module table exactly as a config row's would be, so the seam's one-row-swaps-both-faces invariant holds. Unloading the chooser removes the entry, unloading both faces with it. The sample happens exactly once per boot, so the mounted capability stays stable for the service lifetime.
+The backend and client surface arrive as ordinary Loader entries. For a browse resolution, the backend exposes listing and creation and the surface always renders the in-app browser. For a native resolution, the backend exposes the stable `adaptive` capability and the surface chooses by `ctx.remote.$host.isLoopback`: native `pick` for the local window, listing and creation for a remote page. The client module table discovers the surface exactly as it discovers a config row. Unloading the chooser removes both entries and joins their teardown.
 
 ### Pinning an interaction
 
@@ -41,7 +41,7 @@ Pinning is not a config field here: compose the `-native` or `-browse` row direc
 
 ### Observable failures
 
-A wrong `native` choice degrades to the backend's existing retryable failure dialog rather than a broken composition; composing `-browse` directly selects the safe interaction for deployments whose situation the probe cannot prove.
+A local native failure reaches the existing retryable failure dialog. Remote pages never attempt the privileged native call; they retain the in-app browser. Composing `-browse` directly selects that interaction for every page when the Host probe cannot establish a usable display.
 
 -----
 
@@ -53,7 +53,7 @@ A wrong `native` choice degrades to the backend's existing retryable failure dia
 
 ### Design concept
 
-The chooser is a pure decision plus a mount: `resolveDirectoryPickerBackend` samples host facts once at boot and returns a backend kind, and `apply` mounts the matching backend and surface packages as real Loader entries in the in-memory root tree — never persisted to a config file, because the root tree's `write()` is a no-op. The effect's disposer removes both entries and joins their fibers' teardown, so unloading returns only after both faces of the mounted interaction quiesced.
+The chooser is a pure decision plus a mount: `resolveDirectoryPickerBackend` samples Host facts once at boot and returns a backend kind, and `apply` mounts the backend and surface as real Loader entries in the in-memory root tree — never persisted to a config file, because the root tree's `write()` is a no-op. Both kinds use `dsh-client-ui-directory-picker-browse`; only the native resolution passes `nativeOnLoopback: true`. The effect's disposer removes both entries and joins their fibers' teardown.
 
 ### The resolution table
 
@@ -105,9 +105,9 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define when the boot-time sample can misjudge the host. They are current package constraints, not a task backlog.
 
-- **Detection infers operator location from launch context, which no launch-side signal can prove** — a tmux session detached from its SSH launch loses the `SSH_*` markers; a Darwin process outside an Aqua session still counts as displayed; and a workstation-local launch later reached through `ssh -L` arrives from `127.0.0.1`, resolves `native`, and opens the chooser on the unattended workstation. A wrong `native` choice degrades to the backend's existing retryable failure dialog, and composing `-browse` directly selects the safe interaction for such deployments.
+- **Detection can overestimate display availability** — a tmux session detached from its SSH launch loses the `SSH_*` markers, and a Darwin process outside an Aqua session still counts as displayed. This affects only loopback pages: remote pages use the in-app browser even when the Host resolved `native`. A wrong local choice reaches the retryable failure dialog; composing `-browse` directly selects the safe interaction for every page.
 - **The Linux chooser probe reads `PATH` only** — a zenity/kdialog reachable some other way (shell alias, non-PATH install) still resolves `browse`; installing either binary on `PATH` restores `native` eligibility at the next boot.
-- **Boot-time only** — one resolution serves every client of the boot; per-connection adaptivity (native for a local browser, browse for a remote one, same server) would need a per-client capability and the wire advertisement the seam does not carry, and waits for a deployment that serves both at once.
+- **The Host resolution is boot-time only** — display and SSH changes do not replace the mounted capability until restart. Page-level reachability remains dynamic: each page independently uses its existing loopback authority to choose native or browse without changing the Host service.
 
 <a id="dev-note"></a>
 ### Dev Note

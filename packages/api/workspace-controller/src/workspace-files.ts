@@ -1,7 +1,7 @@
 /** Bounded, read-only filesystem projection for registered Workspaces. */
 
 import { opendir, open, realpath, stat } from 'node:fs/promises'
-import { extname, isAbsolute, join, relative, sep } from 'node:path'
+import { basename, extname, isAbsolute, join, relative, sep } from 'node:path'
 import type {
   WorkspaceFileEntry, WorkspaceFileListing, WorkspaceFilePreview,
 } from './types.ts'
@@ -20,6 +20,11 @@ export class WorkspaceFileError extends Error {
     super(message)
     this.name = 'WorkspaceFileError'
   }
+}
+
+function filesystemErrorMessage(error: unknown): string {
+  /* v8 ignore next -- node:fs/promises rejects filesystem operations with Error instances. */
+  return error instanceof Error ? error.message : String(error)
 }
 
 const IMAGE_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
@@ -117,7 +122,7 @@ async function resolveInside(root: string, path: string): Promise<string> {
     if (error instanceof WorkspaceFileError) throw error
     throw new WorkspaceFileError(
       'workspace/file-unreadable',
-      `Workspace file path is unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      `Workspace file path is unavailable: ${filesystemErrorMessage(error)}`,
     )
   }
 }
@@ -128,7 +133,7 @@ async function resolveRoot(workspaceRoot: string): Promise<string> {
   } catch (error: unknown) {
     throw new WorkspaceFileError(
       'workspace/file-unreadable',
-      `Workspace root is unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      `Workspace root is unavailable: ${filesystemErrorMessage(error)}`,
     )
   }
 }
@@ -154,12 +159,14 @@ export async function listWorkspaceFiles(
   let info
   try {
     info = await stat(directory)
+  /* v8 ignore start -- removing the target between successful realpath and stat is a host filesystem race. */
   } catch (error: unknown) {
     throw new WorkspaceFileError(
       'workspace/file-unreadable',
-      `Workspace directory cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+      `Workspace directory cannot be read: ${filesystemErrorMessage(error)}`,
     )
   }
+  /* v8 ignore stop */
   if (!info.isDirectory()) {
     throw new WorkspaceFileError('workspace/file-unreadable', 'Workspace file listing target is not a directory.')
   }
@@ -198,7 +205,7 @@ export async function listWorkspaceFiles(
     if (signal.aborted) signal.throwIfAborted()
     throw new WorkspaceFileError(
       'workspace/file-unreadable',
-      `Workspace directory cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+      `Workspace directory cannot be read: ${filesystemErrorMessage(error)}`,
     )
   }
   entries.sort((left, right) => {
@@ -218,7 +225,7 @@ function mimeFor(path: string): string {
 function textKind(path: string): 'markdown' | 'text' | undefined {
   const extension = extname(path).toLowerCase()
   if (MARKDOWN_EXTENSIONS.has(extension)) return 'markdown'
-  if (TEXT_MIME_BY_EXTENSION[extension] !== undefined || TEXT_FILENAMES.has(path.split('/').at(-1)?.toLowerCase() ?? '')) {
+  if (TEXT_MIME_BY_EXTENSION[extension] !== undefined || TEXT_FILENAMES.has(basename(path).toLowerCase())) {
     return 'text'
   }
   return undefined
@@ -256,7 +263,7 @@ export async function readWorkspaceFile(
   } catch (error: unknown) {
     throw new WorkspaceFileError(
       'workspace/file-unreadable',
-      `Workspace file cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+      `Workspace file cannot be read: ${filesystemErrorMessage(error)}`,
     )
   }
   try {
@@ -266,7 +273,7 @@ export async function readWorkspaceFile(
     }
     const common = {
       path,
-      name: path.split('/').at(-1) ?? path,
+      name: basename(path),
       mime: mimeFor(path),
       size: info.size,
       modifiedAt: info.mtime.toISOString(),
@@ -276,6 +283,7 @@ export async function readWorkspaceFile(
     }
     const data = await handle.readFile()
     signal.throwIfAborted()
+    /* v8 ignore next -- reaching this guard requires the open file to grow between descriptor stat and read. */
     if (data.byteLength > WORKSPACE_FILE_PREVIEW_MAX_BYTES) {
       return { ...common, size: data.byteLength, kind: 'unsupported', encoding: 'none', content: '', reason: 'too-large' }
     }

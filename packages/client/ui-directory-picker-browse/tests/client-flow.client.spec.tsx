@@ -183,11 +183,14 @@ describe('directory-picker-browse client half', () => {
     const injected = (entry.inject as () => {
       listDirectory: (path?: string) => Promise<DirectoryListing>
       createDirectory: (path: string, name: string) => Promise<string>
+      pick: () => Promise<string | null>
     })()
     await expect(injected.listDirectory()).resolves.toBe(homeListing)
     await expect(injected.createDirectory(HOME, 'fresh')).resolves.toBe(`${HOME}/fresh`)
+    await expect(injected.pick()).resolves.toBeNull()
     expect(b.listDirectory).toHaveBeenCalledOnce()
     expect(b.createDirectory).toHaveBeenCalledWith(HOME, 'fresh')
+    expect(b.pickDirectory).toHaveBeenCalledOnce()
   })
 
   it('adapts the owner conversation onto the dialog: confirm picks, dismissal cancels', async () => {
@@ -228,6 +231,110 @@ describe('directory-picker-browse client half', () => {
       />,
     )
     expect(view.container.innerHTML).toBe('')
+  })
+
+  it('uses the native chooser only for an adaptive loopback page', async () => {
+    const picked = owner()
+    const pick = vi.fn(async () => '/native/workspace')
+    const view = render(
+      <BrowseDirectoryFlow
+        {...picked}
+        listDirectory={vi.fn(async () => homeListing)}
+        createDirectory={vi.fn(async () => '')}
+        pick={pick}
+        isLoopback
+        nativeOnLoopback
+        t={key => key}
+      />,
+    )
+    expect(view.container.innerHTML).toBe('')
+    await waitFor(() => { expect(picked.onPicked).toHaveBeenCalledWith('/native/workspace') })
+    view.unmount()
+
+    const cancelled = owner()
+    render(
+      <BrowseDirectoryFlow
+        {...cancelled}
+        listDirectory={vi.fn(async () => homeListing)}
+        createDirectory={vi.fn(async () => '')}
+        pick={vi.fn(async () => null)}
+        isLoopback
+        nativeOnLoopback
+        t={key => key}
+      />,
+    )
+    await waitFor(() => { expect(cancelled.onCancel).toHaveBeenCalledOnce() })
+  })
+
+  it.each([new Error('native failed'), 'string failure'])('reports native chooser failure %s', async (reason) => {
+    const props = owner()
+    render(
+      <BrowseDirectoryFlow
+        {...props}
+        listDirectory={vi.fn(async () => homeListing)}
+        createDirectory={vi.fn(async () => '')}
+        pick={vi.fn(async () => { throw reason })}
+        isLoopback
+        nativeOnLoopback
+        t={key => key}
+      />,
+    )
+    await waitFor(() => {
+      expect(props.onError).toHaveBeenCalledWith(reason instanceof Error ? reason.message : reason)
+    })
+  })
+
+  it('re-arms after close and ignores a native result after unmount', async () => {
+    const props = owner({ open: false })
+    const first = Promise.withResolvers<string | null>()
+    const second = Promise.withResolvers<string | null>()
+    const pick = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+    const injected = {
+      listDirectory: vi.fn(async () => homeListing),
+      createDirectory: vi.fn(async () => ''),
+      pick,
+      isLoopback: true,
+      nativeOnLoopback: true,
+      t: (key: string) => key,
+    }
+    const view = render(<BrowseDirectoryFlow {...props} {...injected} />)
+    expect(pick).not.toHaveBeenCalled()
+    view.rerender(<BrowseDirectoryFlow {...props} open {...injected} />)
+    await waitFor(() => { expect(pick).toHaveBeenCalledOnce() })
+    view.rerender(<BrowseDirectoryFlow {...props} open={false} {...injected} />)
+    view.rerender(<BrowseDirectoryFlow {...props} open {...injected} />)
+    await waitFor(() => { expect(pick).toHaveBeenCalledTimes(2) })
+    first.resolve('/stale')
+    await Promise.resolve()
+    expect(props.onPicked).toHaveBeenCalledWith('/stale')
+    view.unmount()
+    second.resolve('/late')
+    await Promise.resolve()
+    expect(props.onPicked).not.toHaveBeenCalledWith('/late')
+  })
+
+  it('keeps one native chooser armed and ignores a rejected result after unmount', async () => {
+    const props = owner()
+    const pending = Promise.withResolvers<string | null>()
+    const pick = vi.fn(() => pending.promise)
+    const injected = {
+      listDirectory: vi.fn(async () => homeListing),
+      createDirectory: vi.fn(async () => ''),
+      isLoopback: true,
+      nativeOnLoopback: true,
+      t: (key: string) => key,
+    }
+    const view = render(<BrowseDirectoryFlow {...props} {...injected} pick={pick} />)
+    await waitFor(() => { expect(pick).toHaveBeenCalledOnce() })
+    const replacement = vi.fn(async () => '/duplicate')
+    view.rerender(<BrowseDirectoryFlow {...props} {...injected} pick={replacement} />)
+    expect(replacement).not.toHaveBeenCalled()
+    view.unmount()
+    pending.reject(new Error('late failure'))
+    await Promise.resolve()
+    expect(props.onError).not.toHaveBeenCalled()
   })
 })
 

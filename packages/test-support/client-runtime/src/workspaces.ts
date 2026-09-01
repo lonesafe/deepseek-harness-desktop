@@ -158,7 +158,7 @@ export class TestWorkspaces implements IWorkspaces {
     if (stub !== undefined) return await (stub(workspaceId, path, signal) as Promise<WorkspaceFilePreview>)
     return {
       path,
-      name: path.split('/').at(-1) ?? path,
+      name: path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1),
       mime: 'text/plain',
       size: 0,
       modifiedAt: '2026-01-01T00:00:00.000Z',

@@ -246,6 +246,15 @@ describe('loadWin32DialogBindings over the fake COM world', () => {
     // The shell item is released even when its display name cannot be read.
     expect(nameWorld.released).toEqual(['item', 'dialog'])
     expect(nameWorld.freed).toHaveLength(0)
+
+    vi.doUnmock('koffi')
+    vi.resetModules()
+    const nullNameWorld = comWorld({ path: null as unknown as string })
+    installFakeKoffi(nullNameWorld)
+    bindings = await (await loadBindingsModule()).loadWin32DialogBindings()
+    expect(() => runFolderDialog(bindings, 'Pick', vi.fn()))
+      .toThrow('GetDisplayName returned a null filesystem path')
+    expect(nullNameWorld.released).toEqual(['item', 'dialog'])
   })
 })
 

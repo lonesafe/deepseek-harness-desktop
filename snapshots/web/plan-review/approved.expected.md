@@ -9,6 +9,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Files"
 - img
 - text: plan Plan mode on. Use /plan off to leave.
 - button "System prompt":

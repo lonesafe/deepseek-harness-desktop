@@ -29,9 +29,9 @@ const SETTLED_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'settled-expanded.expected.
 const MODE = webSnapshotMode()
 // The question composer replaces the textarea, so fill → Queue row → Steer
 // starts only after request/context and must finish before the first replay
-// chunk. The compact canonical call plus 500 ms pacing gives loaded CI enough
+// chunk. The compact canonical call plus one-second pacing gives loaded CI enough
 // time without stretching a long provider-authored chunk sequence.
-const REPLAY_PACE_MS = 500
+const REPLAY_PACE_MS = 1_000
 
 const PROMPT = 'Use the ask_user_question tool to ask me exactly one question with id "checkpoint", question "Ready to continue?", header "Checkpoint", and options labeled "Yes" and "No". After I answer, reply with one short sentence acknowledging my answer and stop.'
 const STEER = 'Interjection: include the word BANANA in your final reply.'

@@ -1,5 +1,5 @@
 ---
-description: "Native-OS-chooser backend of the directory-picker seam: opens one platform chooser per pick for operators sitting at the web GUI host's display."
+description: "Attended-desktop backend of the directory-picker seam: native selection for loopback pages plus browser listing and creation for remote pages."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-An operator at the host's display picks a workspace directory through a native OS chooser: `dsh-host-directory-picker-native` opens one platform directory chooser per pick and resolves the chosen absolute path (`null` on cancel). macOS drives `osascript`, Linux uses Zenity with a KDialog fallback, and Windows opens the modern `IFileOpenDialog` in a spawned child process. Only viable when the operator sits at the host's display — remote deployments compose the [browse backend](../directory-picker-browse/README.md) instead. One composition row also registers the matching browser-side interaction in the workspace flow, so it selects both sides.
+`dsh-host-directory-picker-native` is the attended-desktop backend: it registers one stable `adaptive` capability containing the native OS chooser for a loopback page and the listing and creation primitives an authenticated remote page needs for in-app browsing. macOS drives `osascript`, Linux uses Zenity with a KDialog fallback, and Windows opens the modern `IFileOpenDialog` in a spawned child process. The [adaptive chooser](../directory-picker-auto/README.md) mounts this backend only when the Host has a servable display and pairs it with the browse client surface, which selects the reachable interaction per page.
 
 ## Table of Contents
 
@@ -25,19 +25,19 @@ An operator at the host's display picks a workspace directory through a native O
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this backend when the operator works at the host's display and a native chooser is the right interaction. A workspace flow that opens a directory picker calls `pick(signal)` once per open request; the returned promise resolves with the chosen absolute path, or `null` when the operator cancels.
+Compose this backend for an attended desktop that may serve both its local window and remote browsers. A loopback workspace flow calls `pick(signal)` once per open request; a remote flow calls `list(path?, signal)` and `createDirectory(path, name)` through the in-app browser. The capability object and all three operation identities remain stable for the service lifetime.
 
 ### When to choose it
 
-Choose this backend for a workstation-local operator on macOS, Windows, or desktop Linux. Choose the [browse backend](../directory-picker-browse/README.md) when clients cannot reach an OS chooser — remote browsers, SSH-forwarded sessions, or unattended hosts. When the situation varies, the [adaptive chooser](../directory-picker-auto/README.md) resolves it at boot.
+Choose this backend for an attended workstation on macOS, Windows, or desktop Linux, including one that accepts authenticated remote browsers. Choose the [browse backend](../directory-picker-browse/README.md) for SSH and unattended hosts with no usable display. The [adaptive chooser](../directory-picker-auto/README.md) makes that Host-level decision at boot and keeps remote pages on the browser interaction even when it resolves native.
 
 ### What an operator experiences
 
-Each call opens one native chooser on the host display and waits for the operator; aborting the caller's signal terminates the chooser process instead of leaving it open. On Linux the chooser needs either Zenity or KDialog installed; with neither present, `pick` rejects with an actionable error instead of falling back to a typed-path prompt. The browser half of this package registers a renderless flow occupant into the workspace flow — every `open` request drives `directoryPicker/pick` and reports the one outcome (picked path, cancel, or failure).
+A loopback page opens one native chooser on the Host display and waits for the operator; aborting the caller's signal terminates the chooser process instead of leaving it open. On Linux the chooser needs either Zenity or KDialog installed. A remote page never opens a dialog on that display: the paired browse surface lists, navigates, and creates directories through the same adaptive capability.
 
 ### Observable failures
 
-A cancel returns `null`, not an error. Missing platform tooling, a failed chooser launch, or an aborted pick surfaces as a rejection the UI can present; the [browse backend](../directory-picker-browse/README.md) remains the composition-level fallback for deployments where native picking is unreliable.
+A native cancel returns `null`, not an error. Missing platform tooling, a failed chooser launch, or an aborted local pick surfaces as a rejection the UI can present. Remote browse errors retain the typed directory-picker failure vocabulary. The [browse backend](../directory-picker-browse/README.md) remains the Host-level choice when no local native interaction is viable.
 
 -----
 
@@ -49,7 +49,7 @@ A cancel returns `null`, not an error. Missing platform tooling, a failed choose
 
 ### Design concept
 
-The backend is a thin service over a platform chooser: `NativeDirectoryPicker` registers the `native` capability whose `pick` forwards to `pickNativeDirectory`, and the chooser runs as a subprocess so the host process never blocks on the dialog. The command boundary (`DirectoryPickerRunner`) and platform facts are injectable, and the shared no-shell subprocess runner lives in [`dsh-native-command`](../../util/native-command/README.md).
+`NativeDirectoryPicker` combines two maintained implementations behind one stable `adaptive` capability. `pick` forwards to `pickNativeDirectory`; `list` and `createDirectory` forward to the browse capability created by `dsh-host-directory-picker-browse`. Native choosers run as subprocesses so the Host process never blocks on a dialog. The command boundary (`DirectoryPickerRunner`) and platform facts are injectable, and the shared no-shell subprocess runner lives in [`dsh-native-command`](../../util/native-command/README.md).
 
 ### Platform mechanics
 
@@ -59,7 +59,7 @@ Platform tools run without a shell: `osascript` on macOS, and Zenity with a KDia
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `NativeDirectoryPicker` service with the stable `native` capability |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `NativeDirectoryPicker` service with the stable `adaptive` capability |
 | [`src/native-picker.ts`](src/native-picker.ts) | Chooser dispatch: platform selection, subprocess running, abort wiring |
 | [`src/win32-dialog.ts`](src/win32-dialog.ts) + siblings | Windows child-process `IFileOpenDialog` via koffi, DPI handling, `WM_CLOSE` abort |
 
@@ -72,7 +72,7 @@ Platform tools run without a shell: `osascript` on macOS, and Zenity with a KDia
 
 Read these when the backend contract is not enough: the seam definition first, then the alternative backend and the chooser that selects between them.
 
-- [Directory-picker seam](../directory-picker/README.md) — the `native` capability contract and the typed error vocabulary.
+- [Directory-picker seam](../directory-picker/README.md) — the `adaptive` capability contract and the typed error vocabulary.
 - [Directory-picker capability seam decision](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.md) — why backends differ in interaction shape.
 - [Browse backend](../directory-picker-browse/README.md) — the in-app alternative for remote clients.
 - [Adaptive chooser](../directory-picker-auto/README.md) — boot-time resolution between native and browse.
@@ -96,8 +96,8 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define when the native interaction is unavailable or fragile. They are current package constraints, not a task backlog.
 
-- **Linux requires desktop tooling** — with neither Zenity nor KDialog installed, `pick` rejects with an actionable error; it does not fall back to a typed-path prompt (the browse backend is that fallback at the composition level).
-- **Windows has no mechanism fallback** — the child-process picker through packaged koffi is the only native tier, so a COM refusal or dialog crash surfaces the failure; the browse backend remains the fallback at the composition level.
+- **Linux requires desktop tooling for loopback native selection** — with neither Zenity nor KDialog installed, `pick` rejects with an actionable error. Remote pages remain able to browse; the auto chooser resolves the fixed browse backend when its startup probe sees neither tool.
+- **Windows has no native mechanism fallback** — the child-process picker through packaged koffi is the only native tier, so a COM refusal or dialog crash surfaces to the loopback page. Remote browsing is independent of that tier.
 
 <a id="dev-note"></a>
 ### Dev Note

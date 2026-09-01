@@ -1,5 +1,5 @@
 ---
-description: "面向 web GUI 宿主的工作区目录选择 seam：原生与浏览后端所实现的服务约定、能力词汇与错误码。"
+description: "面向 web GUI Host 的工作区目录选择 seam：固定 native 与 browse 交互、adaptive 桌面能力及带类型的 browse 错误。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-web GUI 宿主通过一份约定让操作者选择工作区目录：一个只提供一个方法的服务，该方法报告所组合后端提供的是哪种交互。后端之间的差异在于交互形态，而不仅仅是机制——原生后端在宿主屏幕上打开一个 OS 选择器，浏览后端则为应用内浏览器提供列举与创建原语，也能服务于远程客户端。消费方按报告的能力类型分支；新后端无需修改本包即可扩展能力词汇。该 seam 只服务 GUI 宿主，绝不进入 agent loop；后端与协议映射就在它旁边。
+web GUI Host 通过一项服务让操作者选择工作区目录；其唯一方法报告当前组合的交互。固定 native provider 打开 OS 选择器，固定 browse provider 为应用内浏览器提供列举与创建，而有人值守桌面把两者作为一份稳定的 adaptive 能力公开，让回环窗口与已认证远程页面在不替换 Host 服务的前提下使用可达交互。消费方按能力类型分支。该 seam 只服务 GUI Host，绝不进入 agent loop。
 
 ## 目录
 
@@ -29,11 +29,11 @@ web GUI 宿主通过一份约定让操作者选择工作区目录：一个只提
 
 ### 选择后端
 
-当操作者坐在宿主屏幕前时，[原生后端](../directory-picker-native/README.zh.md)是正确选择：`directoryPicker/pick` 打开一个 OS 选择器，返回所选绝对路径，取消时返回 `null`。[浏览后端](../directory-picker-browse/README.zh.md)处处可用——它在浏览器中列举一个目录层级并创建子目录，因此无法触达 OS 对话框的远程客户端依然能选择工作区。当宿主处境在两次启动之间变化时，组合[自适应选择器](../directory-picker-auto/README.zh.md)，它在启动时判定一次处境并挂载匹配的后端。
+[有人值守桌面后端](../directory-picker-native/README.zh.md)向回环页面公开原生选择，向远程页面公开浏览操作。[浏览后端](../directory-picker-browse/README.zh.md)处处可用，是无头或仅远程 Host 的固定选择。当同一应用组合必须在启动时判定这项 Host 级选择时，组合[自适应选择器](../directory-picker-auto/README.zh.md)。
 
 ### 能力约定
 
-`capability()` 返回一个可辨识联合类型，说明操作者如何选择目录：OS 选择器为 `{ kind: 'native', pick(signal) }`，应用内浏览器为 `{ kind: 'browse', list(path?), createDirectory(path, name) }`。消费方按 `kind` 分支；某个组合没有实现的能力类型意味着界面隐藏选择入口，而不是失败。浏览失败抛出带类型的 `DirectoryPickerError`，其错误码集合是封闭的——`directory-unreadable`、`directory-exists` 或 `directory-create-failed`——每个都携带出错对象的路径，选目录 Remote controller 将其 1:1 映射为协议错误码。
+`capability()` 返回一个可辨识联合类型：固定 OS 选择器为 `{ kind: 'native', pick(signal) }`，固定应用内浏览器为 `{ kind: 'browse', list(path?), createDirectory(path, name) }`，有人值守桌面为 `{ kind: 'adaptive', pick(signal), list(path?), createDirectory(path, name) }`。消费方按 `kind` 分支；未知能力会隐藏入口而非失败。浏览失败抛出 `DirectoryPickerError`，封闭错误码为 `directory-unreadable`、`directory-exists` 与 `directory-create-failed`。
 
 ### 行携带什么
 
@@ -53,7 +53,7 @@ web GUI 宿主通过一份约定让操作者选择工作区目录：一个只提
 
 ### 可合并扩展的词汇表
 
-`DirectoryPickerCapabilities` 是以能力类型为键的可合并扩展映射，`DirectoryPickerCapability` 从它派生联合类型。新后端在此通过声明合并且只修改这里（条目的 `kind` 字面量必须等于其键），而不改动本包。每个后端包还随附一个 browser 入口，在 ui-workspace 的 directory-flow slot 中注册匹配的交互，因此一行组合配置同时选择宿主能力与客户端流程。
+`DirectoryPickerCapabilities` 是以能力类型为键的可合并扩展映射，`DirectoryPickerCapability` 从它派生联合类型。当前映射包含 `native`、`browse` 与 `adaptive`；未来 provider 通过声明合并加入条目，而不是替换联合。client 界面是与 Host 后端并列挂载的独立包：auto 选择器把 adaptive 后端与配置为仅在回环页面选择 native 的 browse 界面配对。
 
 ### 源码地图
 
@@ -75,9 +75,9 @@ web GUI 宿主通过一份约定让操作者选择工作区目录：一个只提
 当 seam 约定不够用时阅读以下内容：先看决策记录，再看组合它的两个后端与自适应选择器。
 
 - [目录选择能力 seam 决策](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.zh.md)——设计依据、`ctx.fs` 切分与策略裁决。
-- [原生后端](../directory-picker-native/README.zh.md)——OS 选择器交互及其平台工具。
+- [有人值守桌面后端](../directory-picker-native/README.zh.md)——adaptive 交互及其原生平台工具。
 - [浏览后端](../directory-picker-browse/README.zh.md)——面向远程客户端的应用内列举与创建交互。
-- [自适应选择器](../directory-picker-auto/README.zh.md)——两个后端之间的启动时判定。
+- [自适应选择器](../directory-picker-auto/README.zh.md)——Host 级启动判定与页面级交互选择。
 - [工作区子系统](../../../docs/subsystems/workspace.zh.md)——被选目录所喂给的工作区记录。
 
 -----

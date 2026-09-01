@@ -2,12 +2,11 @@
  * Service Definition for the `ctx.directoryPicker` capability seam: how the web-GUI host lets an operator
  * select a workspace directory. Backends differ in interaction shape, not
  * just mechanism, so the service exposes a discriminated capability instead
- * of one method set: a `native` backend opens one OS chooser on the
- * host's display, while a `browse` backend serves listing/creation primitives
- * for an in-app browser (and thereby works for remote clients no OS dialog
- * can reach). Consumers switch on `capability().kind`; the union is
- * merge-extensible, and the documented default for an unknown kind is to
- * hide the picking affordance rather than fail.
+ * of one method set: `native` opens one OS chooser, `browse` serves listing
+ * and creation primitives, and an attended desktop exposes `adaptive` so
+ * loopback and remote pages use their reachable interaction without replacing
+ * the Host service. Consumers switch on `capability().kind`; the union is
+ * merge-extensible, and an unknown kind hides the picking affordance.
  * @module @deepseek-ai/dsh-host-directory-picker
  */
 

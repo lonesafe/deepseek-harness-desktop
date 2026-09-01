@@ -2,6 +2,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import NativeDirectoryPicker from '../src/index.ts'
 
 describe('NativeDirectoryPicker', () => {
@@ -17,5 +20,20 @@ describe('NativeDirectoryPicker', () => {
     expect(picker!.capability()).toBe(capability)
     await fiber.dispose()
     expect(ctx.get('directoryPicker')).toBeUndefined()
+  })
+
+  it('forwards remote browsing through the adaptive capability', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-native-picker-'))
+    const ctx = new Context()
+    const fiber = await ctx.plugin(NativeDirectoryPicker)
+    try {
+      const capability = ctx.directoryPicker.capability()
+      if (capability.kind !== 'adaptive') throw new Error(`expected adaptive capability, received ${capability.kind}`)
+      await expect(capability.list(root, new AbortController().signal)).resolves.toMatchObject({ path: root })
+      await expect(capability.createDirectory(root, 'created')).resolves.toBe(join(root, 'created'))
+    } finally {
+      await fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
   })
 })

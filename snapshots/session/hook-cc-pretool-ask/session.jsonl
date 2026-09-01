@@ -23,7 +23,7 @@
 {"type":"tool/call","data":{"turn":1,"step":1,"callId":"call_00_6k0oGSliVHxGSgqBmMEO4311","name":"bash","arguments":"{\"command\": \"echo HELLO\", \"description\": \"Echo HELLO\"}"}}
 {"type":"hook/invoked","data":{"turn":1,"point":"PreToolUse","dialect":"claude-code","handlerId":"claude-code:PreToolUse:1","matcher":"bash"}}
 {"type":"hook/result","data":{"turn":1,"point":"PreToolUse","handlerId":"claude-code:PreToolUse:1","decision":"ask","exitCode":0,"durationMs":4.231499999999869}}
-{"type":"approval/asked","data":{"id":"{{approval:1}}","toolName":"bash","callId":"call_00_6k0oGSliVHxGSgqBmMEO4311","reason":"bash requires manual approval in this session"}}
+{"type":"approval/asked","data":{"id":"{{approval:1}}","toolName":"bash","callId":"call_00_6k0oGSliVHxGSgqBmMEO4311","reason":"bash requires manual approval in this session","alwaysAllowKey":"tool:bash"}}
 {"type":"approval/decided","data":{"id":"{{approval:1}}","outcome":"rejected"}}
 {"type":"tool/result","data":{"turn":1,"step":1,"message":{"source":{"kind":"tool","callId":"call_00_6k0oGSliVHxGSgqBmMEO4311"},"content":[{"type":"tool-result","toolCallId":"call_00_6k0oGSliVHxGSgqBmMEO4311","content":[{"type":"text","text":"Error: the user rejected tool \"bash\""}],"isError":true}],"role":"user","id":"{{message:4}}"}},"sourceEventSeqs":[61],"surfaceOp":"append"}
 {"type":"step/end","data":{"turn":1,"step":1}}

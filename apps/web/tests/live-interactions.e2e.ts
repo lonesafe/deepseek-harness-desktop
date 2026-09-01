@@ -185,6 +185,10 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     // frozen-partial swap is eventually consistent, so poll rather than count.
     await expect.poll(() => page.locator('[data-composer-input]').first().isEnabled(), { timeout: 10_000 }).toBe(true)
     await expect.poll(() => page.locator('[data-streaming="true"]').count(), { timeout: 10_000 }).toBe(0)
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    await page.getByRole('button', { name: 'Send message', exact: true }).hover({ force: true })
+    await page.getByRole('tooltip').filter({ hasText: 'Send message' }).waitFor({ timeout: 10_000 })
+    expect(await page.getByRole('tooltip').allTextContents()).toEqual(['Send message'])
     // Golden of the aborted end-state: the prompt bubble plus the frozen
     // partial ('partial' is the hang entry's replayed prefix) and no more.
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)

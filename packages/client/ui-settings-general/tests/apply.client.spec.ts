@@ -8,6 +8,7 @@ import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-settings-general/client'
 import { CloseLabel, HeaderContent, TriggerContent } from '../src/client/chrome.tsx'
+import { DesktopRemoteAccessRow } from '../src/client/DesktopRemoteAccessRow.tsx'
 import { GeneralSection } from '../src/client/GeneralSection.tsx'
 import { SettingsDocumentAction } from '../src/client/SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from '../src/client/SettingsDocumentAction.tsx'
@@ -181,6 +182,22 @@ describe('ui-settings-general apply', () => {
     expect(b.settingsDescribe).not.toHaveBeenCalled()
     await fiber.dispose()
     for (const [name] of SEATS) expect(b.slots.entries(name)).toEqual([])
+  })
+
+  it('registers the remote-access row only in a desktop renderer', async () => {
+    vi.stubGlobal('location', {
+      search: '?dsh_desktop_version=1.0.0&dsh_desktop_platform=darwin&dsh_desktop_arch=arm64&dsh_update_origin=https%3A%2F%2Fdsh.roubsite.com',
+    })
+    try {
+      const b = await bench()
+      declare(b.slots)
+      await b.ctx.plugin({ inject: [...inject], apply }).await()
+      const entry = b.slots.entries('settings.general.item')[0]!
+      expect(entry.component).toBe(DesktopRemoteAccessRow)
+      expect(entry.options).toMatchObject({ id: 'desktop-remote-access', order: 30 })
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('re-registers after an HMR collapse of the declaring chain (stale disposers must not block)', async () => {

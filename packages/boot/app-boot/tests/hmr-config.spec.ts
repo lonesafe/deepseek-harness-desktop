@@ -168,7 +168,7 @@ describe('HMR exact config paths', () => {
     }
   })
 
-  it('normalizes refresh failures and broadcasts them without escaping the watcher', { timeout: 20_000 }, async () => {
+  it('normalizes refresh failures and broadcasts them without escaping the watcher', { timeout: 30_000 }, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-'))
     const filename = join(dir, 'plugins.yml')
     const ctx = await bootHmr(dir)

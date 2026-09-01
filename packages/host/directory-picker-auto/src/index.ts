@@ -4,10 +4,10 @@
  * chooser binary) and mounts the matching interaction — `native` or `browse`
  * — as real Loader entries in the in-memory root tree. Each interaction is a
  * pair: the Host backend serving the seam capability and the client surface
- * occupying ui-workspace's directory-flow holes. Both arrive as ordinary
- * entries, so the surface is discovered exactly as a config-row's would be
- * and one resolved choice still swaps both faces; pinning an interaction
- * remains composing that pair directly instead of this row.
+ * occupying ui-workspace's directory-flow holes. A native resolution uses
+ * the browse surface in adaptive mode so loopback pages pick natively while
+ * remote pages browse. Both arrive as ordinary entries, so the surface is
+ * discovered exactly as a config row's would be.
  * @module @deepseek-ai/dsh-host-directory-picker-auto
  */
 
@@ -40,11 +40,11 @@ export const BACKEND_PACKAGES: Record<DirectoryPickerBackendKind, string> = {
 }
 
 /**
- * Client surface package per resolved kind, mounted with its backend so one
- * resolved interaction still composes both faces. Declared as dependencies by
- * every composing app for the same reason as {@link BACKEND_PACKAGES}. Only the
- * specifier is referenced here because the packages belong to the Client
- * program, so no import of them exists on this side.
+ * Client surface package per resolved kind. Both kinds use the browse surface;
+ * a native resolution enables its loopback-only native arm. Declared as a
+ * dependency by every composing app for the same reason as
+ * {@link BACKEND_PACKAGES}. Only the specifier is referenced here because the
+ * package belongs to the Client program, so no import exists on this side.
  */
 export const SURFACE_PACKAGES: Record<DirectoryPickerBackendKind, string> = {
   native: '@deepseek-ai/dsh-client-ui-directory-picker-browse',

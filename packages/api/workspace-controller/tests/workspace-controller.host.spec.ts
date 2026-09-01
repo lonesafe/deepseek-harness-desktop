@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -73,6 +73,44 @@ async function nextFrame(
 }
 
 describe('WorkspaceController commands', () => {
+  it('projects bounded Workspace files and maps stable Remote failures', async () => {
+    const { controller, root } = await harness()
+    const path = stageDir(root, 'files')
+    writeFileSync(join(path, 'README.md'), '# Files\n')
+    const created = await controller.create({ path })
+    const workspaceId = created.workspace.workspaceId
+
+    await expect(controller.listFiles({ workspaceId }, new AbortController().signal)).resolves.toMatchObject({
+      path: '', entries: [{ name: 'README.md', path: 'README.md', kind: 'file' }], truncated: false,
+    })
+    await expect(controller.readFile({ workspaceId, path: 'README.md' }, new AbortController().signal))
+      .resolves.toMatchObject({ kind: 'markdown', content: '# Files\n' })
+    await expect(controller.listFiles({ workspaceId, path: 'missing' }, new AbortController().signal))
+      .rejects.toMatchObject({
+        code: 'workspace/file-unreadable', details: { workspaceId, path: 'missing' },
+      })
+    await expect(controller.readFile({ workspaceId, path: '' }, new AbortController().signal))
+      .rejects.toMatchObject({
+        code: 'workspace/file-invalid-path', details: { workspaceId, path: '' },
+      })
+    await expect(controller.listFiles({ workspaceId: 'missing' as WorkspaceId }, new AbortController().signal))
+      .rejects.toMatchObject({ code: 'workspace/not-found' })
+    await expect(controller.readFile({ workspaceId: 'missing' as WorkspaceId, path: 'README.md' }, new AbortController().signal))
+      .rejects.toMatchObject({ code: 'workspace/not-found' })
+
+    const aborted = new AbortController()
+    aborted.abort(new Error('superseded'))
+    await expect(controller.listFiles({ workspaceId }, aborted.signal))
+      .rejects.toMatchObject({ code: 'gateway/cancelled' })
+
+    const unexpected = new Error('unexpected iterator failure')
+    const throwingSignal = {
+      aborted: false,
+      throwIfAborted(): never { throw unexpected },
+    } as unknown as AbortSignal
+    await expect(controller.readFile({ workspaceId, path: 'README.md' }, throwingSignal)).rejects.toBe(unexpected)
+  })
+
   it('serializes concurrent path adoption and preserves an existing title', async () => {
     const { controller, root } = await harness()
     const path = stageDir(root, 'alpha')

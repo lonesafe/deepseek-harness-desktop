@@ -220,6 +220,7 @@ describe('approval Remote Event consumer', () => {
       toolName: 'bash',
       callId: 'call-1',
       reason: 'needs access',
+      alwaysAllowKey: 'bash:pnpm-test',
       signal: controller.signal,
     }, next)
     const pending = bench.pending.getSnapshot()[0]!
@@ -234,6 +235,7 @@ describe('approval Remote Event consumer', () => {
       toolName: 'bash',
       callId: 'call-1',
       reason: 'needs access',
+      allowAlways: true,
     })
 
     await pending.answer('allowed-once')
@@ -316,6 +318,7 @@ function panelProps(
     escalation: `Tool ${pending.toolName} asks`,
     reject: 'Reject',
     allowOnce: 'Allow once',
+    allowAlways: 'Always allow',
   }
   return {
     matched: pending,
@@ -357,6 +360,18 @@ describe('ApprovalPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Allow once' }))
 
     await expect(pending.result).resolves.toBe('allowed-once')
+  })
+
+  it('offers and returns persistent approval when the request declares a stable key', async () => {
+    const pending = new PendingApproval(id('s1'), {
+      toolName: 'bash',
+      alwaysAllowKey: 'bash:pnpm-test',
+    })
+    render(<ApprovalPanel {...panelProps(pending)} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Always allow' }))
+
+    await expect(pending.result).resolves.toBe('allowed-always')
   })
 
   it('re-enables actions when answering fails', async () => {

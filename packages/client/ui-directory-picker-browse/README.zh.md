@@ -39,7 +39,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-对话框是 680×500 的 Miller 分栏视图（在较矮或较窄的视口中限制尺寸），经 `ctx.workspaces` 驱动宿主的 `listDirectory` 与 `createDirectory` 原语。两处注册经嵌套的 `ctx.slots.inject()` 调用作为一次事务性效果安装，因为任一声明条目都可能晚些激活或替换其声明；对话框文案注册在本包自己的 locale 命名空间下，让两份字典作为一个单元落地。浏览类失败留在对话框自己的提示区内，因此本填充从不驱动持有方的 `onError` 分支。node 半部是一个空 `apply`，让插件留在宿主名单上。
+对话框是 680×500 的 Miller 分栏视图（在较矮或较窄的视口中限制尺寸），经 `ctx.workspaces` 驱动宿主的 `listDirectory` 与 `createDirectory` 原语。两处注册经嵌套的 `ctx.slots.inject()` 调用作为一次事务性效果安装，因为任一声明条目都可能晚些激活或替换其声明；对话框文案注册在本包自己的 locale 命名空间下，让两份字典作为一个单元落地。在桌面自适应组合中，回环页面使用共享的 `AsyncPickerFlow` 原语驱动原生选择器，远程页面保留此浏览器；两者使用同一套持有方对话。浏览类失败留在对话框自己的提示区内。node 半部是一个空 `apply`，让插件留在宿主名单上。
 
 </details>
 

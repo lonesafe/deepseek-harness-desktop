@@ -1,11 +1,9 @@
 /**
- * Native backend of the directory-picker seam: registers `ctx.directoryPicker`
- * with the `native` capability, opening one native OS chooser on the host
- * display per pick (macOS `osascript`, Linux Zenity with a KDialog fallback;
- * Windows opens the modern `IFileOpenDialog` in a spawned child process — a
- * koffi-driven COM conversation on the child's main thread). Only viable when
- * the operator sits at the host's screen; remote deployments compose the
- * browse backend instead.
+ * Attended-desktop backend of the directory-picker seam: registers the stable
+ * `adaptive` capability, opening a native OS chooser for loopback pages and
+ * serving browse operations to authenticated remote pages. Native selection
+ * uses macOS `osascript`, Linux Zenity with a KDialog fallback, or a spawned
+ * Windows `IFileOpenDialog` child process.
  * @module @deepseek-ai/dsh-host-directory-picker-native
  */
 

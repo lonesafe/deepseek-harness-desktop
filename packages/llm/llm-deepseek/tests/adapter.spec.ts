@@ -2275,6 +2275,68 @@ describe('plugin registration and config', () => {
     }
   })
 
+  it.each([
+    null,
+    {},
+    { is_available: true, balance_infos: 'not-an-array' },
+    { is_available: true, balance_infos: [null] },
+    { is_available: true, balance_infos: [{ currency: 1, total_balance: '1', granted_balance: '0', topped_up_balance: '1' }] },
+    { is_available: true, balance_infos: [{ currency: 'USD', total_balance: 'bad', granted_balance: '0', topped_up_balance: '1' }] },
+    { is_available: true, balance_infos: [{ currency: 'USD', total_balance: '1', granted_balance: 0, topped_up_balance: '1' }] },
+    { is_available: true, balance_infos: [{ currency: 'USD', total_balance: '1', granted_balance: 'bad', topped_up_balance: '1' }] },
+    { is_available: true, balance_infos: [{ currency: 'USD', total_balance: '1', granted_balance: '0', topped_up_balance: 1 }] },
+    { is_available: true, balance_infos: [{ currency: 'USD', total_balance: '1', granted_balance: '0', topped_up_balance: 'bad' }] },
+  ])('rejects invalid balance response metadata %#', async (value) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(value), { status: 200 }))
+    try {
+      await expect(adapterOf().accountBalance('deepseek-official')).rejects.toMatchObject({ code: 'INVALID_BALANCE' })
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
+  it('maps balance transport cancellation and connection failures', async () => {
+    const cause = new Error('socket closed')
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(cause)
+    try {
+      await expect(adapterOf({ baseURL: 'https://gateway.example/' }).accountBalance('deepseek-official'))
+        .rejects.toMatchObject({ code: 'TRANSPORT', cause })
+      const controller = new AbortController()
+      controller.abort(cause)
+      await expect(adapterOf().accountBalance('deepseek-official', controller.signal))
+        .rejects.toMatchObject({ code: 'ABORTED', cause })
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
+  it('maps balance HTTP failures with structured and malformed provider bodies', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'account denied', type: 'invalid_request_error', code: 'invalid_api_key' },
+      }), { status: 401 }))
+      .mockResolvedValueOnce(new Response('not-json', { status: 503 }))
+    try {
+      await expect(adapterOf().accountBalance('deepseek-official')).rejects.toMatchObject({
+        message: 'account denied', failure: { status: 401 },
+      })
+      await expect(adapterOf().accountBalance('deepseek-official')).rejects.toMatchObject({
+        message: 'DeepSeek balance API error (HTTP 503)', failure: { status: 503 },
+      })
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
+  it('rejects a successful balance response with invalid JSON', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('not-json', { status: 200 }))
+    try {
+      await expect(adapterOf().accountBalance('deepseek-official')).rejects.toMatchObject({ code: 'INVALID_BALANCE' })
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
   it('resolves connection facts and the credential exactly once per stream call', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const options = vi.fn(() => resolveAdapterOptions({ baseURL: server.url }))

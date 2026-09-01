@@ -98,6 +98,7 @@ async function loadComposition(
     '  config:',
     `    host: '${bindHost}'`,
     '    port: 0',
+    ...(bindHost === '0.0.0.0' ? ["    accessToken: 'a-secure-24-character-token'"] : []),
     `- name: '${AUTO}'`,
     '',
   ].join('\n'))

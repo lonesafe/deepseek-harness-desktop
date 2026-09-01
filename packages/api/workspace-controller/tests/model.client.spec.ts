@@ -202,6 +202,27 @@ describe('ClientWorkspaceModel', () => {
     expect(model.getSnapshot().items[0]?.workspaceId).toBe('created')
   })
 
+  it('forwards bounded file requests and caller cancellation', async () => {
+    const remote = new FakeWorkspaceRemote()
+    const model = modelFor(remote)
+    const controller = new AbortController()
+
+    await expect(model.listFiles(wid('files'), 'docs', controller.signal)).resolves.toMatchObject({
+      ok: true,
+      value: { path: 'docs', entries: [], truncated: false },
+    })
+    await expect(model.readFile(wid('files'), 'docs/readme.txt', controller.signal)).resolves.toMatchObject({
+      ok: true,
+      value: { path: 'docs/readme.txt', name: 'readme.txt' },
+    })
+    expect(remote.calls).toContainEqual({
+      method: 'listFiles', request: { workspaceId: wid('files'), path: 'docs' },
+    })
+    expect(remote.calls).toContainEqual({
+      method: 'readFile', request: { workspaceId: wid('files'), path: 'docs/readme.txt' },
+    })
+  })
+
   it('lets newer stream order outrank unary echoes and rolls failures back', async () => {
     const remote = new FakeWorkspaceRemote()
     const model = modelFor(remote)

@@ -92,7 +92,12 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     return result
   }
 
-  /** List one bounded directory level inside a registered Workspace. */
+  /**
+   * List one bounded directory level inside a registered Workspace.
+   * @param request - Workspace identity and relative directory path.
+   * @param signal - optional cancellation for the Remote request.
+   * @returns the generated Remote result containing one directory level.
+   */
   listFiles(
     request: WorkspaceFileListRequest,
     signal?: AbortSignal,
@@ -100,7 +105,12 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     return this.remote.listFiles(request, signal)
   }
 
-  /** Read one bounded regular file inside a registered Workspace. */
+  /**
+   * Read one bounded regular file inside a registered Workspace.
+   * @param request - Workspace identity and relative file path.
+   * @param signal - optional cancellation for the Remote request.
+   * @returns the generated Remote result containing a bounded preview.
+   */
   readFile(
     request: WorkspaceFileReadRequest,
     signal?: AbortSignal,

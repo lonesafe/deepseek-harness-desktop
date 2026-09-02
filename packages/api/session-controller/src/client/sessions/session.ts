@@ -46,7 +46,11 @@ function projectionsBaseline(value: SessionProjectionBaseline): ProjectionsBasel
 const DEFAULT_PAGE_MESSAGES = 50
 const REMOTE_PAGE_MESSAGES = 1
 
-/** Resolve the initial history page size for direct and portal transports. */
+/**
+ * Resolve the initial history page size for direct and portal transports.
+ * @param remoteRPCPath - configured RPC path; `/api/rpc` identifies the portal tunnel.
+ * @returns messages requested in the first history page.
+ */
 export function resolveHistoryPageMessages(remoteRPCPath: unknown): number {
   return remoteRPCPath === '/api/rpc' ? REMOTE_PAGE_MESSAGES : DEFAULT_PAGE_MESSAGES
 }

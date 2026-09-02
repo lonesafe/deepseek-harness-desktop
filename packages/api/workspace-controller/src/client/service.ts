@@ -39,9 +39,21 @@ export interface IWorkspaces {
    * @returns the created or idempotently resolved Workspace.
    */
   create(input: { path: string }): Promise<WorkspaceView>
-  /** List one bounded directory level inside a registered Workspace. */
+  /**
+   * List one bounded directory level inside a registered Workspace.
+   * @param workspaceId - registered Workspace to browse.
+   * @param path - portable Workspace-relative directory path.
+   * @param signal - optional cancellation for the Remote request.
+   * @returns one bounded directory listing.
+   */
   listFiles(workspaceId: WorkspaceId, path?: string, signal?: AbortSignal): Promise<WorkspaceFileListing>
-  /** Read one bounded regular file inside a registered Workspace. */
+  /**
+   * Read one bounded regular file inside a registered Workspace.
+   * @param workspaceId - registered Workspace containing the file.
+   * @param path - portable Workspace-relative file path.
+   * @param signal - optional cancellation for the Remote request.
+   * @returns a bounded read-only file preview.
+   */
   readFile(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFilePreview>
   /**
    * Rename a Workspace.

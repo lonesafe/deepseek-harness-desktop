@@ -93,7 +93,13 @@ function childPath(parent: string, name: string): string {
   return parent === '' ? name : `${parent}/${name}`
 }
 
-/** List one Workspace-relative directory without exposing Host absolute paths. */
+/**
+ * List one Workspace-relative directory without exposing Host absolute paths.
+ * @param workspaceRoot - canonical Host root of the registered Workspace.
+ * @param path - portable Workspace-relative directory path.
+ * @param signal - cancellation checked throughout directory enumeration.
+ * @returns one bounded, directory-first listing.
+ */
 export async function listWorkspaceFiles(
   workspaceRoot: string,
   path: string,
@@ -173,7 +179,13 @@ function decodedText(data: Buffer): string | undefined {
   }
 }
 
-/** Read one bounded Workspace-relative regular file for preview or download. */
+/**
+ * Read one bounded Workspace-relative regular file for preview or download.
+ * @param workspaceRoot - canonical Host root of the registered Workspace.
+ * @param path - portable Workspace-relative file path.
+ * @param signal - cancellation checked before returning file content.
+ * @returns text or base64 preview metadata within the configured byte bound.
+ */
 export async function readWorkspaceFile(
   workspaceRoot: string,
   path: string,

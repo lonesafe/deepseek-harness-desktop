@@ -378,9 +378,9 @@ Each interception waterfall returns a typed **Decision** (the idiom shared with 
 ```ts type-equiv
 /**
  * Pre-dispatch decision. `allow` runs the call; `deny` materializes an error;
- * `ask` runs only after an approval service returns `allowed-once` and otherwise
- * denies. Input rewriting is excluded because arguments are already logged and
- * presented.
+ * `ask` runs only after an approval service returns a one-shot or remembered
+ * grant and otherwise denies. Input rewriting is excluded because arguments
+ * are already logged and presented.
  */
 type PreToolDecision =
   | { kind: 'allow' }

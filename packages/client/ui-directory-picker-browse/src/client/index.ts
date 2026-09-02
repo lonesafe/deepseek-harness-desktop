@@ -17,6 +17,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { BrowseFlowInjected } from './flow.ts'
 import { BrowseDirectoryFlow } from './flow.ts'
 
+/** Client-side selection policy for an adaptive desktop directory picker. */
 export interface Config {
   /** Use the OS chooser only from a loopback desktop page. */
   nativeOnLoopback?: boolean

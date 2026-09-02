@@ -52,31 +52,42 @@ export function BrowseDirectoryFlow(props: DirectoryFlowOwnerProps & BrowseFlowI
 /** Renderless local arm of the adaptive picker; remote pages always use the browser dialog. */
 function LoopbackNativeDirectoryFlow(props: DirectoryFlowOwnerProps & BrowseFlowInjected): ReactElement | null {
   const { open, pick } = props
-  const armed = useRef(false)
-  const outcome = useRef(props)
-  outcome.current = props
-  const alive = useRef(true)
+  const requestOpen = useRef(false)
+  const handlers = useRef(props)
+  handlers.current = props
+  const generation = useRef(0)
   useEffect(() => {
-    alive.current = true
-    return () => { alive.current = false }
+    return () => { generation.current += 1 }
   }, [])
   useEffect(() => {
     if (!open) {
-      armed.current = false
+      requestOpen.current = false
       return
     }
-    if (armed.current) return
-    armed.current = true
-    pick().then(
-      (path) => {
-        if (!alive.current) return
-        if (path === null) outcome.current.onCancel(); else outcome.current.onPicked(path)
-      },
-      (reason: unknown) => {
-        if (!alive.current) return
-        outcome.current.onError(reason instanceof Error ? reason.message : String(reason))
-      },
-    )
+    if (requestOpen.current) return
+    requestOpen.current = true
+    const requestGeneration = generation.current
+    void runNativePick(pick).then((result) => {
+      if (requestGeneration !== generation.current) return
+      if (result.ok) {
+        if (result.path === null) handlers.current.onCancel()
+        else handlers.current.onPicked(result.path)
+        return
+      }
+      handlers.current.onError(result.message)
+    })
   }, [open, pick])
   return null
+}
+
+type NativePickResult =
+  | { readonly ok: true; readonly path: string | null }
+  | { readonly ok: false; readonly message: string }
+
+async function runNativePick(pick: () => Promise<string | null>): Promise<NativePickResult> {
+  try {
+    return { ok: true, path: await pick() }
+  } catch (reason: unknown) {
+    return { ok: false, message: reason instanceof Error ? reason.message : String(reason) }
+  }
 }

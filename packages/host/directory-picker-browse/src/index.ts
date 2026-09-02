@@ -185,6 +185,7 @@ export interface Config {
 
 /** Filesystem operations reusable by browse-only and adaptive desktop services. */
 export class BrowseDirectoryOperations {
+  /** Stable browse capability delegating to this operation set. */
   readonly capability: DirectoryPickerBrowseCapability = {
     kind: 'browse',
     list: (path, signal) => this.list(path, signal),
@@ -193,6 +194,12 @@ export class BrowseDirectoryOperations {
 
   constructor(private readonly config: Config) {}
 
+  /**
+   * List one directory level with bounded memory and deterministic ordering.
+   * @param path - fully qualified directory, or absent for the Host home.
+   * @param signal - optional cancellation for filesystem operations.
+   * @returns the directory identity, crumbs, and enterable child directories.
+   */
   async list(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
     const home = homedir()
     // The seam contract takes fully qualified paths only; resolve() would
@@ -275,6 +282,12 @@ export class BrowseDirectoryOperations {
     return { path: target, home, crumbs: ancestryCrumbs(target), entries, truncated }
   }
 
+  /**
+   * Create one direct child directory.
+   * @param path - fully qualified parent directory.
+   * @param name - one non-empty path segment.
+   * @returns the fully qualified created directory path.
+   */
   async createDirectory(path: string, name: string): Promise<string> {
     // Same fully-qualified fence as list: never rebase a parent under the
     // cwd or the current drive.
@@ -302,7 +315,11 @@ export class BrowseDirectoryOperations {
   }
 }
 
-/** Create browser filesystem primitives for an adaptive desktop picker. */
+/**
+ * Create browser filesystem primitives for an adaptive desktop picker.
+ * @param config - bounded listing configuration.
+ * @returns a stable browse capability backed by local filesystem operations.
+ */
 export function createBrowseDirectoryCapability(config: Config = { maxEntries: 1000 }): DirectoryPickerBrowseCapability {
   return new BrowseDirectoryOperations(config).capability
 }

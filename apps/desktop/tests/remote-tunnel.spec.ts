@@ -31,6 +31,21 @@ function nextFrame(socket: WebSocket): Promise<Record<string, unknown>> {
   })
 }
 
+function nextFrameForId(socket: WebSocket, id: string): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { reject(new Error(`timed out waiting for tunnel frame ${id}`)) }, 3_000)
+    const onMessage = (raw: RawData): void => {
+      const body = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer)
+      const frame = JSON.parse(body.toString('utf8')) as Record<string, unknown>
+      if (frame.id !== id) return
+      clearTimeout(timer)
+      socket.off('message', onMessage)
+      resolve(frame)
+    }
+    socket.on('message', onMessage)
+  })
+}
+
 function collectChunkedResponse(socket: WebSocket, id: string): Promise<{
   start: Record<string, unknown>
   chunks: Buffer[]
@@ -223,10 +238,11 @@ describe('desktop remote tunnel', () => {
     expect(chunked.chunks.every(chunk => chunk.byteLength <= 512 << 10)).toBe(true)
     expect(Buffer.concat(chunked.chunks)).toEqual(Buffer.alloc((1 << 20) + 17, 0x61))
 
+    const staticDeniedFrame = nextFrameForId(socket, '3'.repeat(32))
     socket.send(JSON.stringify({
       type: 'http_request', id: '3'.repeat(32), method: 'GET', path: '/assets/index.js',
     }))
-    const staticDenied = await nextFrame(socket)
+    const staticDenied = await staticDeniedFrame
     expect(staticDenied).toMatchObject({ type: 'error', id: '3'.repeat(32), message: 'Remote tunnel only accepts Harness API requests.' })
 
     socket.send(JSON.stringify({

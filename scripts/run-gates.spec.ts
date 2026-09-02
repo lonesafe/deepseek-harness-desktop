@@ -257,6 +257,13 @@ describe('gate graph validation', () => {
     },
   )
 
+  it('runs the check-all build after tests release temporary source fixtures', () => {
+    const build = withPnpmEntrypoint(() => gatesForMode('check-all'))
+      .find(gate => gate.id === 'build')
+
+    expect(build?.after).toContain('test')
+  })
+
   it('keeps native Windows coverage blocking and behind the complete build', () => {
     const complete = withPnpmEntrypoint(() => gatesForMode('ci-windows-complete'))
     const observational = withPnpmEntrypoint(() => gatesForMode('ci-windows-observational'))

@@ -16,7 +16,7 @@
 }
 
 .browser {
-  border-right: 1px solid var(--dsw-alias-border-l2);
+  border-right: 0.5px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1);
 }
 
@@ -26,7 +26,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .toolbar h2,
@@ -93,7 +93,7 @@
   min-width: 0;
   padding: 10px 12px;
   overflow-x: auto;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   white-space: nowrap;
 }
 
@@ -164,7 +164,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 18px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .previewIdentity {
@@ -189,7 +189,7 @@
 .viewSwitch {
   display: inline-flex;
   padding: 2px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 9px;
   background: var(--dsw-alias-bg-layer-1);
 }
@@ -216,7 +216,7 @@
   gap: 6px;
   flex: 0 0 auto;
   padding: 7px 10px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
   border-radius: 9px;
   color: var(--dsw-alias-label-primary);
   text-decoration: none;

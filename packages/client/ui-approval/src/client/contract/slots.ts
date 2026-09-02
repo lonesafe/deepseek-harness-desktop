@@ -56,12 +56,14 @@ export interface ApprovalPresentationRequest {
   readonly callId?: ToolCallId
   /** Human-readable reason supplied by the requester. */
   readonly reason?: string
+  /** Whether the Host can remember a matching grant for this session. */
+  readonly allowAlways?: boolean
   /** Cancellation projected from the Host waterfall. */
   readonly signal?: AbortSignal
 }
 
 /** Decisions this interactive Client presentation can return. */
-export type ApprovalDecision = 'allowed-once' | 'rejected'
+export type ApprovalDecision = 'allowed-once' | 'allowed-always' | 'rejected'
 
 let nextApprovalKey = 0
 
@@ -77,6 +79,8 @@ export class PendingApproval {
   readonly callId: ToolCallId | undefined
   /** Human-readable reason supplied by the asker. */
   readonly reason: string | undefined
+  /** Whether the Host can remember a matching grant for this session. */
+  readonly allowAlways: boolean
   /** Result returned by the Remote Event listener to the Host waterfall. */
   readonly result: Promise<ApprovalDecision>
 
@@ -97,6 +101,7 @@ export class PendingApproval {
     this.toolName = request.toolName
     this.callId = request.callId
     this.reason = request.reason
+    this.allowAlways = request.allowAlways === true
     const completion = Promise.withResolvers<ApprovalDecision>()
     this.result = completion.promise
     this.#resolve = completion.resolve

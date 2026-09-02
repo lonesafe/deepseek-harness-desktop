@@ -58,6 +58,14 @@ export interface DirectoryPickerBrowseCapability {
   createDirectory(path: string, name: string): Promise<string>
 }
 
+/** Desktop capability combining a native loopback chooser with remote browser primitives. */
+export interface DirectoryPickerAdaptiveCapability {
+  kind: 'adaptive'
+  pick(signal: AbortSignal): Promise<string | null>
+  list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>
+  createDirectory(path: string, name: string): Promise<string>
+}
+
 /**
  * Merge-extensible registry of interaction shapes keyed by capability kind: a
  * new backend declaration-merges its shape here (the entry's `kind` literal
@@ -66,6 +74,7 @@ export interface DirectoryPickerBrowseCapability {
 export interface DirectoryPickerCapabilities {
   native: DirectoryPickerNativeCapability
   browse: DirectoryPickerBrowseCapability
+  adaptive: DirectoryPickerAdaptiveCapability
 }
 
 /** Union of interaction shapes a backend can provide, derived from the merge-extensible {@link DirectoryPickerCapabilities} map. */

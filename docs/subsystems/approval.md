@@ -2,7 +2,7 @@
 
 English | [中文](approval.zh.md)
 
-The user-approval seam of [dsh-user-approval](../../packages/interaction/user-approval) answers one question: may this specific action proceed? It owns the shared request/outcome vocabulary, the `ctx.approval` dispatch service, the `approval/request` answerer waterfall, the log-only audit pair, and the per-session `ask`/`never` policy. UI channels may provide human answerers; the [ACP automation bridge](../../packages/acp/acp) provides one-shot machine decisions for its own agents. Callers such as [dsh-tools](../../packages/core/tools) and [dsh-tool-bash](../../packages/shell/tool-bash) consume the closed outcome and fail closed unless it is `allowed-once`.
+The user-approval seam of [dsh-user-approval](../../packages/interaction/user-approval) answers one question: may this action proceed? It owns the shared request/outcome vocabulary, the `ctx.approval` dispatch service, the `approval/request` answerer waterfall, the log-only audit pair, and the per-session `ask`/`never` policy. UI channels may provide human answerers, including a session-local remembered grant when the requester supplies a stable rule key; the [ACP automation bridge](../../packages/acp/acp) provides one-shot machine decisions for its own agents. Callers such as [dsh-tools](../../packages/core/tools) and [dsh-tool-bash](../../packages/shell/tool-bash) consume the closed outcome and fail closed unless it is a one-shot or valid remembered grant.
 
 Source: [`packages/interaction/user-approval/src/index.ts`](../../packages/interaction/user-approval/src/index.ts)
 
@@ -18,14 +18,15 @@ Every request receives a fresh `ApprovalRequestId`. The brand pairs the `approva
 type ApprovalRequestId = Branded<'ApprovalRequestId'>
 ```
 
-`ApprovalOutcome` is closed and fail-closed. `allowed-once` grants only the asked-about action; callers deny on `rejected`, `cancelled`, and `unavailable`. A missing, non-owning, throwing, or non-conforming answerer becomes `unavailable` rather than opening the gate.
+`ApprovalOutcome` is closed and fail-closed. `allowed-once` grants only the asked-about action; `allowed-always` also records a matching session-local rule when the ask supplied a stable key. Callers deny on `rejected`, `cancelled`, and `unavailable`. A missing, non-owning, throwing, or non-conforming answerer becomes `unavailable` rather than opening the gate.
 
 ```ts type-equiv
 /**
- * Closed approval outcomes: a one-shot grant, explicit rejection, withdrawn
- * request, or unavailable answerer. Callers fail closed on `unavailable`.
+ * Closed approval outcomes: a one-shot or remembered grant, explicit
+ * rejection, withdrawn request, or unavailable answerer. Callers fail closed
+ * on `unavailable`.
  */
-type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'
+type ApprovalOutcome = 'allowed-once' | 'allowed-always' | 'rejected' | 'cancelled' | 'unavailable'
 ```
 
 ## Per-session policy
@@ -57,7 +58,7 @@ Both policies contribute their complete current meaning to the cache-safe runtim
  * Readonly same-process permission question. `callId` links to an already
  * presented tool call, so arguments are not duplicated here.
  */
-interface ApprovalRequest extends ApprovalRequestEvent {
+interface ApprovalRequest extends Omit<ApprovalRequestEvent, 'allowAlways'> {
   /**
    * The agent on whose behalf the question is asked. Routes the question (a
    * UI answerer only answers for agents it owns) and receives the audit
@@ -73,6 +74,8 @@ interface ApprovalRequest extends ApprovalRequestEvent {
   readonly callId?: ToolCallId
   /** The asker's human-readable explanation of WHY it is asking. */
   readonly reason?: string
+  /** Stable identity for equivalent future requests in this session. */
+  readonly alwaysAllowKey?: string
   /**
    * Aborting withdraws the question: the request settles `'cancelled'`
    * immediately and a late answer from a still-pending answerer is discarded.
@@ -83,7 +86,7 @@ interface ApprovalRequest extends ApprovalRequestEvent {
 
 ## Dispatch and audit
 
-`ctx.approval.request(req)` requires the requesting session to be inside an open turn. It appends `approval/asked`, obtains one outcome, appends the matching `approval/decided`, and resolves with that outcome. The `never` policy is enforced inside the service before waterfall dispatch, so even an answerer registered later with `prepend` cannot bypass it. Answerers return an outcome when they own the request or call `next()` to delegate; the first answer occupies the single decision slot.
+`ctx.approval.request(req)` requires the requesting session to be inside an open turn. It appends `approval/asked`, obtains one outcome, appends the matching `approval/decided`, and resolves with that outcome. The `never` policy is enforced inside the service before remembered-grant lookup and waterfall dispatch, so neither a saved rule nor an answerer registered later with `prepend` can bypass it. Answerers return an outcome when they own the request or call `next()` to delegate; the first answer occupies the single decision slot.
 
 The audit events are log-only and do not enter the model transcript. Model-visible behavior is the caller's derived tool result plus the current runtime-context snapshot. Service disposal removes its context contribution; answerer listeners are independently effect-bound to their owning plugins.
 
@@ -125,7 +128,7 @@ setPolicy(agent: Agent, policy: ApprovalPolicy): void
  * authoritative append cannot reject the request or suppress its matching
  * audit event.
  * @param req - the pending decision (agent, tool identity, reason, signal).
- * @returns the closed outcome; `'allowed-once'` is the only grant.
+ * @returns the closed outcome; one-shot and valid remembered grants allow the action.
  * @throws when no turn is open or either audit event fails before the session
  *   append commit point.
  */

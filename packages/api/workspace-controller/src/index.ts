@@ -55,13 +55,23 @@ export class WorkspaceController extends TypertRemoteService {
     ctx.plugin(DirectoryPickerController)
   }
 
-  /** List one bounded directory level inside a registered Workspace. */
+  /**
+   * List one bounded directory level inside a registered Workspace.
+   * @param request - Workspace identity and optional relative directory path.
+   * @param signal - cancellation lifetime for the filesystem scan.
+   * @returns the sorted, workspace-contained file listing.
+   */
   @Remote('listFiles')
   listFiles(request: WorkspaceFileListRequest, signal: AbortSignal): Promise<WorkspaceFileListing> {
     return listWorkspaceFiles(this.requireWorkspacePath(request.workspaceId), request.path ?? '', signal)
   }
 
-  /** Read one bounded regular file inside a registered Workspace. */
+  /**
+   * Read one bounded regular file inside a registered Workspace.
+   * @param request - Workspace identity and relative file path.
+   * @param signal - cancellation lifetime for the file read.
+   * @returns a size-limited text, image, or PDF preview payload.
+   */
   @Remote('readFile')
   readFile(request: WorkspaceFileReadRequest, signal: AbortSignal): Promise<WorkspaceFilePreview> {
     return readWorkspaceFile(this.requireWorkspacePath(request.workspaceId), request.path, signal)

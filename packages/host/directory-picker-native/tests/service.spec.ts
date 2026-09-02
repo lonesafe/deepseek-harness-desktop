@@ -5,14 +5,14 @@ import { Context } from '@deepseek-ai/cordis'
 import NativeDirectoryPicker from '../src/index.ts'
 
 describe('NativeDirectoryPicker', () => {
-  it('registers ctx.directoryPicker with a stable native capability and leaves with its fiber', async () => {
+  it('registers ctx.directoryPicker with a stable adaptive capability and leaves with its fiber', async () => {
     const ctx = new Context()
     const fiber = ctx.plugin(NativeDirectoryPicker)
     await fiber.await()
     const picker = ctx.get('directoryPicker')
     expect(picker).toBeInstanceOf(NativeDirectoryPicker)
     const capability = picker!.capability()
-    expect(capability.kind).toBe('native')
+    expect(capability.kind).toBe('adaptive')
     // Stability: consumers may capture the capability object across calls.
     expect(picker!.capability()).toBe(capability)
     await fiber.dispose()

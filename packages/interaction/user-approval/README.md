@@ -1,5 +1,5 @@
 ---
-description: "Channel-neutral one-shot approval seam for users and maintainers composing answerers, setting policy, or debugging fail-closed permission decisions."
+description: "Channel-neutral approval seam with one-shot and session-remembered grants for composing answerers and fail-closed permission decisions."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-user-approval` lets a sensitive tool action pause for a one-shot allow/reject decision: `ctx.approval.request(req)` asks the composed answerers whether one specific action may proceed and returns `allowed-once`, `rejected`, `cancelled`, or `unavailable`. Missing, non-owning, or throwing answerers fail closed to `unavailable`, and a grant applies only to the requested action. A per-session policy — `ask` (the default) or `never` — decides what happens before any answerer runs: `ask` delegates to the composed answerers, `never` rejects every request deterministically without prompting anyone. Each request is recorded in the requesting session's audit log, and the model sees only the asking consumer's tool outcome plus the current policy in the runtime-context snapshot. UI channels provide human answerers; the ACP automation bridge answers for its own agents.
+`dsh-user-approval` lets a sensitive tool action pause for an allow/reject decision: `ctx.approval.request(req)` asks the composed answerers whether one specific action may proceed and returns `allowed-once`, `allowed-always`, `rejected`, `cancelled`, or `unavailable`. A requester may provide a stable rule key; then an `allowed-always` answer remembers that rule for matching requests in the same session. Missing, non-owning, or throwing answerers fail closed to `unavailable`. A per-session policy — `ask` (the default) or `never` — decides what happens before any answerer runs: `ask` delegates to the composed answerers, while `never` rejects every request deterministically and takes precedence over remembered grants. Each request is recorded in the requesting session's audit log, and the model sees only the asking consumer's tool outcome plus the current policy in the runtime-context snapshot. UI channels provide human answerers; the ACP automation bridge answers for its own agents.
 
 ## Table of Contents
 
@@ -49,7 +49,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Requesting a decision
 
-`request(req)` names the agent, tool, optional call id and reason, and an abort signal. It requires an open turn: an idle or between-turn caller throws before auditing anything. Aborting withdraws the question — the request settles `cancelled` and a late answer is discarded. A failure that prevents either audit append from committing rejects instead of returning an unlogged decision.
+`request(req)` names the agent, tool, optional call id and reason, an optional stable `alwaysAllowKey`, and an abort signal. When that key has a prior completed `allowed-always` audit pair in the same session, the matching request is granted without prompting. It requires an open turn: an idle or between-turn caller throws before auditing anything. Aborting withdraws the question — the request settles `cancelled` and a late answer is discarded. A failure that prevents either audit append from committing rejects instead of returning an unlogged decision.
 
 ### What the model and user see
 
@@ -75,7 +75,7 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 ### Dispatch
 
-`decide()` races the answerer waterfall against the request signal and contains every answerer failure: a throwing listener fails the question closed to `unavailable`, and a rogue non-vocabulary return is normalized to `unavailable`. The `never` policy is enforced inside the service before waterfall dispatch, so a listener registered later with `prepend` cannot bypass the deterministic rejection. The request must be turn-enclosed because the turn is the durable log's commit/replay boundary — a bare event between turns is indistinguishable from a crash tail.
+`decide()` races the answerer waterfall against the request signal and contains every answerer failure: a throwing listener fails the question closed to `unavailable`, and a rogue non-vocabulary return is normalized to `unavailable`. The `never` policy is enforced before remembered-grant lookup and waterfall dispatch, so neither a stored rule nor a listener registered later with `prepend` can bypass the deterministic rejection. The request must be turn-enclosed because the turn is the durable log's commit/replay boundary — a bare event between turns is indistinguishable from a crash tail.
 
 ### Policy and the runtime-context snapshot
 
@@ -83,7 +83,7 @@ The system-prompt contribution `approval:policy` states the complete current mea
 
 ### Audit
 
-`request()` appends `approval/asked` with the request identity and tool, then `approval/decided` with the closed outcome; the exact appended fields live in [`src/index.ts`](src/index.ts). Both are log-only; the invariant validates the pair by id within one open turn and the closed outcome vocabulary.
+`request()` appends `approval/asked` with the request identity, tool, and optional remembered-rule key, then `approval/decided` with the closed outcome; the exact appended fields live in [`src/index.ts`](src/index.ts). Both are log-only; the invariant validates the pair by id within one open turn and rejects `allowed-always` unless the ask carried a non-empty rule key.
 
 </details>
 
@@ -152,7 +152,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits define when the seam is a poor fit or needs special composition care. They are current package constraints, not a general permission comparison.
 
 - **Requests are valid only inside an open turn** — an idle or between-turn caller throws before auditing; a durable out-of-turn approval workflow is deferred.
-- **Only one-shot grants exist** — the outcome vocabulary has `allowed-once` but no `allow-always`, remembered rule, revocation, or grant store; session policy is only `ask` / `never`.
+- **Remembered grants are session-local** — `allowed-always` applies only to later requests with the same stable key in the same session; a new session asks again, and there is no separate persistent grant store or revocation UI.
 - **The request carries no tool arguments** — an answerer sees the tool name, reason, and optional call id; the ACP machine channel requires a call id and delegates requests without one.
 - **No built-in answerer** — headless or incompletely composed deployments resolve `unavailable` and fail closed; the service itself never prompts a human.
 

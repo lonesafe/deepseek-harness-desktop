@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-浏览器经由 `dsh-host-webserver` 通过 HTTP 访问 web GUI：一个 `node:http` 服务器，其他插件在其中注册具名路由、upgrade 路由、index 启动输入与一个回退 handler。它不了解任何 harness 概念，也不提供任何文件服务——`/api` 桥接、插件 bundle、HMR（热模块替换）事件流与 SPA dist 都属于注册它们的插件。路由匹配顺序固定不变：先在整张表中匹配精确 route，再匹配最长前缀，最后交给回退 handler。它只服务浏览器；Electron 通过 `file://` 加载 dist，并经 IPC 桥接承载 fetch。
+浏览器经由 `dsh-host-webserver` 通过 HTTP 访问 web GUI：一个 `node:http` 服务器，其他插件在其中注册具名路由、upgrade 路由、index 启动输入与一个回退 handler。它不提供文件服务——`/api` 桥接、插件 bundle、HMR（热模块替换）事件流与 SPA dist 都属于注册它们的插件。回环访问无需密码；全网卡绑定必须配置强访问密钥，并用登录 Cookie 保护 HTTP 与 WebSocket 路由。路由匹配顺序固定不变：先匹配精确 route，再匹配最长前缀，最后交给回退 handler。
 
 ## 目录
 
@@ -36,7 +36,7 @@ kind: "package-reference"
     port: 3000
 ```
 
-`host` 只接受两个值：`127.0.0.1`（默认姿态，仅回环）与 `0.0.0.0`（有意向网络开放——服务器自身不携带 TLS、认证或来源策略）。`port` 为 0 时请求 OS 分配端口；之后用 `ctx.webServer.port` 读取正在监听的端口。
+`host` 只接受两个值：`127.0.0.1`（默认姿态，仅回环）与 `0.0.0.0`（有意向局域网开放）。全网卡绑定要求 `accessToken` 至少 24 个字符；远程用户以用户名 `deepseek` 和该密钥登录，表单或 Basic 认证成功后会建立 HttpOnly Cookie，供外层路由防线及 Connection 的 index/API 鉴权共同识别。服务器仍不提供 TLS，因此只应在可信局域网使用，或置于 HTTPS 之后。`port` 为 0 时请求 OS 分配端口；之后用 `ctx.webServer.port` 读取正在监听的端口。
 
 设置 `compression: 'gzip'` 可以包装符合条件的 socket-backed 响应，而不改变 route API。客户端必须接受 gzip，且媒体类型必须可压缩；已知长度小于 `compressionThresholdBytes` 的响应保持未压缩，未知长度 stream 则立即符合条件。已有编码、`Cache-Control: no-transform`、range 响应、SSE、ZIP 与已打包的 `.gz` Worker image 均保持不变。随附 Web bundle 使用 level 1 与 1024 字节阈值；其他组合默认不压缩。
 

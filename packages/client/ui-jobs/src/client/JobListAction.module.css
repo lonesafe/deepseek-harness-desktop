@@ -63,6 +63,14 @@
   box-shadow: var(--dsw-elevation-prominent);
 }
 
+.menuPortal {
+  position: fixed;
+  top: auto;
+  left: auto;
+  z-index: 1100;
+  visibility: hidden;
+}
+
 .row {
   display: flex;
   align-items: center;

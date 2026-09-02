@@ -7,7 +7,7 @@ import type { ApprovalRequestId } from './index.ts'
 import { APPROVAL_POLICIES } from './index.ts'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-user-approval'
-const APPROVAL_OUTCOMES = ['allowed-once', 'rejected', 'cancelled', 'unavailable'] as const
+const APPROVAL_OUTCOMES = ['allowed-once', 'allowed-always', 'rejected', 'cancelled', 'unavailable'] as const
 
 /** Cordis companion plugin name. */
 export const name = 'user-approval-invariant'
@@ -32,6 +32,9 @@ function validateApprovalEvent(
   if (event.type === 'approval/asked') {
     if (trace.openTurn === null) fail('approval/asked appended outside any open turn')
     if (event.data.toolName.length === 0) fail('approval/asked toolName must be non-empty')
+    if (event.data.alwaysAllowKey !== undefined && event.data.alwaysAllowKey.length === 0) {
+      fail('approval/asked alwaysAllowKey must be non-empty')
+    }
     if (trace.pending.has(event.data.id)) fail(`approval/asked repeated open id ${JSON.stringify(event.data.id)}`)
     return { kind: 'asked', id: event.data.id }
   }

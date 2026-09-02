@@ -449,7 +449,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'async request(req: ApprovalRequest): Promise<ApprovalOutcome>',
         description: 'Ask the composed answerers to decide one readonly same-process request. The service borrows the request, agent, session, and live signal directly. The request requires an open turn because the audit pair must be enclosed by the durable log\'s commit/replay boundary; an idle ask rejects before appending anything. The answerer phase always produces an outcome: an aborted signal yields `\'cancelled\'`, a missing or throwing answerer yields `\'unavailable\'` (fail closed), and a rogue non-vocabulary return value is normalized to `\'unavailable\'`. A failure that prevents either audit append from committing still rejects because returning an unlogged decision would violate the pair. Session contains post-commit observer failures, so an authoritative append cannot reject the request or suppress its matching audit event.',
         parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, reason, signal).' }],
-        returns: 'the closed outcome; `\'allowed-once\'` is the only grant.',
+        returns: 'the closed outcome; one-shot and valid remembered grants allow the action.',
         throws: ['when no turn is open or either audit event fails before the session append commit point.'],
       },
       {
@@ -2674,6 +2674,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'The browser HTTP carrier service. Activation listens immediately. Route registration order does not affect requests because configured named routes must be distinct, and the fallback handler answers anything not yet claimed during startup with 404 until its owner registers. A listen failure rejects initialization, and the boot process reports the failed fiber.',
     methods: [
       {
+        signature: 'isLanAuthenticated(headers: RequestHeaders): boolean',
+        description: 'Verify credentials already accepted by the outer LAN access fence. This lets authenticated LAN browsers enter Connection\'s independently guarded index and API routes without exposing the configured secret to them.',
+        parameters: [{ name: 'headers', description: 'node:http or Fetch-compatible request headers.' }],
+        returns: 'Whether the request carries the configured LAN credential.',
+      },
+      {
         signature: 'register(route: WebRoute): () => void',
         description: 'Register a named route. Duplicate (kind, path) throws — route patterns are a composition-level contract, so a collision is a misconfiguration.',
         parameters: [{ name: 'route', description: 'kind, path, and the owning handler.' }],
@@ -2735,6 +2741,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Host service backing the generated `ctx.remote.workspace` namespace.',
     description: 'Host service backing the generated `ctx.remote.workspace` namespace.',
     methods: [
+      {
+        signature: '@Remote(\'listFiles\') listFiles(request: WorkspaceFileListRequest, signal: AbortSignal): Promise<WorkspaceFileListing>',
+        description: 'List one bounded directory level inside a registered Workspace.',
+        parameters: [{ name: 'request', description: 'Workspace identity and optional relative directory path.' }, { name: 'signal', description: 'cancellation lifetime for the filesystem scan.' }],
+        returns: 'the sorted, workspace-contained file listing.',
+      },
+      {
+        signature: '@Remote(\'readFile\') readFile(request: WorkspaceFileReadRequest, signal: AbortSignal): Promise<WorkspaceFilePreview>',
+        description: 'Read one bounded regular file inside a registered Workspace.',
+        parameters: [{ name: 'request', description: 'Workspace identity and relative file path.' }, { name: 'signal', description: 'cancellation lifetime for the file read.' }],
+        returns: 'a size-limited text, image, or PDF preview payload.',
+      },
       {
         signature: '@Remote(\'create\') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>',
         description: 'Create or idempotently resolve one Workspace over an existing directory.',
@@ -3434,7 +3452,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ApprovalOutcome',
-    declaration: 'export type ApprovalOutcome = \'allowed-once\' | \'rejected\' | \'cancelled\' | \'unavailable\';',
+    declaration: 'export type ApprovalOutcome = \'allowed-once\' | \'allowed-always\' | \'rejected\' | \'cancelled\' | \'unavailable\';',
   },
   {
     name: 'ApprovalPolicy',
@@ -3442,11 +3460,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ApprovalRequest',
-    declaration: 'export interface ApprovalRequest extends ApprovalRequestEvent {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface ApprovalRequest extends Omit<ApprovalRequestEvent, \'allowAlways\'> {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly alwaysAllowKey?: string;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'ApprovalRequestEvent',
-    declaration: 'export interface ApprovalRequestEvent {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface ApprovalRequestEvent {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly allowAlways?: boolean;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'AskUserQuestionAnswer',
@@ -3853,12 +3871,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface DirectoryListing {\n    path: string;\n    home: string;\n    crumbs: DirectoryEntry[];\n    entries: DirectoryEntry[];\n    truncated: boolean;\n}',
   },
   {
+    name: 'DirectoryPickerAdaptiveCapability',
+    declaration: 'export interface DirectoryPickerAdaptiveCapability {\n    kind: \'adaptive\';\n    pick(signal: AbortSignal): Promise<string | null>;\n    list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>;\n    createDirectory(path: string, name: string): Promise<string>;\n}',
+  },
+  {
     name: 'DirectoryPickerBrowseCapability',
     declaration: 'export interface DirectoryPickerBrowseCapability {\n    kind: \'browse\';\n    list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>;\n    createDirectory(path: string, name: string): Promise<string>;\n}',
   },
   {
     name: 'DirectoryPickerCapabilities',
-    declaration: 'export interface DirectoryPickerCapabilities {\n    native: DirectoryPickerNativeCapability;\n    browse: DirectoryPickerBrowseCapability;\n}',
+    declaration: 'export interface DirectoryPickerCapabilities {\n    native: DirectoryPickerNativeCapability;\n    browse: DirectoryPickerBrowseCapability;\n    adaptive: DirectoryPickerAdaptiveCapability;\n}',
   },
   {
     name: 'DirectoryPickerCapability',
@@ -6115,6 +6137,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkspaceDeleteValue',
     declaration: 'export interface WorkspaceDeleteValue {\n    readonly deleted: true;\n}',
+  },
+  {
+    name: 'WorkspaceFileEntry',
+    declaration: 'export interface WorkspaceFileEntry {\n    readonly name: string;\n    readonly path: string;\n    readonly kind: \'directory\' | \'file\';\n    readonly hidden: boolean;\n    readonly size: number;\n    readonly modifiedAt: string;\n}',
+  },
+  {
+    name: 'WorkspaceFileListing',
+    declaration: 'export interface WorkspaceFileListing {\n    readonly path: string;\n    readonly entries: readonly WorkspaceFileEntry[];\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'WorkspaceFileListRequest',
+    declaration: 'export interface WorkspaceFileListRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path?: string;\n}',
+  },
+  {
+    name: 'WorkspaceFilePreview',
+    declaration: 'export interface WorkspaceFilePreview {\n    readonly path: string;\n    readonly name: string;\n    readonly mime: string;\n    readonly size: number;\n    readonly modifiedAt: string;\n    readonly kind: \'markdown\' | \'text\' | \'image\' | \'pdf\' | \'binary\' | \'unsupported\';\n    readonly encoding: \'utf8\' | \'base64\' | \'none\';\n    readonly content: string;\n    readonly reason?: \'too-large\';\n}',
+  },
+  {
+    name: 'WorkspaceFileReadRequest',
+    declaration: 'export interface WorkspaceFileReadRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n}',
   },
   {
     name: 'WorkspaceFollowFrame',

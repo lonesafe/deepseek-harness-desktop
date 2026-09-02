@@ -10,10 +10,10 @@ import type {
 import type { WorkspaceFilesProps } from './contract/slots.ts'
 import css from './WorkspaceFilesView.module.css'
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1_024) return `${bytes} B`
-  if (bytes < 1_048_576) return `${(bytes / 1_024).toFixed(bytes < 10_240 ? 1 : 0)} KiB`
-  return `${(bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0)} MiB`
+function formatBytes(bytes: number, t: WorkspaceFilesProps['t']): string {
+  if (bytes < 1_024) return t('files.unit.bytes', { value: bytes })
+  if (bytes < 1_048_576) return t('files.unit.kibibytes', { value: (bytes / 1_024).toFixed(bytes < 10_240 ? 1 : 0) })
+  return t('files.unit.mebibytes', { value: (bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0) })
 }
 
 function errorMessage(reason: unknown): string {
@@ -58,7 +58,7 @@ function FilePreview({ preview, t, labels }: Pick<WorkspaceFilesProps, 't'> & {
       <div className={css.previewHeader}>
         <div className={css.previewIdentity}>
           <strong title={preview.path}>{preview.name}</strong>
-          <span>{formatBytes(preview.size)}</span>
+          <span>{formatBytes(preview.size, t)}</span>
         </div>
         <div className={css.previewActions}>
           {preview.kind === 'markdown' && (
@@ -228,10 +228,10 @@ export function WorkspaceFilesView({
               }}
             >
               <span className={css.fileIcon} aria-hidden="true">
-                {entry.kind === 'directory' ? <IconFolderClose16 /> : entry.name.split('.').at(-1)?.slice(0, 4).toUpperCase() || 'FILE'}
+                {entry.kind === 'directory' ? <IconFolderClose16 /> : entry.name.split('.').at(-1)?.slice(0, 4).toUpperCase() || t('files.fileType')}
               </span>
               <span className={css.fileName}>{entry.name}</span>
-              <span className={css.fileSize}>{entry.kind === 'file' ? formatBytes(entry.size) : ''}</span>
+              <span className={css.fileSize}>{entry.kind === 'file' ? formatBytes(entry.size, t) : ''}</span>
               {entry.kind === 'directory' && <IconChevronRightOutline14 />}
             </button>
           ))}

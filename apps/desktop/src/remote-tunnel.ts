@@ -10,23 +10,23 @@ const MAX_LEGACY_RESPONSE_BODY_BYTES = 1 << 20
 const TUNNEL_RESPONSE_CHUNK_BYTES = 512 << 10
 const MAX_TUNNEL_MESSAGE_BYTES = MAX_TUNNEL_REQUEST_BODY_BYTES * 2
 const READ_ONLY_REMOTE_METHODS = new Set([
-  'settings.describe',
-  'credentials.describe',
+  'settings/describe',
+  'credentials/describe',
 ])
 const PRIVILEGED_REMOTE_METHODS = new Set([
-  'agentPreset.read',
-  'agentPreset.copy',
-  'agentPreset.openDocument',
-  'agentPreset.remove',
-  'host.pickDirectory',
-  'host.openPath',
-  'settings.openDocument',
-  'settings.update',
-  'settings.replace',
-  'settings.mutate',
-  'credentials.set',
-  'credentials.unset',
-  'llm.discoverModels',
+  'agentPresets/read',
+  'agentPresets/copy',
+  'agentPresets/deletePreset',
+  'directoryPicker/pick',
+  'session/openWorkspacePath',
+  'settings/openSettingsDocument',
+  'settings/openAgentPresetDirectory',
+  'settings/update',
+  'settings/replace',
+  'settings/mutate',
+  'credentials/set',
+  'credentials/unset',
+  'llm/discoverModels',
 ])
 
 interface TunnelFrame {
@@ -39,6 +39,11 @@ interface TunnelFrame {
   body?: string
   binary?: boolean
   message?: string
+}
+
+interface LocalSession {
+  readonly origin: string
+  readonly cookie?: string
 }
 
 /** Observable tunnel states used by the desktop menu. */
@@ -68,14 +73,16 @@ export function startRemoteTunnel(options: {
 
   const run = async (): Promise<void> => {
     let retryMs = 1_000
+    let localSession: LocalSession | undefined
     while (true) {
       if (abortRequested(controller.signal)) break
       publish('connecting')
       try {
+        localSession ??= await authorizeLocalSession(options.localUrl, controller.signal)
         socket = await connect(options.authorization, controller.signal)
         retryMs = 1_000
         publish('online')
-        await serve(socket, options.localUrl, localSockets, controller.signal)
+        await serve(socket, localSession, localSockets, controller.signal)
       } catch {
         if (!abortRequested(controller.signal)) publish('offline')
       } finally {
@@ -103,6 +110,23 @@ export function startRemoteTunnel(options: {
       await done
     },
   }
+}
+
+/** Exchange the process-only startup URL for an authority-bound loopback cookie. */
+async function authorizeLocalSession(localUrl: string, signal: AbortSignal): Promise<LocalSession> {
+  const url = new URL(localUrl)
+  const origin = url.origin
+  if (!url.searchParams.has('token')) return { origin }
+  const response = await fetch(url, { method: 'GET', redirect: 'manual', signal })
+  if (response.status !== 303) {
+    throw new Error(`Local Harness authentication failed with HTTP ${String(response.status)}.`)
+  }
+  const setCookie = response.headers.get('set-cookie')
+  const cookie = setCookie?.split(';', 1)[0]?.trim()
+  if (cookie === undefined || cookie.length === 0) {
+    throw new Error('Local Harness authentication returned no session cookie.')
+  }
+  return { origin, cookie }
 }
 
 function abortRequested(signal: AbortSignal): boolean {
@@ -140,7 +164,7 @@ function connect(authorization: RemoteDeviceAuthorization, signal: AbortSignal):
 
 function serve(
   socket: WebSocket,
-  localUrl: string,
+  localSession: LocalSession,
   localSockets: Map<string, WebSocket>,
   signal: AbortSignal,
 ): Promise<void> {
@@ -163,7 +187,7 @@ function serve(
         socket.close(1007, 'invalid tunnel JSON')
         return
       }
-      void handleFrame(socket, localUrl, localSockets, frame, signal).catch((error: unknown) => {
+      void handleFrame(socket, localSession, localSockets, frame, signal).catch((error: unknown) => {
         if (frame.id === undefined) return
         safeSend(socket, { type: 'error', id: frame.id, message: error instanceof Error ? error.message : String(error) })
       })
@@ -173,18 +197,18 @@ function serve(
 
 async function handleFrame(
   tunnel: WebSocket,
-  localUrl: string,
+  localSession: LocalSession,
   localSockets: Map<string, WebSocket>,
   frame: TunnelFrame,
   signal: AbortSignal,
 ): Promise<void> {
   if (frame.id === undefined || !/^[a-f0-9]{32}$/u.test(frame.id)) throw new Error('Invalid tunnel request ID.')
   if (frame.type === 'http_request') {
-    await handleHttp(tunnel, localUrl, frame, signal)
+    await handleHttp(tunnel, localSession, frame, signal)
     return
   }
   if (frame.type === 'ws_open') {
-    openLocalWebSocket(tunnel, localUrl, localSockets, frame)
+    openLocalWebSocket(tunnel, localSession, localSockets, frame)
     return
   }
   if (frame.type === 'ws_data') {
@@ -202,10 +226,10 @@ async function handleFrame(
   throw new Error('Unsupported tunnel frame.')
 }
 
-async function handleHttp(tunnel: WebSocket, localUrl: string, frame: TunnelFrame, signal: AbortSignal): Promise<void> {
+async function handleHttp(tunnel: WebSocket, localSession: LocalSession, frame: TunnelFrame, signal: AbortSignal): Promise<void> {
   if (typeof frame.method !== 'string' || typeof frame.path !== 'string') throw new Error('Invalid HTTP tunnel request.')
   if (!isApiPath(frame.path)) throw new Error('Remote tunnel only accepts Harness API requests.')
-  const target = localTarget(localUrl, frame.path)
+  const target = localTarget(localSession.origin, frame.path)
   if (isPrivilegedRequest(target, frame.method)) {
     safeSend(tunnel, {
       type: 'http_response', id: frame.id, status: 403,
@@ -219,7 +243,7 @@ async function handleHttp(tunnel: WebSocket, localUrl: string, frame: TunnelFram
   const requestBody = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer
   const response = await fetch(target, {
     method: frame.method,
-    headers: requestHeaders(frame.headers),
+    headers: requestHeaders(frame.headers, localSession.cookie),
     body: body.byteLength === 0 || frame.method === 'GET' || frame.method === 'HEAD' ? undefined : requestBody,
     redirect: 'manual',
     signal,
@@ -230,7 +254,7 @@ async function handleHttp(tunnel: WebSocket, localUrl: string, frame: TunnelFram
     Buffer.from(await response.arrayBuffer()),
   )
   if (responseBody.byteLength > MAX_TUNNEL_RESPONSE_BODY_BYTES) throw new Error('Local response body is too large for remote access.')
-  const headers = responseHeaders(response.headers, localUrl)
+  const headers = responseHeaders(response.headers, localSession.origin)
   if (responseBody.byteLength <= MAX_LEGACY_RESPONSE_BODY_BYTES) {
     safeSend(tunnel, {
       type: 'http_response', id: frame.id, status: response.status,
@@ -253,16 +277,19 @@ async function handleHttp(tunnel: WebSocket, localUrl: string, frame: TunnelFram
 
 function openLocalWebSocket(
   tunnel: WebSocket,
-  localUrl: string,
+  localSession: LocalSession,
   localSockets: Map<string, WebSocket>,
   frame: TunnelFrame,
 ): void {
   if (typeof frame.path !== 'string' || frame.id === undefined) throw new Error('Invalid WebSocket tunnel request.')
   if (!isApiPath(frame.path)) throw new Error('Remote tunnel only accepts Harness API WebSockets.')
-  const target = localTarget(localUrl, frame.path)
+  const target = localTarget(localSession.origin, frame.path)
   target.protocol = 'ws:'
   const protocols = frame.headers?.['Sec-Websocket-Protocol'] ?? frame.headers?.['sec-websocket-protocol']
-  const local = new WebSocket(target, protocols?.flatMap(value => value.split(',').map(item => item.trim()).filter(Boolean)))
+  const requestedProtocols = protocols?.flatMap(value => value.split(',').map(item => item.trim()).filter(Boolean))
+  const local = new WebSocket(target, requestedProtocols, {
+    headers: localSession.cookie === undefined ? undefined : { Cookie: localSession.cookie },
+  })
   localSockets.set(frame.id, local)
   let opened = false
   local.once('open', () => {
@@ -318,16 +345,13 @@ function projectReadOnlyResponse(target: URL, method: string, body: Buffer): Buf
     throw new Error(`Local ${rpcMethod} response had an invalid result.`)
   }
   const value = envelope.result.value
-  if (rpcMethod === 'settings.describe') {
+  if (rpcMethod === 'settings/describe') {
     value.writable = false
     value.hasDocument = false
   } else {
-    if (!isRecord(value.credentials)) {
-      throw new Error('Local credentials.describe response had an invalid credential map.')
-    }
-    for (const credential of Object.values(value.credentials)) {
+    for (const credential of Object.values(value)) {
       if (!isRecord(credential)) {
-        throw new Error('Local credentials.describe response had an invalid credential entry.')
+        throw new Error('Local credentials/describe response had an invalid credential entry.')
       }
       credential.writable = false
     }
@@ -348,13 +372,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function requestHeaders(source: Record<string, string[]> | undefined): Headers {
+function requestHeaders(source: Record<string, string[]> | undefined, localCookie?: string): Headers {
   const headers = new Headers()
   const allowed = new Set(['accept', 'accept-language', 'content-type', 'if-modified-since', 'if-none-match', 'range'])
   for (const [name, values] of Object.entries(source ?? {})) {
     if (!allowed.has(name.toLowerCase())) continue
     for (const value of values) headers.append(name, value)
   }
+  if (localCookie !== undefined) headers.set('cookie', localCookie)
   return headers
 }
 

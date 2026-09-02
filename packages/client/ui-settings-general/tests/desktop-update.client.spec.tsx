@@ -3,12 +3,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { DesktopUpdateBadge } from '../src/client/DesktopUpdateBadge.tsx'
 import { DesktopVersionLabel } from '../src/client/DesktopVersionLabel.tsx'
+import { zh } from '../src/client/locales.ts'
+import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import {
   DESKTOP_UPDATE_CANCEL_URL, DESKTOP_UPDATE_STATE_EVENT, desktopUpdateConfiguration,
   fetchDesktopUpdate, UPDATE_CHECK_INTERVAL_MS,
 } from '../src/client/desktop-update.ts'
 
 const desktopSearch = '?dsh_desktop_version=1.0.0-beta.5&dsh_desktop_platform=darwin&dsh_desktop_arch=arm64&dsh_update_origin=https%3A%2F%2Fdsh.roubsite.com'
+const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
+  let value = zh[key]
+  for (const [name, replacement] of Object.entries(params ?? {})) {
+    value = value.replaceAll(`{${name}}`, String(replacement))
+  }
+  return value
+}) as SettingsRootComponentProps['t']
 
 afterEach(() => {
   cleanup()
@@ -55,13 +64,13 @@ describe('desktop update configuration', () => {
 describe('DesktopUpdateBadge', () => {
   it('shows the current version beside Settings only in the wide desktop sidebar', () => {
     window.history.replaceState({}, '', desktopSearch)
-    const { rerender } = render(<DesktopVersionLabel wide />)
+    const { rerender } = render(<DesktopVersionLabel wide t={t} />)
     expect(screen.getByText('v1.0.0-beta.5')).toBeTruthy()
-    rerender(<DesktopVersionLabel wide={false} />)
+    rerender(<DesktopVersionLabel wide={false} t={t} />)
     expect(screen.queryByText('v1.0.0-beta.5')).toBeNull()
     cleanup()
     window.history.replaceState({}, '', '/')
-    render(<DesktopVersionLabel wide />)
+    render(<DesktopVersionLabel wide t={t} />)
     expect(screen.queryByText('v1.0.0-beta.5')).toBeNull()
   })
 
@@ -76,7 +85,7 @@ describe('DesktopUpdateBadge', () => {
       },
     }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
-    render(<DesktopUpdateBadge wide />)
+    render(<DesktopUpdateBadge wide t={t} />)
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     expect(screen.getByRole('link', { name: /有新版本/u })).toBeTruthy()
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -91,7 +100,7 @@ describe('DesktopUpdateBadge', () => {
   it('does not enable update polling in an ordinary browser', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    render(<DesktopUpdateBadge wide />)
+    render(<DesktopUpdateBadge wide t={t} />)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.queryByRole('link')).toBeNull()
   })
@@ -105,7 +114,7 @@ describe('DesktopUpdateBadge', () => {
         asset: { file_name: 'package.dmg', download_url: 'https://dsh.roubsite.com/downloads/a/package.dmg' },
       },
     }), { status: 200 })))
-    render(<DesktopUpdateBadge wide />)
+    render(<DesktopUpdateBadge wide t={t} />)
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
     act(() => {

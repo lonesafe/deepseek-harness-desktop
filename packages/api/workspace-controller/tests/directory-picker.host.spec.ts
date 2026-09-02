@@ -98,7 +98,7 @@ describe('directoryPicker pick Remote', () => {
     const picker = await harness(BROWSE_STUB)
     const failure = await refused(picker.pick(new AbortController().signal))
     expect(failure.code).toBe('directory-picker/unavailable')
-    expect(failure.message).toContain('needs the native capability')
+    expect(failure.message).toContain('needs one of native, adaptive')
     expect(failure.details).toEqual({ capability: 'browse' })
   })
 })

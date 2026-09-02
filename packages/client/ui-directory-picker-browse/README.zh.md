@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包提供 Web GUI 的应用内目录浏览表面：一个「选择工作区目录」对话框，通过本地宿主列出、导航并创建文件夹，不涉及任何操作系统选择框。它填充 `ui-workspace` 声明的两个目录流程槽位，用一行 cordis.yml 组合出浏览拾取交互的客户端一侧。当浏览器为远程或进程内、没有本地操作系统选择器时选择它；本地部署可优先选择 [`-native`](../ui-directory-picker-native/README.zh.md) 表面。
+本包提供 Web GUI 的自适应目录选择表面。远程页面会显示「选择工作区目录」对话框，通过宿主列出、导航并创建文件夹；启用 `nativeOnLoopback` 后，只有本地桌面页面会委托给 OS 选择器。它填充 `ui-workspace` 声明的两个目录流程槽位，因此同一个表面可以同时服务本地与远程访问。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-与 `ui-workspace` 及宿主后端 [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.zh.md) 一起挂载本插件；一行 cordis.yml 随即组合出完整的浏览拾取交互。当工作区流程发起目录请求时，用户看到应用内对话框：头部承载路径面包屑与可编辑路径区，未选中行时是一整栏层级，选中后该行分为层级与子项两栏。
+与 `ui-workspace` 及宿主的[`浏览`](../../host/directory-picker-browse/README.zh.md)或自适应[`原生`](../../host/directory-picker-native/README.zh.md)后端一起挂载本插件。设置 `nativeOnLoopback: true` 后，回环桌面页面调用原生选择器，局域网与官网远程页面渲染浏览对话框。对话框头部承载路径面包屑与可编辑路径区，未选中行时是一整栏层级，选中后该行分为层级与子项两栏。
 
 ### 导航与创建
 
@@ -39,7 +39,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-对话框是 680×500 的 Miller 分栏视图（在较矮或较窄的视口中限制尺寸），经 `ctx.workspaces` 驱动宿主的 `listDirectory` 与 `createDirectory` 原语。两处注册经嵌套的 `ctx.slots.inject()` 调用作为一次事务性效果安装，因为任一声明条目都可能晚些激活或替换其声明；对话框文案注册在本包自己的 locale 命名空间下，让两份字典作为一个单元落地。浏览类失败留在对话框自己的提示区内，因此本填充从不驱动持有方的 `onError` 分支。node 半部是一个空 `apply`，让插件留在宿主名单上。
+对话框是 680×500 的 Miller 分栏视图（在较矮或较窄的视口中限制尺寸），经 `ctx.uiWorkspace` 驱动宿主的 `listDirectory` 与 `createDirectory` 原语。连接服务负责判断页面是否回环；只有启用 `nativeOnLoopback` 的回环页面才调用 `pickDirectory`。两处注册经嵌套的 `ctx.slots.inject()` 调用作为一次事务性效果安装。浏览类失败留在对话框自己的提示区内。node 半部是一个空 `apply`，让插件留在宿主名单上。
 
 </details>
 

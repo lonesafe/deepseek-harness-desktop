@@ -68,6 +68,15 @@ The browser HTTP carrier service. Activation listens immediately. Route registra
 
 ```ts cordis-catalog
 /**
+ * Verify credentials already accepted by the outer LAN access fence. This
+ * lets authenticated LAN browsers enter Connection's independently guarded
+ * index and API routes without exposing the configured secret to them.
+ * @param headers - node:http or Fetch-compatible request headers.
+ * @returns Whether the request carries the configured LAN credential.
+ */
+isLanAuthenticated(headers: RequestHeaders): boolean
+
+/**
  * Register a named route. Duplicate (kind, path) throws — route patterns are
  * a composition-level contract, so a collision is a misconfiguration.
  * @param route - kind, path, and the owning handler.

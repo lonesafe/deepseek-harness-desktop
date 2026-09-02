@@ -53,7 +53,7 @@ export class DirectoryPickerController extends TypertRemoteService {
    */
   @Remote('pick')
   async pick(signal: AbortSignal): Promise<string | null> {
-    const capability = this.requireCapability('native', 'pick')
+    const capability = this.requireCapability(['native', 'adaptive'] as const, 'pick')
     try {
       return await capability.pick(signal)
     } catch (error: unknown) {
@@ -70,7 +70,7 @@ export class DirectoryPickerController extends TypertRemoteService {
    */
   @Remote('list')
   async list(path: string | undefined, signal: AbortSignal): Promise<DirectoryListing> {
-    const capability = this.requireCapability('browse', 'list')
+    const capability = this.requireCapability(['browse', 'adaptive'] as const, 'list')
     try {
       return await capability.list(path, signal)
     } catch (error: unknown) {
@@ -94,7 +94,7 @@ export class DirectoryPickerController extends TypertRemoteService {
         { issues: request.error.issues },
       )
     }
-    const capability = this.requireCapability('browse', 'createDirectory')
+    const capability = this.requireCapability(['browse', 'adaptive'] as const, 'createDirectory')
     try {
       return await capability.createDirectory(request.data.path, request.data.name)
     } catch (error: unknown) {
@@ -104,14 +104,14 @@ export class DirectoryPickerController extends TypertRemoteService {
 
   /** Resolve the capability one wire verb needs, or refuse with the kind this backend serves. */
   private requireCapability<Kind extends keyof DirectoryPickerCapabilities>(
-    kind: Kind,
+    kinds: readonly Kind[],
     method: string,
   ): DirectoryPickerCapabilities[Kind] {
     const capability = this.ctx.directoryPicker.capability()
-    if (capability.kind !== kind) {
+    if (!(kinds as readonly string[]).includes(capability.kind)) {
       throw new RemoteError(
         'directory-picker/unavailable',
-        `directoryPicker.${method} needs the ${kind} capability; the composed picker serves "${capability.kind}"`,
+        `directoryPicker.${method} needs one of ${kinds.join(', ')}; the composed picker serves "${capability.kind}"`,
         { capability: capability.kind },
       )
     }

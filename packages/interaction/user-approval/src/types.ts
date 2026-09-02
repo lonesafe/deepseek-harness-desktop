@@ -26,10 +26,11 @@ export function ApprovalRequestId(id: string): ApprovalRequestId {
 }
 
 /**
- * Closed approval outcomes: a one-shot grant, explicit rejection, withdrawn
- * request, or unavailable answerer. Callers fail closed on `unavailable`.
+ * Closed approval outcomes: a one-shot or remembered grant, explicit
+ * rejection, withdrawn request, or unavailable answerer. Callers fail closed
+ * on `unavailable`.
  */
-export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'
+export type ApprovalOutcome = 'allowed-once' | 'allowed-always' | 'rejected' | 'cancelled' | 'unavailable'
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
@@ -46,6 +47,8 @@ declare module '@deepseek-ai/dsh-session/types' {
       toolName: string
       callId?: ToolCallId
       reason?: string
+      /** Stable identity for a session-local remembered grant. */
+      alwaysAllowKey?: string
     }
     /**
      * The outcome of a prior `approval/asked` (same `id`) — log-only audit.
@@ -69,6 +72,8 @@ export interface ApprovalRequestEvent {
   readonly callId?: ToolCallId
   /** Human-readable reason supplied by the asker. */
   readonly reason?: string
+  /** Whether the requester can remember a matching grant for this session. */
+  readonly allowAlways?: boolean
   /** Cancellation lifetime of the pending request. */
   readonly signal?: AbortSignal
 }

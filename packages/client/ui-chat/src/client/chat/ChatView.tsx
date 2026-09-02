@@ -17,6 +17,7 @@ import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
+const HISTORY_LOAD_THRESHOLD = 96
 const SCROLL_SAMPLE_INTERVAL_MS = 500
 
 /** Active column host when present; otherwise the view-local scroller. */
@@ -576,6 +577,15 @@ export function ChatView({
     if (isAtBottom) chatScroll.save(null)
     else if (position !== null) chatScroll.save(position)
     observedTopRef.current = el.scrollTop
+    if (
+      movedByReader
+      && el.scrollTop <= HISTORY_LOAD_THRESHOLD
+      && openState === 'open'
+      && hasMore
+      && !loadingOlder
+    ) {
+      loadOlderAnchored()
+    }
     scheduleActiveTurn()
   }
 

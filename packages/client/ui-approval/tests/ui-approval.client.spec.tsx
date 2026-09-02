@@ -314,6 +314,7 @@ function panelProps(
     escalation: `Tool ${pending.toolName} asks`,
     reject: 'Reject',
     allowOnce: 'Allow once',
+    allowAlways: 'Always allow',
   }
   return {
     matched: pending,
@@ -355,6 +356,21 @@ describe('ApprovalPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Allow once' }))
 
     await expect(pending.result).resolves.toBe('allowed-once')
+  })
+
+  it('offers and returns a remembered grant only when advertised', async () => {
+    const remembered = new PendingApproval(id('s1'), { toolName: 'bash', allowAlways: true })
+    render(<ApprovalPanel {...panelProps(remembered)} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Always allow' }))
+    await expect(remembered.result).resolves.toBe('allowed-always')
+
+    cleanup()
+    const oneShot = new PendingApproval(id('s2'), { toolName: 'bash' })
+    render(<ApprovalPanel {...panelProps(oneShot)} />)
+    expect(screen.queryByRole('button', { name: 'Always allow' })).toBeNull()
+    oneShot.abort(new Error('test cleanup'))
+    await oneShot.result.catch(() => {})
   })
 
   it('re-enables actions when answering fails', async () => {

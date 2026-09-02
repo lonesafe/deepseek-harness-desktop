@@ -43,8 +43,18 @@ function projectionsBaseline(value: SessionProjectionBaseline): ProjectionsBasel
   }
 }
 
-/** Messages requested per history page. */
-export const PAGE_MESSAGES = 50
+const DEFAULT_PAGE_MESSAGES = 50
+const REMOTE_PAGE_MESSAGES = 1
+
+/** Resolve the initial history page size for direct and portal transports. */
+export function resolveHistoryPageMessages(remoteRPCPath: unknown): number {
+  return remoteRPCPath === '/api/rpc' ? REMOTE_PAGE_MESSAGES : DEFAULT_PAGE_MESSAGES
+}
+
+/** Messages requested per history page; remote clients begin with only the newest message. */
+export const PAGE_MESSAGES = resolveHistoryPageMessages(
+  (globalThis as { __DSH_REMOTE_RPC__?: unknown }).__DSH_REMOTE_RPC__,
+)
 
 /** Messages requested per page while a turn jump loops backwards (fewer, larger round trips). */
 export const JUMP_PAGE_MESSAGES = 200

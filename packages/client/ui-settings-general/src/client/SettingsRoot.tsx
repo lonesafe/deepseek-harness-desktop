@@ -192,8 +192,8 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         >
           {renderSlot('settings.trigger', { wide })}
         </button>
-        <DesktopVersionLabel wide={wide} />
-        <DesktopUpdateBadge wide={wide} />
+        <DesktopVersionLabel wide={wide} t={t} />
+        <DesktopUpdateBadge wide={wide} t={t} />
         <ConnectionIndicator
           state={wide ? connectionIndicator : undefined}
           disconnectedLabel={t('connection.error')}

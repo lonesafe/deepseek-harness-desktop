@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-host-directory-picker-auto` picks the right directory-picking interaction for every boot: it resolves the host's situation once at boot and mounts the matching backend — [native](../directory-picker-native/README.md) or [browse](../directory-picker-browse/README.md) — together with its browser half, as real Loader entries in the in-memory root tree. The resolution is one pure boot-time sample: `native` requires a loopback-only bind, a non-SSH launch, and a servable display session; anything ambiguous resolves to `browse`, which works everywhere. Pinning an interaction means composing that backend directly. The mounted capability stays stable for the service lifetime, as the seam requires.
+`dsh-host-directory-picker-auto` picks the right directory-picking backend for every boot and always mounts the in-app browser surface. A local attended host gets the [native](../directory-picker-native/README.md) backend's adaptive capability: desktop pages use the OS chooser while remote pages use directory browsing. Remote or headless hosts get the [browse](../directory-picker-browse/README.md) backend. The resolution is one pure boot-time sample, and the mounted capability stays stable for the service lifetime.
 
 ## Table of Contents
 
@@ -33,7 +33,7 @@ Compose this plugin instead of a concrete backend when the same composition must
 
 ### What you get
 
-The resolved interaction arrives as an ordinary Loader entry: the backend registers `ctx.directoryPicker`, and its browser half is discovered by the client module table exactly as a config row's would be, so the seam's one-row-swaps-both-faces invariant holds. Unloading the chooser removes the entry, unloading both faces with it. The sample happens exactly once per boot, so the mounted capability stays stable for the service lifetime.
+The resolved backend and the browse-capable client surface arrive as ordinary Loader entries. For a native backend, the surface receives `nativeOnLoopback: true`, so only the desktop's loopback page invokes the OS chooser; an authenticated LAN or remote portal page uses the same surface's in-app browser. Unloading the chooser removes both entries. The sample happens exactly once per boot, so the mounted capability stays stable for the service lifetime.
 
 ### Pinning an interaction
 
@@ -53,7 +53,7 @@ A wrong `native` choice degrades to the backend's existing retryable failure dia
 
 ### Design concept
 
-The chooser is a pure decision plus a mount: `resolveDirectoryPickerBackend` samples host facts once at boot and returns a backend kind, and `apply` mounts the matching backend and surface packages as real Loader entries in the in-memory root tree — never persisted to a config file, because the root tree's `write()` is a no-op. The effect's disposer removes both entries and joins their fibers' teardown, so unloading returns only after both faces of the mounted interaction quiesced.
+The chooser is a pure decision plus a mount: `resolveDirectoryPickerBackend` samples host facts once at boot and returns a backend kind, and `apply` mounts that backend plus the browse-capable surface as real Loader entries in the in-memory root tree — never persisted to a config file, because the root tree's `write()` is a no-op. The effect's disposer removes both entries and joins their fibers' teardown, so unloading returns only after both faces quiesce.
 
 ### The resolution table
 

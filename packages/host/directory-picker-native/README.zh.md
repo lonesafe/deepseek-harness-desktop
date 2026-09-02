@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-坐在宿主屏幕前的操作者通过原生 OS 选择器选择工作区目录：`dsh-host-directory-picker-native` 每次选择打开一个平台目录选择器，并解析出所选绝对路径（取消时为 `null`）。macOS 驱动 `osascript`，Linux 使用 Zenity 并以 KDialog 回退，Windows 在 spawn 的子进程中打开现代 `IFileOpenDialog`。只有操作者坐在宿主屏幕前时才可用——远程部署应组合[浏览后端](../directory-picker-browse/README.zh.md)。一行组合配置还会在工作区流程中注册匹配的浏览器侧交互，因此同时选择两侧。
+坐在宿主屏幕前的操作者通过原生 OS 选择器选择工作区目录：`dsh-host-directory-picker-native` 为每次本地选择打开一个平台目录选择器，并解析出所选绝对路径（取消时为 `null`）。macOS 驱动 `osascript`，Linux 使用 Zenity 并以 KDialog 回退，Windows 在 spawn 的子进程中打开现代 `IFileOpenDialog`。该后端还通过自适应能力提供目录列举与创建，因此连接同一桌面端的远程页面会使用应用内浏览器，而不会尝试打开宿主 OS 对话框。
 
 ## 目录
 
@@ -25,15 +25,15 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当操作者工作在宿主屏幕前、且原生选择器是合适的交互时，组合此后端。打开目录选择器的工作区流程每次 open 请求调用一次 `pick(signal)`；返回的 promise 解析为所选绝对路径，操作者取消时解析为 `null`。
+当操作者工作在宿主屏幕前、且原生选择器是合适的本地交互时，组合此后端。本地回环工作区流程每次 open 请求调用一次 `pick(signal)`；远程工作区流程则通过应用内浏览器调用同一能力的 `list` 与 `createDirectory`。
 
 ### 何时选择
 
-为 macOS、Windows 或桌面 Linux 上的工作站本地操作者选择此后端。当客户端无法触达 OS 选择器时——远程浏览器、SSH 转发会话或无人值守宿主——请选择[浏览后端](../directory-picker-browse/README.zh.md)。处境因启动而异时，[自适应选择器](../directory-picker-auto/README.zh.md)在启动时判定。
+为 macOS、Windows 或桌面 Linux 上的工作站本地操作者选择此后端。本地回环页面调用 `pick(signal)`；远程页面则通过应用内浏览器调用同一能力的 `list` 与 `createDirectory`。对于没有可用显示环境的 SSH 或无人值守宿主，请选择[浏览后端](../directory-picker-browse/README.zh.md)；处境因启动而异时，由[自适应选择器](../directory-picker-auto/README.zh.md)在启动时判定。
 
 ### 操作者会看到什么
 
-每次调用在宿主屏幕上打开一个原生选择器并等待操作者；中止调用方的信号会终止选择器进程，而不是让它留在屏幕上。Linux 上选择器需要安装 Zenity 或 KDialog 之一；两者都没有时，`pick` 以包含解决建议的错误拒绝，而不会回退为手输路径提示。本包的 browser 半侧向工作区流程注册一个无渲染的流程占用者——每次 `open` 请求驱动 `directoryPicker/pick`，并上报唯一结果（所选路径、取消或失败）。
+每次本地调用会在宿主屏幕上打开原生选择器并等待操作者；中止调用方的信号会终止选择器进程，而不是让它留在屏幕上。Linux 上选择器需要安装 Zenity 或 KDialog 之一；两者都没有时，`pick` 以包含解决建议的错误拒绝，而不会回退为手输路径提示。配套的自适应客户端表面只在回环页面选择这个本地分支。
 
 ### 可观察的失败
 

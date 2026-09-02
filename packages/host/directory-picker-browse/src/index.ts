@@ -18,7 +18,7 @@ import {
   DirectoryPicker, DirectoryPickerError,
 } from '@deepseek-ai/dsh-host-directory-picker'
 import type {
-  DirectoryEntry, DirectoryListing, DirectoryPickerCapability,
+  DirectoryEntry, DirectoryListing, DirectoryPickerBrowseCapability, DirectoryPickerCapability,
 } from '@deepseek-ai/dsh-host-directory-picker'
 
 /**
@@ -183,38 +183,17 @@ export interface Config {
   maxEntries: number
 }
 
-/** The `ctx.directoryPicker` browse implementation (stable capability object per service life). */
-export default class BrowseDirectoryPicker extends DirectoryPicker {
-  /**
-   * `maxEntries` bounds the complete listing level a single `list` call may
-   * materialize and put on the wire: at most this many child-directory rows
-   * (hidden rows included), with `truncated` flagging a cut level. The
-   * default follows GitHub's web UI, which truncates directory listings at
-   * 1,000 entries.
-   */
-  static Config: z<Config> = z.object({
-    maxEntries: z.natural().min(1).default(1000),
-  })
-
-  private readonly browseCapability: DirectoryPickerCapability = {
+/** Filesystem operations reusable by browse-only and adaptive desktop services. */
+export class BrowseDirectoryOperations {
+  readonly capability: DirectoryPickerBrowseCapability = {
     kind: 'browse',
     list: (path, signal) => this.list(path, signal),
     createDirectory: (path, name) => this.createDirectory(path, name),
   }
 
-  constructor(ctx: Context, private readonly config: Config) {
-    super(ctx)
-  }
+  constructor(private readonly config: Config) {}
 
-  /**
-   * The browse interaction capability.
-   * @returns the stable `browse` capability object.
-   */
-  capability(): DirectoryPickerCapability {
-    return this.browseCapability
-  }
-
-  private async list(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
+  async list(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
     const home = homedir()
     // The seam contract takes fully qualified paths only; resolve() would
     // silently rebase a relative or empty wire value under the host process
@@ -296,7 +275,7 @@ export default class BrowseDirectoryPicker extends DirectoryPicker {
     return { path: target, home, crumbs: ancestryCrumbs(target), entries, truncated }
   }
 
-  private async createDirectory(path: string, name: string): Promise<string> {
+  async createDirectory(path: string, name: string): Promise<string> {
     // Same fully-qualified fence as list: never rebase a parent under the
     // cwd or the current drive.
     if (!fullyQualified(path)) {
@@ -320,5 +299,28 @@ export default class BrowseDirectoryPicker extends DirectoryPicker {
       }
       throw new DirectoryPickerError('directory-create-failed', target, `cannot create ${target}: ${messageOf(error)}`)
     }
+  }
+}
+
+/** Create browser filesystem primitives for an adaptive desktop picker. */
+export function createBrowseDirectoryCapability(config: Config = { maxEntries: 1000 }): DirectoryPickerBrowseCapability {
+  return new BrowseDirectoryOperations(config).capability
+}
+
+/** The `ctx.directoryPicker` browse implementation (stable capability object per service life). */
+export default class BrowseDirectoryPicker extends DirectoryPicker {
+  static Config: z<Config> = z.object({
+    maxEntries: z.natural().min(1).default(1000),
+  })
+
+  private readonly browseCapability: DirectoryPickerCapability
+
+  constructor(ctx: Context, config: Config) {
+    super(ctx)
+    this.browseCapability = createBrowseDirectoryCapability(config)
+  }
+
+  capability(): DirectoryPickerCapability {
+    return this.browseCapability
   }
 }

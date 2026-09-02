@@ -2,7 +2,7 @@
 
 [English](approval.md) | 中文
 
-[dsh-user-approval](../../packages/interaction/user-approval) 的用户审批 seam 回答一个问题：这个具体操作是否可以继续？它拥有共享的请求/结果词汇、`ctx.approval` 分发服务、`approval/request` 应答者 waterfall（瀑布式事件）、仅记录日志的审计事件对，以及按会话的 `ask`/`never` 策略。UI 通道可以提供人类应答者；[ACP（Agent Client Protocol）自动化桥接层](../../packages/acp/acp)为其拥有的 agent（智能体）提供一次性机器决策。调用方如 [dsh-tools](../../packages/core/tools) 和 [dsh-tool-bash](../../packages/shell/tool-bash) 消费闭合的结果，除非结果为 `allowed-once`，否则一律拒绝。
+[dsh-user-approval](../../packages/interaction/user-approval) 的用户审批 seam 回答一个问题：这个操作是否可以继续？它拥有共享的请求/结果词汇、`ctx.approval` 分发服务、`approval/request` 应答者 waterfall（瀑布式事件）、仅记录日志的审计事件对，以及按会话的 `ask`/`never` 策略。UI 通道可以提供人类应答者；当请求方提供稳定规则键时，还能记住仅在当前会话生效的授权。[ACP（Agent Client Protocol）自动化桥接层](../../packages/acp/acp)为其拥有的 agent（智能体）提供一次性机器决策。调用方如 [dsh-tools](../../packages/core/tools) 和 [dsh-tool-bash](../../packages/shell/tool-bash) 消费闭合结果，除非结果为单次授权或有效记忆授权，否则一律拒绝。
 
 源码：[`packages/interaction/user-approval/src/index.ts`](../../packages/interaction/user-approval/src/index.ts)
 
@@ -18,14 +18,15 @@
 type ApprovalRequestId = Branded<'ApprovalRequestId'>
 ```
 
-`ApprovalOutcome` 是闭合的，且失败时拒绝。`allowed-once` 仅授权所询问的那一个操作；调用方对 `rejected`、`cancelled` 和 `unavailable` 均执行拒绝。缺失、不负责该请求、抛异常或不合规的应答者会产生 `unavailable`，而非放行。
+`ApprovalOutcome` 是闭合的，且失败时拒绝。`allowed-once` 仅授权所询问的那一个操作；当请求带有稳定规则键时，`allowed-always` 还会记录同一会话内的匹配授权。调用方对 `rejected`、`cancelled` 和 `unavailable` 均执行拒绝。缺失、不负责该请求、抛异常或不合规的应答者会产生 `unavailable`，而非放行。
 
 ```ts type-equiv
 /**
- * Closed approval outcomes: a one-shot grant, explicit rejection, withdrawn
- * request, or unavailable answerer. Callers fail closed on `unavailable`.
+ * Closed approval outcomes: a one-shot or remembered grant, explicit
+ * rejection, withdrawn request, or unavailable answerer. Callers fail closed
+ * on `unavailable`.
  */
-type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable'
+type ApprovalOutcome = 'allowed-once' | 'allowed-always' | 'rejected' | 'cancelled' | 'unavailable'
 ```
 
 ## 按会话策略
@@ -57,7 +58,7 @@ type ApprovalPolicy = 'ask' | 'never'
  * Readonly same-process permission question. `callId` links to an already
  * presented tool call, so arguments are not duplicated here.
  */
-interface ApprovalRequest extends ApprovalRequestEvent {
+interface ApprovalRequest extends Omit<ApprovalRequestEvent, 'allowAlways'> {
   /**
    * The agent on whose behalf the question is asked. Routes the question (a
    * UI answerer only answers for agents it owns) and receives the audit
@@ -73,6 +74,8 @@ interface ApprovalRequest extends ApprovalRequestEvent {
   readonly callId?: ToolCallId
   /** The asker's human-readable explanation of WHY it is asking. */
   readonly reason?: string
+  /** Stable identity for equivalent future requests in this session. */
+  readonly alwaysAllowKey?: string
   /**
    * Aborting withdraws the question: the request settles `'cancelled'`
    * immediately and a late answer from a still-pending answerer is discarded.
@@ -83,7 +86,7 @@ interface ApprovalRequest extends ApprovalRequestEvent {
 
 ## 分发与审计
 
-`ctx.approval.request(req)` 要求发起请求的会话处于一个尚未结束的轮次内。它追加 `approval/asked`，获取一个结果，追加对应的 `approval/decided`，然后以该结果完成。`never` 策略在服务内部、waterfall 分发之前强制执行，因此即使后来以 `prepend` 注册的应答者也无法绕过它。应答者在负责处理该请求时返回结果，否则调用 `next()` 委托；第一个应答占据唯一的决策槽位。
+`ctx.approval.request(req)` 要求发起请求的会话处于一个尚未结束的轮次内。它追加 `approval/asked`，获取一个结果，追加对应的 `approval/decided`，然后以该结果完成。`never` 策略在服务内部、记忆授权查询与 waterfall 分发之前强制执行，因此已保存规则和后来以 `prepend` 注册的应答者都无法绕过它。应答者在负责处理该请求时返回结果，否则调用 `next()` 委托；第一个应答占据唯一的决策槽位。
 
 审计事件仅写入日志，不进入模型 transcript（文本记录）。模型可见的行为是调用方派生的工具结果与当前运行时上下文快照。服务 dispose（资源释放）时会移除其上下文贡献；应答者监听器独立地通过 effect 绑定到其所属插件。
 
@@ -125,7 +128,7 @@ setPolicy(agent: Agent, policy: ApprovalPolicy): void
  * authoritative append cannot reject the request or suppress its matching
  * audit event.
  * @param req - the pending decision (agent, tool identity, reason, signal).
- * @returns the closed outcome; `'allowed-once'` is the only grant.
+ * @returns the closed outcome; one-shot and valid remembered grants allow the action.
  * @throws when no turn is open or either audit event fails before the session
  *   append commit point.
  */

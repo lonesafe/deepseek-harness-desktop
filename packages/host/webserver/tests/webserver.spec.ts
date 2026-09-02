@@ -421,6 +421,13 @@ describe('LAN access authentication', () => {
     expect(isAuthorizedPeer('192.168.1.9', `Basic ${Buffer.from(`other:${accessToken}`).toString('base64')}`, accessToken)).toBe(false)
   })
 
+  it('lets downstream authenticated routes recognize the accepted LAN credentials', async () => {
+    const loaded = await loadComposition(0, false, '0.0.0.0', accessToken)
+    expect(loaded.webServer.isLanAuthenticated({ authorization })).toBe(true)
+    expect(loaded.webServer.isLanAuthenticated(new Headers({ authorization }))).toBe(true)
+    expect(loaded.webServer.isLanAuthenticated({ authorization: 'Bearer wrong' })).toBe(false)
+  })
+
   it('accepts only the opaque session cookie derived from the configured token', () => {
     expect(isAuthorizedPeer('192.168.1.9', undefined, accessToken, `${LAN_ACCESS_COOKIE}=wrong`)).toBe(false)
     expect(isAuthorizedPeer('192.168.1.9', undefined, accessToken, 'other=value')).toBe(false)

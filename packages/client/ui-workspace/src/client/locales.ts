@@ -93,6 +93,10 @@ export const zh = {
   'files.copyCode': '复制代码',
   'files.copiedCode': '已复制',
   'files.footnotes': '脚注',
+  'files.unit.bytes': '{value} B',
+  'files.unit.kibibytes': '{value} KiB',
+  'files.unit.mebibytes': '{value} MiB',
+  'files.fileType': '文件',
 } satisfies Record<string, string>
 
 /** The workspace namespace key union. */
@@ -187,4 +191,8 @@ export const en = {
   'files.copyCode': 'Copy code',
   'files.copiedCode': 'Copied',
   'files.footnotes': 'Footnotes',
+  'files.unit.bytes': '{value} B',
+  'files.unit.kibibytes': '{value} KiB',
+  'files.unit.mebibytes': '{value} MiB',
+  'files.fileType': 'FILE',
 } satisfies Record<WorkspaceKey, string>

@@ -75,9 +75,20 @@ function collectChunkedResponse(socket: WebSocket, id: string): Promise<{
 
 describe('desktop remote tunnel', () => {
   it('proxies only the fixed loopback origin and exposes configuration as read-only', async () => {
+    const localCookie = 'dsh_browser_auth=local-session-cookie'
     const local = createServer((request, response) => {
+      if (request.url === '/?token=process-launch-token') {
+        response.writeHead(303, { location: '/', 'set-cookie': `${localCookie}; Path=/; HttpOnly` })
+        response.end()
+        return
+      }
+      if (request.headers.cookie !== localCookie) {
+        response.writeHead(401)
+        response.end('unauthorized')
+        return
+      }
       response.writeHead(200, { 'content-type': 'application/json' })
-      if (request.url === '/api/settings.describe') {
+      if (request.url === '/api/settings/describe') {
         response.end(JSON.stringify({
           rpcId: 'settings-rpc',
           result: {
@@ -91,28 +102,33 @@ describe('desktop remote tunnel', () => {
         }))
         return
       }
-      if (request.url === '/api/credentials.describe') {
+      if (request.url === '/api/credentials/describe') {
         response.end(JSON.stringify({
           rpcId: 'credentials-rpc',
           result: {
             ok: true,
-            value: {
-              credentials: {
-                DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: true },
-              },
-            },
+            value: { DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: true } },
           },
         }))
         return
       }
-      if (request.url === '/api/session.history') {
+      if (request.url === '/api/session/page') {
         response.end(Buffer.alloc((1 << 20) + 17, 0x61))
         return
       }
       response.end(JSON.stringify({ path: request.url, forwardedCookie: request.headers.cookie ?? null }))
     })
+    let localWebSocketCookie: string | undefined
+    const localWebSockets = new WebSocketServer({ server: local, path: '/api' })
+    localWebSockets.on('connection', (socket, request) => {
+      localWebSocketCookie = request.headers.cookie
+      socket.on('message', (body, binary) => { socket.send(body, { binary }) })
+    })
     const localPort = await listen(local)
-    closers.push(() => closeServer(local))
+    closers.push(async () => {
+      await new Promise<void>((resolve) => { localWebSockets.close(() => { resolve() }) })
+      await closeServer(local)
+    })
 
     const relayServer = createServer()
     const relay = new WebSocketServer({ server: relayServer })
@@ -134,7 +150,7 @@ describe('desktop remote tunnel', () => {
     let markOnline: (() => void) | undefined
     const online = new Promise<void>((resolve) => { markOnline = resolve })
     const tunnel: RemoteTunnel = startRemoteTunnel({
-      localUrl: `http://127.0.0.1:${String(localPort)}/`,
+      localUrl: `http://127.0.0.1:${String(localPort)}/?token=process-launch-token`,
       authorization: {
         deviceId: 'a'.repeat(32),
         deviceToken: 'device-token-with-at-least-thirty-two-characters',
@@ -153,7 +169,24 @@ describe('desktop remote tunnel', () => {
     }))
     const response = await nextFrame(socket)
     expect(response).toMatchObject({ type: 'http_response', id: '1'.repeat(32), status: 200 })
-    expect(JSON.parse(Buffer.from(response.body as string, 'base64').toString())).toEqual({ path: '/api/hello?from=relay', forwardedCookie: null })
+    expect(JSON.parse(Buffer.from(response.body as string, 'base64').toString())).toEqual({
+      path: '/api/hello?from=relay',
+      forwardedCookie: localCookie,
+    })
+
+    const websocketId = '9'.repeat(32)
+    const opened = nextFrame(socket)
+    socket.send(JSON.stringify({ type: 'ws_open', id: websocketId, path: '/api' }))
+    await expect(opened).resolves.toMatchObject({ type: 'ws_opened', id: websocketId })
+    expect(localWebSocketCookie).toBe(localCookie)
+    const echoed = nextFrame(socket)
+    socket.send(JSON.stringify({
+      type: 'ws_data', id: websocketId, body: Buffer.from('history-page').toString('base64'), binary: false,
+    }))
+    await expect(echoed).resolves.toMatchObject({
+      type: 'ws_data', id: websocketId, body: Buffer.from('history-page').toString('base64'), binary: false,
+    })
+    socket.send(JSON.stringify({ type: 'ws_close', id: websocketId }))
 
     // The native ws implementation may report a successful send with null
     // instead of undefined. Reproduce that production callback shape so a
@@ -178,7 +211,7 @@ describe('desktop remote tunnel', () => {
       try {
         const largeResponse = collectChunkedResponse(socket, '8'.repeat(32))
         socket.send(JSON.stringify({
-          type: 'http_request', id: '8'.repeat(32), method: 'POST', path: '/api/session.history', body: '',
+          type: 'http_request', id: '8'.repeat(32), method: 'POST', path: '/api/session/page', body: '',
         }))
         return await largeResponse
       } finally {
@@ -197,7 +230,7 @@ describe('desktop remote tunnel', () => {
     expect(staticDenied).toMatchObject({ type: 'error', id: '3'.repeat(32), message: 'Remote tunnel only accepts Harness API requests.' })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '2'.repeat(32), method: 'POST', path: '/api/settings.describe', body: '',
+      type: 'http_request', id: '2'.repeat(32), method: 'POST', path: '/api/settings/describe', body: '',
     }))
     const settings = await nextFrame(socket)
     expect(settings).toMatchObject({ type: 'http_response', id: '2'.repeat(32), status: 200 })
@@ -214,7 +247,7 @@ describe('desktop remote tunnel', () => {
     })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '4'.repeat(32), method: 'POST', path: '/api/credentials.describe', body: '',
+      type: 'http_request', id: '4'.repeat(32), method: 'POST', path: '/api/credentials/describe', body: '',
     }))
     const credentials = await nextFrame(socket)
     expect(credentials).toMatchObject({ type: 'http_response', id: '4'.repeat(32), status: 200 })
@@ -223,33 +256,31 @@ describe('desktop remote tunnel', () => {
         result: {
           ok: true,
           value: {
-            credentials: {
-              DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: false },
-            },
+            DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: false },
           },
         },
       })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '5'.repeat(32), method: 'post', path: '/api/settings.mutate', body: '',
+      type: 'http_request', id: '5'.repeat(32), method: 'post', path: '/api/settings/mutate', body: '',
     }))
     const writeForbidden = await nextFrame(socket)
     expect(writeForbidden).toMatchObject({ type: 'http_response', id: '5'.repeat(32), status: 403 })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '6'.repeat(32), method: 'POST', path: '/api/settings%2Emutate', body: '',
+      type: 'http_request', id: '6'.repeat(32), method: 'POST', path: '/api/settings%2Fmutate', body: '',
     }))
     const encodedWriteForbidden = await nextFrame(socket)
     expect(encodedWriteForbidden).toMatchObject({ type: 'http_response', id: '6'.repeat(32), status: 403 })
 
     socket.send(JSON.stringify({
-      type: 'http_request', id: '7'.repeat(32), method: 'POST', path: '/api/settings.describe?malformed=true', body: '',
+      type: 'http_request', id: '7'.repeat(32), method: 'POST', path: '/api/settings/describe?malformed=true', body: '',
     }))
     const malformedProjection = await nextFrame(socket)
     expect(malformedProjection).toMatchObject({
       type: 'error',
       id: '7'.repeat(32),
-      message: 'Local settings.describe response had an invalid RPC envelope.',
+      message: 'Local settings/describe response had an invalid RPC envelope.',
     })
   }, 15_000)
 })

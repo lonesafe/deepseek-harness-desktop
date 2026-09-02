@@ -2639,6 +2639,9 @@ importers:
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
         version: link:../../api/remotes
+      '@deepseek-ai/dsh-client-connection':
+        specifier: workspace:^
+        version: link:../connection
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:^
         version: link:../locale
@@ -2835,9 +2838,15 @@ importers:
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
+      '@types/react-dom':
+        specifier: ~18.3.0
+        version: 18.3.7(@types/react@18.3.31)
       react:
         specifier: ^18.2.0
         version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
 
   packages/client/ui-layout:
     devDependencies:
@@ -5992,9 +6001,6 @@ importers:
       '@deepseek-ai/dsh-client-ui-directory-picker-browse':
         specifier: workspace:^
         version: link:../../client/ui-directory-picker-browse
-      '@deepseek-ai/dsh-client-ui-directory-picker-native':
-        specifier: workspace:^
-        version: link:../../client/ui-directory-picker-native
       '@deepseek-ai/dsh-host-directory-picker':
         specifier: workspace:^
         version: link:../directory-picker
@@ -6026,6 +6032,9 @@ importers:
       '@deepseek-ai/dsh-host-directory-picker':
         specifier: workspace:^
         version: link:../directory-picker
+      '@deepseek-ai/dsh-host-directory-picker-browse':
+        specifier: workspace:^
+        version: link:../directory-picker-browse
       '@deepseek-ai/dsh-native-command':
         specifier: workspace:^
         version: link:../../util/native-command

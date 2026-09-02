@@ -191,6 +191,22 @@ Host service backing the generated `ctx.remote.workspace` namespace.
 
 ```ts cordis-catalog
 /**
+ * List one bounded directory level inside a registered Workspace.
+ * @param request - Workspace identity and optional relative directory path.
+ * @param signal - cancellation lifetime for the filesystem scan.
+ * @returns the sorted, workspace-contained file listing.
+ */
+@Remote('listFiles') listFiles(request: WorkspaceFileListRequest, signal: AbortSignal): Promise<WorkspaceFileListing>
+
+/**
+ * Read one bounded regular file inside a registered Workspace.
+ * @param request - Workspace identity and relative file path.
+ * @param signal - cancellation lifetime for the file read.
+ * @returns a size-limited text, image, or PDF preview payload.
+ */
+@Remote('readFile') readFile(request: WorkspaceFileReadRequest, signal: AbortSignal): Promise<WorkspaceFilePreview>
+
+/**
  * Create or idempotently resolve one Workspace over an existing directory.
  * @param request - directory path to register.
  * @returns the Workspace and whether this call created it.

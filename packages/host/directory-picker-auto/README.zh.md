@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-host-directory-picker-auto` 为每次启动选出正确的目录选择交互：它在启动时一次性判定宿主处境，并把匹配的后端——[原生](../directory-picker-native/README.zh.md)或[浏览](../directory-picker-browse/README.zh.md)——连同其 browser 半侧一起，作为真实的 Loader 条目挂进内存根树。判定是一次纯函数的启动时采样：`native` 要求仅回环绑定、非 SSH 启动与可服务的显示会话；任何含糊情形都判定为处处可用的 `browse`。固定某种交互就是直接组合那个后端。挂载的能力在服务生命周期内保持稳定，符合 seam 的要求。
+`dsh-host-directory-picker-auto` 为每次启动选出正确的目录选择后端，并始终挂载应用内浏览表面。本地有人值守的宿主使用[原生](../directory-picker-native/README.zh.md)后端的自适应能力：桌面页面使用 OS 选择器，远程页面使用目录浏览；远程或无头宿主使用[浏览](../directory-picker-browse/README.zh.md)后端。判定是一次纯函数的启动时采样，挂载能力在服务生命周期内保持稳定。
 
 ## 目录
 
@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 你会得到什么
 
-判定出的交互以普通 Loader 条目的形式到达：后端注册 `ctx.directoryPicker`，其 browser 半侧被 client 模块表发现的方式与配置行完全相同，因此 seam 的「一行同时换两面」不变式依然成立。卸载该选择器会移除该条目，连同两面一起卸载。采样每次启动恰好发生一次，因此挂载的能力在服务生命周期内保持稳定。
+判定出的后端与具备浏览能力的客户端表面以普通 Loader 条目到达。使用原生后端时，表面会收到 `nativeOnLoopback: true`，因此只有桌面的回环页面调用 OS 选择器；经过认证的局域网或官网远程页面使用同一表面的应用内浏览器。卸载选择器会同时移除两个条目。采样每次启动恰好发生一次，因此挂载能力在服务生命周期内保持稳定。
 
 ### 固定某种交互
 
@@ -53,7 +53,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-选择器是一次纯决策加一次挂载：`resolveDirectoryPickerBackend` 在启动时采样宿主事实并返回一个后端类型，`apply` 把匹配的后端与界面包作为真实 Loader 条目挂进内存根树——绝不持久化到配置文件，因为根树的 `write()` 是 no-op。该 effect 的 disposer 会移除两个条目并汇合其 fiber 的拆除，因此卸载只在所挂载交互的两面（及其依赖方）完全停稳后返回。
+选择器是一次纯决策加一次挂载：`resolveDirectoryPickerBackend` 在启动时采样宿主事实并返回一个后端类型，`apply` 把该后端与具备浏览能力的表面作为真实 Loader 条目挂进内存根树——绝不持久化到配置文件，因为根树的 `write()` 是 no-op。该 effect 的 disposer 会移除两个条目并汇合其 fiber 的拆除，因此卸载只在两面完全停稳后返回。
 
 ### 判定表
 

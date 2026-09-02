@@ -89,6 +89,17 @@ type NodeMiddleware = (
   next: () => void,
 ) => void
 
+type RequestHeaders = Readonly<Record<string, string | readonly string[] | undefined>> | {
+  get(name: string): string | null
+}
+
+/** Read one header from either node:http or Fetch-compatible headers. */
+function requestHeader(headers: RequestHeaders, name: string): string | undefined {
+  if ('get' in headers && typeof headers.get === 'function') return headers.get(name) ?? undefined
+  const value = (headers as Readonly<Record<string, string | readonly string[] | undefined>>)[name.toLowerCase()]
+  return typeof value === 'string' ? value : value?.at(0)
+}
+
 function createGzipMiddleware(config: ResolvedConfig): NodeMiddleware {
   // `compression` is typed for Express, but its runtime uses only the
   // node:http request and response members supplied here.
@@ -330,6 +341,19 @@ export class WebServer extends Service {
   /** The configured bind host (the loopback or all-interfaces literal). */
   get host(): Config['host'] {
     return this.config.host
+  }
+
+  /**
+   * Verify credentials already accepted by the outer LAN access fence. This
+   * lets authenticated LAN browsers enter Connection's independently guarded
+   * index and API routes without exposing the configured secret to them.
+   * @param headers - node:http or Fetch-compatible request headers.
+   * @returns Whether the request carries the configured LAN credential.
+   */
+  isLanAuthenticated(headers: RequestHeaders): boolean {
+    if (this.config.accessToken.length < MIN_LAN_ACCESS_TOKEN_LENGTH) return false
+    return hasLanAccessCookie(requestHeader(headers, 'cookie'), this.config.accessToken)
+      || hasBasicCredentials(requestHeader(headers, 'authorization'), this.config.accessToken)
   }
 
   /**

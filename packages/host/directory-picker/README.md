@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The web GUI host lets an operator choose a workspace directory through one contract: a single service whose one method reports which interaction the composed backend provides. Backends differ in interaction shape, not just mechanism — the native backend opens an OS chooser on the host display, while the browse backend serves listing and creation primitives for an in-app browser that also works for remote clients. Consumers switch on the reported capability kind; a new backend extends the capability vocabulary without editing this package. This seam is GUI-host only and never reaches the agent loop; the backends and the wire mapping live beside it.
+The web GUI host lets an operator choose a workspace directory through one contract: a single service whose one method reports which interaction the composed backend provides. Backends differ in interaction shape, not just mechanism — the native backend can expose an adaptive capability that opens an OS chooser for the local desktop while also serving listing and creation primitives to remote browsers; the browse backend serves only the in-app browser. Consumers switch on the reported capability kind. This seam is GUI-host only and never reaches the agent loop; the backends and the wire mapping live beside it.
 
 ## Table of Contents
 
@@ -29,11 +29,11 @@ Mount exactly one directory-picker backend and let the workspace flow drive it: 
 
 ### Choosing a backend
 
-The [native backend](../directory-picker-native/README.md) is the right choice when the operator sits at the host's display: `directoryPicker/pick` opens one OS chooser and returns the chosen absolute path, or `null` on cancel. The [browse backend](../directory-picker-browse/README.md) works everywhere — it lists one directory level and creates child directories from the browser, so remote clients that cannot reach an OS dialog still pick a workspace. When the host situation varies between boots, compose the [adaptive chooser](../directory-picker-auto/README.md), which resolves the situation once at boot and mounts the matching backend.
+The [native backend](../directory-picker-native/README.md) is the right choice when the operator sits at the host's display: `directoryPicker/pick` opens an OS chooser locally, while its adaptive capability also lets remote browsers list directories and create folders. The [browse backend](../directory-picker-browse/README.md) works everywhere using only the in-app browser. When the host situation varies between boots, compose the [adaptive chooser](../directory-picker-auto/README.md), which resolves the situation once at boot and mounts the matching backend and browser surface.
 
 ### The capability contract
 
-`capability()` returns a discriminated union describing how an operator selects a directory: `{ kind: 'native', pick(signal) }` for the OS chooser, or `{ kind: 'browse', list(path?), createDirectory(path, name) }` for the in-app browser. Consumers switch on `kind`; a capability kind no composition implements means the UI hides the picking affordance rather than failing. Browse failures throw the typed `DirectoryPickerError` with a closed code set — `directory-unreadable`, `directory-exists`, or `directory-create-failed` — each carrying the subject path, which the picking Remote controller maps onto wire failure codes.
+`capability()` returns a discriminated union describing how an operator selects a directory: `{ kind: 'native', pick(signal) }` for the OS chooser, `{ kind: 'browse', list(path?), createDirectory(path, name) }` for the in-app browser, or `{ kind: 'adaptive', pick, list, createDirectory }` when both are available. Consumers choose the local or remote arm without asking a remote browser to open a host OS dialog. Browse failures throw the typed `DirectoryPickerError` with a closed code set — `directory-unreadable`, `directory-exists`, or `directory-create-failed` — each carrying the subject path, which the picking Remote controller maps onto wire failure codes.
 
 ### What rows carry
 

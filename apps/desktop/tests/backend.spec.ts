@@ -5,6 +5,8 @@ describe('desktop backend readiness', () => {
   it('extracts only the loopback readiness URL', () => {
     expect(extractHarnessUrl('booting\ndsh web: http://127.0.0.1:43119\n')).toBe('http://127.0.0.1:43119')
     expect(extractHarnessUrl('dsh web: http://0.0.0.0:43119')).toBeUndefined()
+    expect(extractHarnessUrl('dsh web: http://127.0.0.1:43119/?token=launch-token\n'))
+      .toBe('http://127.0.0.1:43119/?token=launch-token')
   })
 
   it('accepts the optional LAN display suffix without widening the app origin', () => {
@@ -12,6 +14,12 @@ describe('desktop backend readiness', () => {
       .toBe('http://127.0.0.1:3080')
     expect(extractHarnessReady('dsh web: http://127.0.0.1:3080 (LAN: http://10.0.0.8:3080)\n'))
       .toEqual({ localUrl: 'http://127.0.0.1:3080', lanUrl: 'http://10.0.0.8:3080' })
+    expect(extractHarnessReady(
+      'dsh web: http://127.0.0.1:3080/?token=local-token (LAN: http://10.0.0.8:3080/?token=lan-token)\n',
+    )).toEqual({
+      localUrl: 'http://127.0.0.1:3080/?token=local-token',
+      lanUrl: 'http://10.0.0.8:3080/?token=lan-token',
+    })
   })
 
   it('adds authenticated all-interfaces arguments only when LAN access is enabled', () => {

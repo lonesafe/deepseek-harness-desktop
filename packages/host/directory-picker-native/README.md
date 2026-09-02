@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-An operator at the host's display picks a workspace directory through a native OS chooser: `dsh-host-directory-picker-native` opens one platform directory chooser per pick and resolves the chosen absolute path (`null` on cancel). macOS drives `osascript`, Linux uses Zenity with a KDialog fallback, and Windows opens the modern `IFileOpenDialog` in a spawned child process. Only viable when the operator sits at the host's display — remote deployments compose the [browse backend](../directory-picker-browse/README.md) instead. One composition row also registers the matching browser-side interaction in the workspace flow, so it selects both sides.
+An operator at the host's display picks a workspace directory through a native OS chooser: `dsh-host-directory-picker-native` opens one platform directory chooser per local pick and resolves the chosen absolute path (`null` on cancel). macOS drives `osascript`, Linux uses Zenity with a KDialog fallback, and Windows opens the modern `IFileOpenDialog` in a spawned child process. The backend also exposes directory listing and creation in its adaptive capability, so remote pages connected to the same desktop use an in-app browser instead of trying to open the host's OS dialog.
 
 ## Table of Contents
 
@@ -25,15 +25,15 @@ An operator at the host's display picks a workspace directory through a native O
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this backend when the operator works at the host's display and a native chooser is the right interaction. A workspace flow that opens a directory picker calls `pick(signal)` once per open request; the returned promise resolves with the chosen absolute path, or `null` when the operator cancels.
+Compose this backend when the operator works at the host's display and a native chooser is the right local interaction. A loopback workspace flow calls `pick(signal)` once per open request; remote workspace flows use the same capability's `list` and `createDirectory` operations through the in-app browser.
 
 ### When to choose it
 
-Choose this backend for a workstation-local operator on macOS, Windows, or desktop Linux. Choose the [browse backend](../directory-picker-browse/README.md) when clients cannot reach an OS chooser — remote browsers, SSH-forwarded sessions, or unattended hosts. When the situation varies, the [adaptive chooser](../directory-picker-auto/README.md) resolves it at boot.
+Choose this backend for a workstation-local operator on macOS, Windows, or desktop Linux. Local pages use `pick(signal)`; remote pages use the adaptive capability's `list` and `createDirectory` through the in-app browser. Choose the [browse backend](../directory-picker-browse/README.md) for SSH-forwarded or unattended hosts without a usable display. When the situation varies, the [adaptive chooser](../directory-picker-auto/README.md) resolves it at boot.
 
 ### What an operator experiences
 
-Each call opens one native chooser on the host display and waits for the operator; aborting the caller's signal terminates the chooser process instead of leaving it open. On Linux the chooser needs either Zenity or KDialog installed; with neither present, `pick` rejects with an actionable error instead of falling back to a typed-path prompt. The browser half of this package registers a renderless flow occupant into the workspace flow — every `open` request drives `directoryPicker/pick` and reports the one outcome (picked path, cancel, or failure).
+Each local call opens one native chooser on the host display and waits for the operator; aborting the caller's signal terminates the chooser process instead of leaving it open. On Linux the chooser needs either Zenity or KDialog installed; with neither present, `pick` rejects with an actionable error instead of falling back to a typed-path prompt. The paired adaptive client surface chooses this local arm only on loopback pages.
 
 ### Observable failures
 

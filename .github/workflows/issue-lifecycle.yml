@@ -41,6 +41,7 @@ jobs:
     # are gated at step level (a skipped step does not gray the job): only a
     # changes_requested review drives the Project board; approved/commented
     # reviews never mint a write-capable App token.
+    if: github.repository == 'deepseek-ai/deepseek-harness'
     runs-on: ubuntu-latest
     steps:
       - name: Check out trusted policy

@@ -14,6 +14,10 @@ permissions:
 jobs:
   policy:
     name: Issue policy
+    # This policy reads the official repository's reviewer and project state.
+    # Forks do not own that state and must not call the upstream API with their
+    # repository token.
+    if: github.repository == 'deepseek-ai/deepseek-harness'
     runs-on: ubuntu-latest
     steps:
       - name: Check out trusted policy

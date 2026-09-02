@@ -142,7 +142,7 @@ The `apps/web/tests/**` e2e files typecheck in root `tsconfig.host.json`: they b
 
 This implies one build rule needed by the design: importing a value or type from a Client package in those tests brings that package's whole project and all its project references into the Host build graph. Four consumers (`ui-settings-general`, `ui-settings-models`, `ui-permission`, and `ui-commands`) reference API Remotes' Client face, which cannot compile until Host tsdown generates `@deepseek-ai/dsh-goal/remote`. That forms a build-order cycle: Host tsc needs API Remotes Client, which needs generated `goal/remote`, which Host tsdown emits after Host tsc.
 
-The required Client symbols are mirrored on the test side: `scaffold.ts` exports the welcome-notice constants consumed by the e2e files, so those tests do not import the four Client consumers. This removes those consumers from the Host graph, and the Client project references formerly kept in `apps/cli/tsconfig.json` no longer serve an owner-map role. Each mirror is byte-identical to its source; drift produces a selector mismatch or an unsuppressed notice and fails loudly.
+The few required Client symbols are mirrored on the test side: `scaffold.ts` exports the mirrored welcome-notice constants, while the two chat e2e files import `dsh-client-runtime/client` directly because the Runtime project already belongs to the Host graph. This removes those four consumers from the Host graph, and the 15 Client project references in `apps/cli/tsconfig.json` no longer serve an owner-map role. Each mirror is byte-identical to its source; drift produces a selector mismatch or an unsuppressed notice and fails loudly.
 
 ### Change inventory
 
@@ -154,7 +154,7 @@ The required Client symbols are mirrored on the test side: `scaffold.ts` exports
 | Root `tsconfig.base.json` | Adds source-plane `paths` entries for `dsh-settings/types`, `dsh-credentials/types`, and `dsh-api-remotes/types` |
 | `dsh-commands` / `dsh-settings` / `dsh-credentials` | Moves each `interface Events` member to the owner's Client-safe `./types`; settings and credentials add that export, move brands and pure types with it, retain constructors in index, and include `lib/types/**/*.js` in published files |
 | `dsh-session` | Exposes `isJsonValue` for validation of every event argument by the API Remotes Host source |
-| Session and Workspace Controllers | Own the Session and Workspace Client state formerly assembled in `client/runtime`; the Host-frame subscription bridge remains absent |
+| `client/runtime` | Removes the bridge from Host frames to the Remote subscription table; it only publishes `connection/reset` after a Connection generation is established |
 | Consumers | Client plugins subscribe directly through `ctx.remote.$on(...)`, import owner event declarations type-only, and inject `'remote'` |
 | `client/connection` | Provides the one generation-source registration point; `ConnectionController` publishes the Host facts from `$events` ready, and the fixture emits events from the same source |
 | `apps/web/tests` + `apps/cli` | Mirrors Client symbols on the test side as described above and removes 15 Client project references from `apps/cli/tsconfig.json` |

@@ -544,7 +544,6 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     dshHome,
     processCwd: cwd,
     env,
-    initializeTimeoutMs: 30_000,
     requestTimeoutMs: 110_000,
     cwd,
     provider: route.provider,

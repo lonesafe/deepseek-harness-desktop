@@ -9,7 +9,6 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-    - tab "Files"
 - button "System prompt":
   - img
   - img
@@ -40,6 +39,7 @@
     - text: Edited queue item
     - button "Edit queued message":
       - img
+    - tooltip "Edit queued message"
     - button "Remove queued message":
       - img
     - button "Steer queued message" [disabled]:
@@ -60,5 +60,4 @@
   - text: DeepSeek-V4-Flash
   - img
 - button "Send message" [disabled]
-- tooltip "Send message"
 - text: 1 turns · 1 steps LLM {{duration}} TTFT avg {{duration}}

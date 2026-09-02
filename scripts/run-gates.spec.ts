@@ -185,7 +185,7 @@ describe('gate graph validation', () => {
       'rescope-vendor', 'publint', 'constraints', 'package-dependencies', 'application-entrypoints',
       'dsh-package-licenses', 'package-invariants', 'built-package-invariants', 'node-next-types',
       'optional-dependency-imports', 'client-packages', 'client-ui-i18n', 'cordis-config',
-      'runtime-closure', 'desktop-runtime-closure', 'vendored-links',
+      'runtime-closure', 'vendored-links',
     ])
     expect(defaultConcurrency('hygiene', ids.length, 8)).toEqual({
       workers: 4,
@@ -256,6 +256,13 @@ describe('gate graph validation', () => {
       expect(ids).toContain('application-entrypoints')
     },
   )
+
+  it('runs the check-all build after tests release temporary source fixtures', () => {
+    const build = withPnpmEntrypoint(() => gatesForMode('check-all'))
+      .find(gate => gate.id === 'build')
+
+    expect(build?.after).toContain('test')
+  })
 
   it('keeps native Windows coverage blocking and behind the complete build', () => {
     const complete = withPnpmEntrypoint(() => gatesForMode('ci-windows-complete'))

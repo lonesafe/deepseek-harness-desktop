@@ -358,3 +358,44 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+@media (max-width: 639px) {
+  .root {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+
+  .card {
+    gap: 8px;
+    border-radius: 18px;
+  }
+
+  .row {
+    gap: 6px;
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .tools,
+  .modes,
+  .trailing {
+    gap: 6px;
+  }
+
+  .trailing {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .trailing > * {
+    min-width: 0;
+  }
+
+  .trailing > :first-child {
+    flex: 1 1 auto;
+  }
+
+  .input {
+    padding-right: 8px;
+    padding-left: 12px;
+  }
+}

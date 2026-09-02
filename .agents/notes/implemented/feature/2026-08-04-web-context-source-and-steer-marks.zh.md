@@ -36,8 +36,8 @@ Chat Inbox 与 Message Definition 会重放持久 `agent/inbox/spliced` 事件�
 
 ## 测试
 
-- `packages/client/ui-chat` 与 `packages/client/ui-trajectory` 的单元覆盖钉住每种来源类型、名称字段缺失／为空／类型不符时的回退、来源没有可读 kind 时的无名降级，以及持久 steering 重建。
-- `packages/client/ui-chat` 的 jsdom 覆盖钉住角色标题、标题旁的生产者名称、展开后该名称的留存，以及无角色标题栏。
+- `packages/client/runtime` 单元覆盖钉住每种来源类型、名称字段缺失／为空／类型不符时的回退、来源没有可读 kind 时的无名降级，以及 reset 和实时 append 路径上的 steering 重建。
+- `packages/client/ui-conversation` 的 jsdom 覆盖钉住角色标题、标题旁的生产者名称、展开后该名称的留存，以及无角色标题栏。
 - 无密钥的组装 Web 预期输出携带带名称的标题栏，因此，这些标识也在组装后的 transcript 中得到验证，而不只经过了组件测试。
 
 ## 后果

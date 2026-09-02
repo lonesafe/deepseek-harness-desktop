@@ -2,9 +2,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket, { type RawData, WebSocketServer } from 'ws'
-import {
-  REMOTE_RPC_POLICY, remoteRpcDisposition, startRemoteTunnel, type RemoteTunnel,
-} from '../src/remote-tunnel.ts'
+import { startRemoteTunnel, type RemoteTunnel } from '../src/remote-tunnel.ts'
 
 const closers: (() => Promise<void>)[] = []
 
@@ -30,6 +28,21 @@ function nextFrame(socket: WebSocket): Promise<Record<string, unknown>> {
       const body = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer)
       resolve(JSON.parse(body.toString('utf8')) as Record<string, unknown>)
     })
+  })
+}
+
+function nextFrameForId(socket: WebSocket, id: string): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { reject(new Error(`timed out waiting for tunnel frame ${id}`)) }, 3_000)
+    const onMessage = (raw: RawData): void => {
+      const body = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer)
+      const frame = JSON.parse(body.toString('utf8')) as Record<string, unknown>
+      if (frame.id !== id) return
+      clearTimeout(timer)
+      socket.off('message', onMessage)
+      resolve(frame)
+    }
+    socket.on('message', onMessage)
   })
 }
 
@@ -76,38 +89,22 @@ function collectChunkedResponse(socket: WebSocket, id: string): Promise<{
 }
 
 describe('desktop remote tunnel', () => {
-  it('classifies every privileged RPC and keeps remote workspace browsing available', () => {
-    expect(Object.keys(REMOTE_RPC_POLICY).sort())
-      .toEqual([
-        'agentPresets/copy',
-        'agentPresets/deletePreset',
-        'agentPresets/read',
-        'credentials/describe',
-        'credentials/set',
-        'credentials/unset',
-        'directoryPicker/pick',
-        'llm/discoverModels',
-        'session/openWorkspacePath',
-        'settings/describe',
-        'settings/mutate',
-        'settings/openAgentPresetDirectory',
-        'settings/openSettingsDocument',
-        'settings/replace',
-        'settings/update',
-      ])
-    expect(remoteRpcDisposition('directoryPicker/list')).toBe('forward')
-    expect(remoteRpcDisposition('directoryPicker/createDirectory')).toBe('forward')
-    expect(remoteRpcDisposition('workspace/create')).toBe('forward')
-    expect(remoteRpcDisposition('workspace/listFiles')).toBe('forward')
-    expect(remoteRpcDisposition('workspace/readFile')).toBe('forward')
-  })
-
   it('proxies only the fixed loopback origin and exposes configuration as read-only', async () => {
+    const localCookie = 'dsh_browser_auth=local-session-cookie'
     const local = createServer((request, response) => {
+      if (request.url === '/?token=process-launch-token') {
+        response.writeHead(303, { location: '/', 'set-cookie': `${localCookie}; Path=/; HttpOnly` })
+        response.end()
+        return
+      }
+      if (request.headers.cookie !== localCookie) {
+        response.writeHead(401)
+        response.end('unauthorized')
+        return
+      }
       response.writeHead(200, { 'content-type': 'application/json' })
       if (request.url === '/api/settings/describe') {
         response.end(JSON.stringify({
-          type: 'server-response',
           rpcId: 'settings-rpc',
           result: {
             ok: true,
@@ -122,13 +119,10 @@ describe('desktop remote tunnel', () => {
       }
       if (request.url === '/api/credentials/describe') {
         response.end(JSON.stringify({
-          type: 'server-response',
           rpcId: 'credentials-rpc',
           result: {
             ok: true,
-            value: {
-              DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: true },
-            },
+            value: { DEEPSEEK_API_KEY: { configured: true, source: 'managed', writable: true } },
           },
         }))
         return
@@ -139,8 +133,17 @@ describe('desktop remote tunnel', () => {
       }
       response.end(JSON.stringify({ path: request.url, forwardedCookie: request.headers.cookie ?? null }))
     })
+    let localWebSocketCookie: string | undefined
+    const localWebSockets = new WebSocketServer({ server: local, path: '/api' })
+    localWebSockets.on('connection', (socket, request) => {
+      localWebSocketCookie = request.headers.cookie
+      socket.on('message', (body, binary) => { socket.send(body, { binary }) })
+    })
     const localPort = await listen(local)
-    closers.push(() => closeServer(local))
+    closers.push(async () => {
+      await new Promise<void>((resolve) => { localWebSockets.close(() => { resolve() }) })
+      await closeServer(local)
+    })
 
     const relayServer = createServer()
     const relay = new WebSocketServer({ server: relayServer })
@@ -162,7 +165,7 @@ describe('desktop remote tunnel', () => {
     let markOnline: (() => void) | undefined
     const online = new Promise<void>((resolve) => { markOnline = resolve })
     const tunnel: RemoteTunnel = startRemoteTunnel({
-      localUrl: `http://127.0.0.1:${String(localPort)}/`,
+      localUrl: `http://127.0.0.1:${String(localPort)}/?token=process-launch-token`,
       authorization: {
         deviceId: 'a'.repeat(32),
         deviceToken: 'device-token-with-at-least-thirty-two-characters',
@@ -181,7 +184,24 @@ describe('desktop remote tunnel', () => {
     }))
     const response = await nextFrame(socket)
     expect(response).toMatchObject({ type: 'http_response', id: '1'.repeat(32), status: 200 })
-    expect(JSON.parse(Buffer.from(response.body as string, 'base64').toString())).toEqual({ path: '/api/hello?from=relay', forwardedCookie: null })
+    expect(JSON.parse(Buffer.from(response.body as string, 'base64').toString())).toEqual({
+      path: '/api/hello?from=relay',
+      forwardedCookie: localCookie,
+    })
+
+    const websocketId = '9'.repeat(32)
+    const opened = nextFrame(socket)
+    socket.send(JSON.stringify({ type: 'ws_open', id: websocketId, path: '/api' }))
+    await expect(opened).resolves.toMatchObject({ type: 'ws_opened', id: websocketId })
+    expect(localWebSocketCookie).toBe(localCookie)
+    const echoed = nextFrame(socket)
+    socket.send(JSON.stringify({
+      type: 'ws_data', id: websocketId, body: Buffer.from('history-page').toString('base64'), binary: false,
+    }))
+    await expect(echoed).resolves.toMatchObject({
+      type: 'ws_data', id: websocketId, body: Buffer.from('history-page').toString('base64'), binary: false,
+    })
+    socket.send(JSON.stringify({ type: 'ws_close', id: websocketId }))
 
     // The native ws implementation may report a successful send with null
     // instead of undefined. Reproduce that production callback shape so a
@@ -218,10 +238,11 @@ describe('desktop remote tunnel', () => {
     expect(chunked.chunks.every(chunk => chunk.byteLength <= 512 << 10)).toBe(true)
     expect(Buffer.concat(chunked.chunks)).toEqual(Buffer.alloc((1 << 20) + 17, 0x61))
 
+    const staticDeniedFrame = nextFrameForId(socket, '3'.repeat(32))
     socket.send(JSON.stringify({
       type: 'http_request', id: '3'.repeat(32), method: 'GET', path: '/assets/index.js',
     }))
-    const staticDenied = await nextFrame(socket)
+    const staticDenied = await staticDeniedFrame
     expect(staticDenied).toMatchObject({ type: 'error', id: '3'.repeat(32), message: 'Remote tunnel only accepts Harness API requests.' })
 
     socket.send(JSON.stringify({
@@ -230,7 +251,6 @@ describe('desktop remote tunnel', () => {
     const settings = await nextFrame(socket)
     expect(settings).toMatchObject({ type: 'http_response', id: '2'.repeat(32), status: 200 })
     expect(JSON.parse(Buffer.from(settings.body as string, 'base64').toString())).toEqual({
-      type: 'server-response',
       rpcId: 'settings-rpc',
       result: {
         ok: true,
@@ -268,20 +288,6 @@ describe('desktop remote tunnel', () => {
     }))
     const encodedWriteForbidden = await nextFrame(socket)
     expect(encodedWriteForbidden).toMatchObject({ type: 'http_response', id: '6'.repeat(32), status: 403 })
-
-    socket.send(JSON.stringify({
-      type: 'http_request', id: '9'.repeat(32), method: 'POST', path: '/api/directoryPicker/pick', body: '',
-    }))
-    const nativePickerForbidden = await nextFrame(socket)
-    expect(nativePickerForbidden).toMatchObject({ type: 'http_response', id: '9'.repeat(32), status: 403 })
-
-    socket.send(JSON.stringify({
-      type: 'http_request', id: 'a'.repeat(32), method: 'POST', path: '/api/directoryPicker/list', body: '',
-    }))
-    const browsePickerForwarded = await nextFrame(socket)
-    expect(browsePickerForwarded).toMatchObject({ type: 'http_response', id: 'a'.repeat(32), status: 200 })
-    expect(JSON.parse(Buffer.from(browsePickerForwarded.body as string, 'base64').toString()))
-      .toEqual({ path: '/api/directoryPicker/list', forwardedCookie: null })
 
     socket.send(JSON.stringify({
       type: 'http_request', id: '7'.repeat(32), method: 'POST', path: '/api/settings/describe?malformed=true', body: '',

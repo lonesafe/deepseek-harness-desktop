@@ -106,23 +106,18 @@ export interface ClientTransportHooks {
 /** Page global carrying {@link ClientTransportHooks}; absent in the served web app. */
 interface ClientTransportGlobal {
   __DSH_TRANSPORT__?: ClientTransportHooks
-  /** Legacy portal selection retained while deployed remote pages move to `__DSH_TRANSPORT__`. */
+  /** Same-origin multiplexed RPC socket injected by the authenticated remote portal. */
   __DSH_REMOTE_RPC__?: unknown
 }
 
-/** Adapt the desktop portal's multiplexed socket to the current generic RPC fetch seat. */
-function remoteRpcFetch(transport: WebSocketRpcTransport): RpcFetch {
+function portalRpcFetch(global: ClientTransportGlobal): RpcFetch | undefined {
+  if (global.__DSH_REMOTE_RPC__ !== RPC_SOCKET_PATH) return undefined
+  const remote = new WebSocketRpcTransport(RPC_SOCKET_PATH)
   return async (input, init) => {
     if (init.method !== 'POST' || typeof init.body !== 'string') {
-      throw new TypeError('remote portal RPC requires a JSON POST body')
+      throw new Error('remote portal RPC requires a JSON POST request')
     }
-    let body: unknown
-    try {
-      body = JSON.parse(init.body) as unknown
-    } catch (error) {
-      throw new TypeError('remote portal RPC body is not valid JSON', { cause: error })
-    }
-    return await transport.request(input.pathname, body, init.signal ?? undefined)
+    return remote.request(input.pathname, JSON.parse(init.body), init.signal ?? undefined)
   }
 }
 
@@ -205,12 +200,12 @@ export function apply(ctx: Context): void {
   const pageLocation = typeof location === 'undefined' ? undefined : location
   const fixture = pageLocation !== undefined && new URLSearchParams(pageLocation.search).has('fixture')
   const fixtureRpc = fixture ? createFixtureConnectionRpc() : undefined
-  const transportGlobal = globalThis as ClientTransportGlobal
-  const transport = transportGlobal.__DSH_TRANSPORT__
-  const legacyRemote = transport === undefined && transportGlobal.__DSH_REMOTE_RPC__ === RPC_SOCKET_PATH
-    ? remoteRpcFetch(new WebSocketRpcTransport(RPC_SOCKET_PATH))
-    : undefined
-  const rpc = fixtureRpc ?? createWebConnectionRpc(transport?.fetch ?? legacyRemote, transport?.openStream)
+  const clientGlobal = globalThis as ClientTransportGlobal
+  const transport = clientGlobal.__DSH_TRANSPORT__
+  const rpc = fixtureRpc ?? createWebConnectionRpc(
+    transport?.fetch ?? portalRpcFetch(clientGlobal),
+    transport?.openStream,
+  )
   let generationSource: ConnectionGenerationSource | undefined
   let owner: ConnectionOwner | undefined
   let generationId = 0

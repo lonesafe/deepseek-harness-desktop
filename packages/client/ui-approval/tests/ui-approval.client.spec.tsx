@@ -218,7 +218,6 @@ describe('approval Remote Event consumer', () => {
       toolName: 'bash',
       callId: 'call-1',
       reason: 'needs access',
-      alwaysAllowKey: 'bash:pnpm-test',
       signal: controller.signal,
     }, next)
     const pending = bench.pending.getSnapshot()[0]!
@@ -233,7 +232,6 @@ describe('approval Remote Event consumer', () => {
       toolName: 'bash',
       callId: 'call-1',
       reason: 'needs access',
-      allowAlways: true,
     })
 
     await pending.answer('allowed-once')
@@ -360,16 +358,19 @@ describe('ApprovalPanel', () => {
     await expect(pending.result).resolves.toBe('allowed-once')
   })
 
-  it('offers and returns persistent approval when the request declares a stable key', async () => {
-    const pending = new PendingApproval(id('s1'), {
-      toolName: 'bash',
-      alwaysAllowKey: 'bash:pnpm-test',
-    })
-    render(<ApprovalPanel {...panelProps(pending)} />)
+  it('offers and returns a remembered grant only when advertised', async () => {
+    const remembered = new PendingApproval(id('s1'), { toolName: 'bash', allowAlways: true })
+    render(<ApprovalPanel {...panelProps(remembered)} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Always allow' }))
+    await expect(remembered.result).resolves.toBe('allowed-always')
 
-    await expect(pending.result).resolves.toBe('allowed-always')
+    cleanup()
+    const oneShot = new PendingApproval(id('s2'), { toolName: 'bash' })
+    render(<ApprovalPanel {...panelProps(oneShot)} />)
+    expect(screen.queryByRole('button', { name: 'Always allow' })).toBeNull()
+    oneShot.abort(new Error('test cleanup'))
+    await oneShot.result.catch(() => {})
   })
 
   it('re-enables actions when answering fails', async () => {

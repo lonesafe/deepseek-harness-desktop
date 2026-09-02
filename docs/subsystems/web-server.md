@@ -35,7 +35,7 @@ interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
-  /** Login token required from non-loopback peers; at least 24 characters. @default '' */
+  /** Login token required from non-loopback peers; at least 24 characters. */
   accessToken?: string
   /** Response compression for socket-backed HTTP requests. @default 'none' */
   compression?: 'none' | 'gzip'
@@ -46,7 +46,7 @@ interface Config {
 }
 ```
 
-`host` accepts only `127.0.0.1` (default posture) and `0.0.0.0` (deliberate network exposure). An all-interfaces bind requires an `accessToken` of at least 24 characters. Non-loopback browsers exchange the username `deepseek` and that token through the built-in login form for an HttpOnly cookie; HTTP Basic credentials serve non-browser clients and upgrade requests. The carrier owns no TLS, so expose it only on a trusted LAN or behind a TLS terminator. `compression` defaults to `none`; the shipped Web bundle selects gzip level 1 with a 1024-byte threshold. The shipped `dsh web` command selects loopback and rejects `--host 0.0.0.0`; its Connection plugin supplies Host/Origin checks for every Host API route and stream. Other compositions still own bind selection and route-specific authorization beyond the server's LAN entry authentication. The dist location is an assembly fact of the frontend plugin that claims the seat.
+`host` accepts only `127.0.0.1` (default posture) and `0.0.0.0` (deliberate network exposure). An all-interfaces bind requires an `accessToken` of at least 24 characters; the outer server fence authenticates non-loopback HTTP and WebSocket requests through the built-in login flow or HTTP Basic credentials. The carrier owns no TLS or Origin policy, so LAN exposure should stay on a trusted network or behind HTTPS while the Connection plugin retains its Host/Origin checks. `compression` defaults to `none`; the shipped Web bundle selects gzip level 1 with a 1024-byte threshold. The shipped `dsh web` command selects loopback by default and accepts `--host 0.0.0.0 --access-token <token>` for deliberate authenticated LAN access. Other compositions own their bind policy. The dist location is an assembly fact of the frontend plugin that claims the seat.
 
 ## The service
 
@@ -69,6 +69,15 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 The browser HTTP carrier service. Activation listens immediately. Route registration order does not affect requests because configured named routes must be distinct, and the fallback handler answers anything not yet claimed during startup with 404 until its owner registers. A listen failure rejects initialization, and the boot process reports the failed fiber.
 
 ```ts cordis-catalog
+/**
+ * Verify credentials already accepted by the outer LAN access fence. This
+ * lets authenticated LAN browsers enter Connection's independently guarded
+ * index and API routes without exposing the configured secret to them.
+ * @param headers - node:http or Fetch-compatible request headers.
+ * @returns Whether the request carries the configured LAN credential.
+ */
+isLanAuthenticated(headers: RequestHeaders): boolean
+
 /**
  * Register a named route. Duplicate (kind, path) throws — route patterns are
  * a composition-level contract, so a collision is a misconfiguration.

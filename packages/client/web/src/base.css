@@ -10,15 +10,6 @@ body,
 
 body {
   overflow: hidden;
-}
-
-@supports (height: 100dvh) {
-  #root {
-    height: 100dvh;
-  }
-}
-
-body {
   font-family: var(
     --dsw-font-family,
     -apple-system,
@@ -40,6 +31,12 @@ body {
   background: var(--dsw-alias-bg-base, #fff);
   /* Supporting browsers insert CJK/Latin spacing in inherited prose. */
   text-autospace: normal;
+}
+
+@supports (height: 100dvh) {
+  #root {
+    height: 100dvh;
+  }
 }
 
 code,

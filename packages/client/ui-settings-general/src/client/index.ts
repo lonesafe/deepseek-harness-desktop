@@ -28,10 +28,11 @@ import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
+import { SettingsDocumentStore } from './settings-document-store.ts'
 import { DesktopRemoteAccessRow } from './DesktopRemoteAccessRow.tsx'
 import { isDesktopRenderer } from './desktop-update.ts'
-import { SettingsDocumentStore } from './settings-document-store.ts'
 import { en, zh, type SettingsKey } from './locales.ts'
+import { BalanceStore } from './balance-store.ts'
 
 export type {
   CloseLabelProps, HeaderContentProps, TriggerContentProps,
@@ -59,7 +60,7 @@ const NS = 'settings'
  * ui-settings' apply, whose activation order relative to this one is NOT
  * constrained; registrations depend on their slots through `slots.inject()`.
  */
-export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settings', 'settingsScope']
+export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.llm', 'remote.settings', 'settingsScope']
 
 /**
  * Register the `settings` dictionaries, the chrome content, and the General
@@ -69,6 +70,18 @@ export const inject = ['slots', 'locale', 'connection', 'remote', 'remote.settin
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-general: dictionaries')
   const connection = ctx.get('connection') as ConnectionHandle
+  const balance = new BalanceStore(ctx.remote)
+  void balance.load()
+  ctx.effect(() => {
+    const refresh = (): void => { void balance.load() }
+    const disposers = [
+      ctx.remote.$on('settings/document-updated', refresh),
+      ctx.remote.$on('credentials/reference-updated', refresh),
+      ctx.remote.$on('llm/adapters-updated', refresh),
+      ctx.on('connection/reset', refresh),
+    ]
+    return () => { for (const dispose of disposers) dispose() }
+  }, 'ui-settings-general: account balance invalidations')
 
   // Copy freshness is framework-owned: components read the standard `t`
   // seat, and the nav label is a thunk the owner resolves per render — no
@@ -97,7 +110,9 @@ export function apply(ctx: ClientContext): void {
   let onboardingSteps: readonly SettingsOnboardingStep[] = []
   const shellInjected = (): SettingsRootInjected => ({
     reconnect: () => { connection.reconnect() },
+    refreshBalance: () => { void balance.load() },
     hooks: {
+      balance: balance.store,
       connectionState: connection.state,
       sections: {
         getSnapshot: () => {
@@ -150,7 +165,6 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: {
       'settings.trigger': { kind: 'single', scope: 'root' },
-      'settings.footer.utility': { kind: 'list', scope: 'root' },
       'settings.header': { kind: 'single', scope: 'root' },
       'settings.action': { kind: 'list', scope: 'root' },
       'settings.close': { kind: 'single', scope: 'root' },

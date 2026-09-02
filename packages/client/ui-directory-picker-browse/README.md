@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package provides the in-app directory-browsing surface for the Web GUI: a Select Workspace Directory dialog that lists, navigates, and creates folders through the local Host, with no operating-system chooser involved. It fills the two directory-flow slots declared by `ui-workspace`, composing the client side of the browse picking interaction in one cordis.yml row. Choose it when the browser is remote or in-process and no local OS chooser exists; local deployments may prefer the [`-native`](../ui-directory-picker-native/README.md) surface.
+This package provides the adaptive directory-picking surface for the Web GUI. Remote pages get a Select Workspace Directory dialog that lists, navigates, and creates folders through the Host. When configured with `nativeOnLoopback`, only a local desktop page delegates to the OS chooser. It fills the two directory-flow slots declared by `ui-workspace`, so one surface works for both local and remote access to the same desktop.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This package provides the in-app directory-browsing surface for the Web GUI: a S
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin alongside `ui-workspace` and the host backend [`dsh-host-directory-picker-browse`](../../host/directory-picker-browse/README.md); one cordis.yml row then composes the whole browse picking interaction. When a workspace flow opens a directory request, the user sees the in-app dialog: a header with the path breadcrumb and an editable path zone, then a single full-width level until a row is selected, after which the row splits into level and children columns.
+Mount this plugin alongside `ui-workspace` and either the [`browse`](../../host/directory-picker-browse/README.md) or adaptive [`native`](../../host/directory-picker-native/README.md) backend. With `nativeOnLoopback: true`, a loopback desktop page invokes the native picker while LAN and portal pages render the browser dialog. The dialog has a path breadcrumb and editable path zone, then a single full-width level until a row is selected, after which the row splits into level and children columns.
 
 ### Navigating and creating
 
@@ -39,7 +39,7 @@ Step through folders, edit the path directly, or filter the last pane by prefix;
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The dialog is a 680×500 Miller-column view (clamped on short or narrow viewports), driven by the host `listDirectory` and `createDirectory` primitives through `ctx.workspaces`. Both registrations install as one transactional effect through nested `ctx.slots.inject()` calls, because either declaring entry may activate later or replace its declaration; the dialog's copy lives in this package's own locale namespace so the two dictionaries land as a unit. In the desktop adaptive composition, a loopback page uses the shared `AsyncPickerFlow` primitive to drive the native chooser, while a remote page keeps this browser; both use the same owner conversation. Browse failures stay inside the dialog's own alert surfaces. The node half is an empty `apply` that keeps the plugin on the host roster.
+The dialog is a 680×500 Miller-column view (clamped on short or narrow viewports), driven by the host `listDirectory` and `createDirectory` primitives through `ctx.uiWorkspace`. The connection service identifies loopback pages; those use `pickDirectory` only when `nativeOnLoopback` is enabled. Both registrations install as one transactional effect through nested `ctx.slots.inject()` calls. Browse failures stay inside the dialog's own alert surfaces. The node half is an empty `apply` that keeps the plugin on the host roster.
 
 </details>
 

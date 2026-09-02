@@ -17,9 +17,7 @@ export type {
 } from './model.ts'
 export { WorkspaceController, WorkspaceCreateError } from './service.ts'
 export type { IWorkspaces, WorkspaceSource } from './service.ts'
-export type {
-  WorkspaceFileEntry, WorkspaceFileListing, WorkspaceFilePreview, WorkspaceId, WorkspaceView,
-} from '../types.ts'
+export type { WorkspaceId, WorkspaceView } from '../types.ts'
 
 type WorkspaceBaselineFrame = Extract<WorkspaceFollowFrame, { type: 'baseline' }>
 

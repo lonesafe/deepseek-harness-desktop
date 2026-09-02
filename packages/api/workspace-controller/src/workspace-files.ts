@@ -1,7 +1,8 @@
 /** Bounded, read-only filesystem projection for registered Workspaces. */
 
 import { opendir, open, realpath, stat } from 'node:fs/promises'
-import { basename, extname, isAbsolute, join, relative, sep } from 'node:path'
+import { extname, isAbsolute, join, relative, sep } from 'node:path'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   WorkspaceFileEntry, WorkspaceFileListing, WorkspaceFilePreview,
 } from './types.ts'
@@ -11,96 +12,52 @@ export const WORKSPACE_FILE_ENTRY_LIMIT = 1_000
 /** Maximum bytes returned by one preview or download payload. */
 export const WORKSPACE_FILE_PREVIEW_MAX_BYTES = 8 << 20
 
-/** Stable business failure reported by workspace file RPC methods. */
-export class WorkspaceFileError extends Error {
-  constructor(
-    readonly code: 'workspace/file-invalid-path' | 'workspace/file-unreadable' | 'workspace/file-not-file',
-    message: string,
-  ) {
-    super(message)
-    this.name = 'WorkspaceFileError'
-  }
-}
-
-function filesystemErrorMessage(error: unknown): string {
-  /* v8 ignore next -- node:fs/promises rejects filesystem operations with Error instances. */
-  return error instanceof Error ? error.message : String(error)
-}
-
 const IMAGE_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
-  '.avif': 'image/avif',
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
+  '.avif': 'image/avif', '.gif': 'image/gif', '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp',
 }
 
 const TEXT_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
-  '.bash': 'text/x-shellscript',
-  '.c': 'text/x-c',
-  '.cc': 'text/x-c++',
-  '.conf': 'text/plain',
-  '.cpp': 'text/x-c++',
-  '.cs': 'text/x-csharp',
-  '.css': 'text/css',
-  '.csv': 'text/csv',
-  '.env': 'text/plain',
-  '.go': 'text/x-go',
-  '.gql': 'text/plain',
-  '.graphql': 'text/plain',
-  '.h': 'text/x-c',
-  '.hpp': 'text/x-c++',
-  '.htm': 'text/html',
-  '.html': 'text/html',
-  '.ini': 'text/plain',
-  '.java': 'text/x-java',
-  '.js': 'text/javascript',
-  '.json': 'application/json',
-  '.jsonc': 'application/json',
-  '.jsx': 'text/javascript',
-  '.kt': 'text/x-kotlin',
-  '.kts': 'text/x-kotlin',
-  '.less': 'text/css',
-  '.log': 'text/plain',
-  '.lua': 'text/x-lua',
-  '.markdown': 'text/markdown',
-  '.md': 'text/markdown',
-  '.mdx': 'text/markdown',
-  '.mjs': 'text/javascript',
-  '.py': 'text/x-python',
-  '.rb': 'text/x-ruby',
-  '.rs': 'text/x-rust',
-  '.scss': 'text/css',
-  '.sh': 'text/x-shellscript',
-  '.sql': 'text/x-sql',
-  '.svg': 'image/svg+xml',
-  '.swift': 'text/x-swift',
-  '.toml': 'application/toml',
-  '.ts': 'text/typescript',
-  '.tsv': 'text/tab-separated-values',
-  '.tsx': 'text/typescript',
-  '.txt': 'text/plain',
-  '.xml': 'application/xml',
-  '.yaml': 'application/yaml',
-  '.yml': 'application/yaml',
-  '.zsh': 'text/x-shellscript',
+  '.bash': 'text/x-shellscript', '.c': 'text/x-c', '.cc': 'text/x-c++',
+  '.conf': 'text/plain', '.cpp': 'text/x-c++', '.cs': 'text/x-csharp',
+  '.css': 'text/css', '.csv': 'text/csv', '.env': 'text/plain', '.go': 'text/x-go',
+  '.gql': 'text/plain', '.graphql': 'text/plain', '.h': 'text/x-c',
+  '.hpp': 'text/x-c++', '.htm': 'text/html', '.html': 'text/html',
+  '.ini': 'text/plain', '.java': 'text/x-java', '.js': 'text/javascript',
+  '.json': 'application/json', '.jsonc': 'application/json', '.jsx': 'text/javascript',
+  '.kt': 'text/x-kotlin', '.kts': 'text/x-kotlin', '.less': 'text/css',
+  '.log': 'text/plain', '.lua': 'text/x-lua', '.markdown': 'text/markdown',
+  '.md': 'text/markdown', '.mdx': 'text/markdown', '.mjs': 'text/javascript',
+  '.py': 'text/x-python', '.rb': 'text/x-ruby', '.rs': 'text/x-rust',
+  '.scss': 'text/css', '.sh': 'text/x-shellscript', '.sql': 'text/x-sql',
+  '.svg': 'image/svg+xml', '.swift': 'text/x-swift', '.toml': 'application/toml',
+  '.ts': 'text/typescript', '.tsv': 'text/tab-separated-values',
+  '.tsx': 'text/typescript', '.txt': 'text/plain', '.xml': 'application/xml',
+  '.yaml': 'application/yaml', '.yml': 'application/yaml', '.zsh': 'text/x-shellscript',
 }
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdx'])
 const TEXT_FILENAMES = new Set([
-  '.editorconfig', '.env', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore',
-  'dockerfile', 'license', 'makefile', 'readme',
+  '.editorconfig', '.env', '.gitattributes', '.gitignore', '.npmrc',
+  '.prettierignore', 'dockerfile', 'license', 'makefile', 'readme',
 ])
+
+function invalidPath(path: string, message: string): RemoteError<'workspace/file-invalid-path'> {
+  return new RemoteError('workspace/file-invalid-path', message, { path })
+}
+
+function unreadable(path: string, message: string, cause?: unknown): RemoteError<'workspace/file-unreadable'> {
+  return new RemoteError('workspace/file-unreadable', message, { path }, { cause })
+}
 
 function relativeSegments(path: string): string[] {
   if (path === '') return []
   if (path.includes('\0') || path.includes('\\') || path.startsWith('/')) {
-    throw new WorkspaceFileError('workspace/file-invalid-path', 'Workspace file paths must be portable relative paths.')
+    throw invalidPath(path, 'Workspace file paths must be portable relative paths.')
   }
   const segments = path.split('/')
   if (segments.some(segment => segment === '' || segment === '.' || segment === '..')) {
-    throw new WorkspaceFileError('workspace/file-invalid-path', 'Workspace file paths cannot contain empty, dot, or parent segments.')
+    throw invalidPath(path, 'Workspace file paths cannot contain empty, dot, or parent segments.')
   }
   return segments
 }
@@ -110,31 +67,25 @@ function within(root: string, target: string): boolean {
   return suffix === '' || (!isAbsolute(suffix) && suffix !== '..' && !suffix.startsWith(`..${sep}`))
 }
 
+async function resolveRoot(workspaceRoot: string): Promise<string> {
+  try {
+    return await realpath(workspaceRoot)
+  } catch (error) {
+    throw unreadable('', `Workspace root is unavailable: ${errorMessage(error)}`, error)
+  }
+}
+
 async function resolveInside(root: string, path: string): Promise<string> {
   const candidate = join(root, ...relativeSegments(path))
   try {
     const resolved = await realpath(candidate)
     if (!within(root, resolved)) {
-      throw new WorkspaceFileError('workspace/file-invalid-path', 'Workspace file path resolves outside the Workspace.')
+      throw invalidPath(path, 'Workspace file path resolves outside the Workspace.')
     }
     return resolved
-  } catch (error: unknown) {
-    if (error instanceof WorkspaceFileError) throw error
-    throw new WorkspaceFileError(
-      'workspace/file-unreadable',
-      `Workspace file path is unavailable: ${filesystemErrorMessage(error)}`,
-    )
-  }
-}
-
-async function resolveRoot(workspaceRoot: string): Promise<string> {
-  try {
-    return await realpath(workspaceRoot)
-  } catch (error: unknown) {
-    throw new WorkspaceFileError(
-      'workspace/file-unreadable',
-      `Workspace root is unavailable: ${filesystemErrorMessage(error)}`,
-    )
+  } catch (error) {
+    if (error instanceof RemoteError) throw error
+    throw unreadable(path, `Workspace file path is unavailable: ${errorMessage(error)}`, error)
   }
 }
 
@@ -144,10 +95,10 @@ function childPath(parent: string, name: string): string {
 
 /**
  * List one Workspace-relative directory without exposing Host absolute paths.
- * @param workspaceRoot Canonical root owned by the registered Workspace.
- * @param path Portable Workspace-relative directory path; empty selects the root.
- * @param signal Caller cancellation for directory iteration.
- * @returns The bounded direct-child listing and truncation state.
+ * @param workspaceRoot - canonical Host root of the registered Workspace.
+ * @param path - portable Workspace-relative directory path.
+ * @param signal - cancellation checked throughout directory enumeration.
+ * @returns one bounded, directory-first listing.
  */
 export async function listWorkspaceFiles(
   workspaceRoot: string,
@@ -159,17 +110,11 @@ export async function listWorkspaceFiles(
   let info
   try {
     info = await stat(directory)
-  /* v8 ignore start -- removing the target between successful realpath and stat is a host filesystem race. */
-  } catch (error: unknown) {
-    throw new WorkspaceFileError(
-      'workspace/file-unreadable',
-      `Workspace directory cannot be read: ${filesystemErrorMessage(error)}`,
-    )
+  } catch (error) {
+    throw unreadable(path, `Workspace directory cannot be read: ${errorMessage(error)}`, error)
   }
-  /* v8 ignore stop */
-  if (!info.isDirectory()) {
-    throw new WorkspaceFileError('workspace/file-unreadable', 'Workspace file listing target is not a directory.')
-  }
+  if (!info.isDirectory()) throw unreadable(path, 'Workspace file listing target is not a directory.')
+
   const entries: WorkspaceFileEntry[] = []
   let truncated = false
   try {
@@ -182,31 +127,26 @@ export async function listWorkspaceFiles(
       }
       if (!entry.isDirectory() && !entry.isFile() && !entry.isSymbolicLink()) continue
       const absolute = join(directory, entry.name)
-      let resolved: string
-      let childInfo
       try {
-        resolved = entry.isSymbolicLink() ? await realpath(absolute) : absolute
+        const resolved = entry.isSymbolicLink() ? await realpath(absolute) : absolute
         if (!within(root, resolved)) continue
-        childInfo = await stat(resolved)
+        const childInfo = await stat(resolved)
+        if (!childInfo.isDirectory() && !childInfo.isFile()) continue
+        entries.push({
+          name: entry.name,
+          path: childPath(path, entry.name),
+          kind: childInfo.isDirectory() ? 'directory' : 'file',
+          hidden: entry.name.startsWith('.'),
+          size: childInfo.isFile() ? childInfo.size : 0,
+          modifiedAt: childInfo.mtime.toISOString(),
+        })
       } catch {
-        continue
+        // A disappearing or unreadable child does not fail the containing level.
       }
-      if (!childInfo.isDirectory() && !childInfo.isFile()) continue
-      entries.push({
-        name: entry.name,
-        path: childPath(path, entry.name),
-        kind: childInfo.isDirectory() ? 'directory' : 'file',
-        hidden: entry.name.startsWith('.'),
-        size: childInfo.isFile() ? childInfo.size : 0,
-        modifiedAt: childInfo.mtime.toISOString(),
-      })
     }
-  } catch (error: unknown) {
+  } catch (error) {
     if (signal.aborted) signal.throwIfAborted()
-    throw new WorkspaceFileError(
-      'workspace/file-unreadable',
-      `Workspace directory cannot be read: ${filesystemErrorMessage(error)}`,
-    )
+    throw unreadable(path, `Workspace directory cannot be read: ${errorMessage(error)}`, error)
   }
   entries.sort((left, right) => {
     if (left.kind !== right.kind) return left.kind === 'directory' ? -1 : 1
@@ -225,9 +165,8 @@ function mimeFor(path: string): string {
 function textKind(path: string): 'markdown' | 'text' | undefined {
   const extension = extname(path).toLowerCase()
   if (MARKDOWN_EXTENSIONS.has(extension)) return 'markdown'
-  if (TEXT_MIME_BY_EXTENSION[extension] !== undefined || TEXT_FILENAMES.has(basename(path).toLowerCase())) {
-    return 'text'
-  }
+  const filename = path.split('/').at(-1)?.toLowerCase() ?? ''
+  if (TEXT_MIME_BY_EXTENSION[extension] !== undefined || TEXT_FILENAMES.has(filename)) return 'text'
   return undefined
 }
 
@@ -242,38 +181,33 @@ function decodedText(data: Buffer): string | undefined {
 
 /**
  * Read one bounded Workspace-relative regular file for preview or download.
- * @param workspaceRoot Canonical root owned by the registered Workspace.
- * @param path Portable Workspace-relative file path.
- * @param signal Caller cancellation checked before the response is projected.
- * @returns A typed preview containing bounded text or Base64 content.
+ * @param workspaceRoot - canonical Host root of the registered Workspace.
+ * @param path - portable Workspace-relative file path.
+ * @param signal - cancellation checked before returning file content.
+ * @returns text or base64 preview metadata within the configured byte bound.
  */
 export async function readWorkspaceFile(
   workspaceRoot: string,
   path: string,
   signal: AbortSignal,
 ): Promise<WorkspaceFilePreview> {
-  if (path === '') {
-    throw new WorkspaceFileError('workspace/file-invalid-path', 'Workspace file preview requires a file path.')
-  }
+  if (path === '') throw invalidPath(path, 'Workspace file preview requires a file path.')
   const root = await resolveRoot(workspaceRoot)
   const target = await resolveInside(root, path)
   let handle
   try {
     handle = await open(target, 'r')
-  } catch (error: unknown) {
-    throw new WorkspaceFileError(
-      'workspace/file-unreadable',
-      `Workspace file cannot be read: ${filesystemErrorMessage(error)}`,
-    )
+  } catch (error) {
+    throw unreadable(path, `Workspace file cannot be read: ${errorMessage(error)}`, error)
   }
   try {
     const info = await handle.stat()
     if (!info.isFile()) {
-      throw new WorkspaceFileError('workspace/file-not-file', 'Workspace file preview target is not a regular file.')
+      throw new RemoteError('workspace/file-not-file', 'Workspace file preview target is not a regular file.', { path })
     }
     const common = {
       path,
-      name: basename(path),
+      name: path.split('/').at(-1) ?? path,
       mime: mimeFor(path),
       size: info.size,
       modifiedAt: info.mtime.toISOString(),
@@ -283,7 +217,6 @@ export async function readWorkspaceFile(
     }
     const data = await handle.readFile()
     signal.throwIfAborted()
-    /* v8 ignore next -- reaching this guard requires the open file to grow between descriptor stat and read. */
     if (data.byteLength > WORKSPACE_FILE_PREVIEW_MAX_BYTES) {
       return { ...common, size: data.byteLength, kind: 'unsupported', encoding: 'none', content: '', reason: 'too-large' }
     }
@@ -292,10 +225,11 @@ export async function readWorkspaceFile(
     if (declaredText !== undefined && text !== undefined) {
       return { ...common, kind: declaredText, encoding: 'utf8', content: text }
     }
-    if (IMAGE_MIME_BY_EXTENSION[extname(path).toLowerCase()] !== undefined) {
+    const extension = extname(path).toLowerCase()
+    if (IMAGE_MIME_BY_EXTENSION[extension] !== undefined) {
       return { ...common, kind: 'image', encoding: 'base64', content: data.toString('base64') }
     }
-    if (extname(path).toLowerCase() === '.pdf') {
+    if (extension === '.pdf') {
       return { ...common, kind: 'pdf', encoding: 'base64', content: data.toString('base64') }
     }
     if (text !== undefined) {
@@ -305,4 +239,8 @@ export async function readWorkspaceFile(
   } finally {
     await handle.close()
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

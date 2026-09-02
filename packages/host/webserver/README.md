@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Browsers and the desktop shell reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http` server where other plugins register named routes, upgrade routes, index startup inputs, and one fallback handler. It knows no harness concepts and serves no files itself — the `/api` bridge, plugin bundles, the HMR event stream, and the SPA dist belong to the plugins that register them. Route matching is fixed: exact over the whole table, then longest prefix, then the fallback handler. Loopback peers connect directly; non-loopback peers must authenticate before any HTTP or upgrade route is dispatched.
+Browsers reach the web GUI over HTTP through `dsh-host-webserver`: a `node:http` server where other plugins register named routes, upgrade routes, index startup inputs, and one fallback handler. It serves no files — the `/api` bridge, plugin bundles, the HMR event stream, and the SPA dist belong to the plugins that register them. Loopback access stays password-free; an all-interfaces bind requires a strong access token and protects HTTP and WebSocket routes with a login cookie. Route matching is fixed: exact over the whole table, then longest prefix, then the fallback handler.
 
 ## Table of Contents
 
@@ -36,7 +36,7 @@ Compose the webserver as the HTTP transport of a browser-facing host, then let t
     port: 3000
 ```
 
-`host` accepts exactly two values: `127.0.0.1` (default posture, loopback only) and `0.0.0.0` (deliberate network exposure). An all-interfaces bind requires an `accessToken` of at least 24 characters. Non-loopback browsers exchange the username `deepseek` and that token through the built-in login form for an HttpOnly cookie; HTTP Basic credentials support non-browser clients and upgrade requests. The server does not provide TLS, so expose it only on a trusted LAN or behind a TLS terminator. `port` 0 requests an OS-assigned port; `ctx.webServer.port` reads the listening port afterwards.
+`host` accepts exactly two values: `127.0.0.1` (default posture, loopback only) and `0.0.0.0` (deliberate LAN exposure). An all-interfaces bind requires an `accessToken` of at least 24 characters. Remote peers sign in as `deepseek` with that token; successful form or Basic authentication establishes an HttpOnly cookie accepted by the outer route fence and Connection's authenticated index/API routes. The server still carries no TLS, so expose it only on a trusted LAN or behind HTTPS. `port` 0 requests an OS-assigned port; `ctx.webServer.port` reads the listening port afterwards.
 
 Set `compression: 'gzip'` to wrap eligible socket-backed responses without changing route APIs. The client must accept gzip and the media type must be compressible; known response lengths below `compressionThresholdBytes` remain uncompressed, while unknown-length streams are eligible immediately. Existing encodings, `Cache-Control: no-transform`, range responses, SSE, ZIP, and the packaged `.gz` Worker image remain unchanged. The shipped Web bundle uses compression level 1 with a 1024-byte threshold; other compositions default to no compression.
 
@@ -110,7 +110,7 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define where the server is intentionally minimal. They are current package constraints, not a task backlog.
 
-- **No server-wide TLS or origin policy** — non-loopback dispatch is authenticated, while route owners such as `dsh-client-connection` enforce Host and Origin policy. An all-interfaces listener must remain on a trusted LAN or behind a TLS terminator because its credentials and content otherwise travel over plain HTTP.
+- **No server-wide TLS, authentication, or origin policy** — route owners such as `dsh-client-connection` enforce their own request policy. Binding a non-loopback address still exposes unprotected routes and static assets to that network.
 - **Socket options are fixed** — config selects the bind host and port, while backlog and other socket settings remain internal until a deployment needs them.
 
 <a id="dev-note"></a>

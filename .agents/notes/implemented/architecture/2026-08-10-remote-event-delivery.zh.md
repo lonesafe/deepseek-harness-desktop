@@ -142,7 +142,7 @@ Client 要求首项是带非空 `clientId` 与 `host.home` 的 `ready`；后续 
 
 由此得到一条对本设计要紧的连带纪律：**这些测试从客户端包 import 值或类型，会把该包的整个 project——以及它引用的每个 project——拖进 Host 构建图**。`ui-settings-general`/`ui-settings-models`/`ui-permission`/`ui-commands` 四个消费者 references `api/remotes` 的 client face，而该 face 必须等 host tsdown 生成 `@deepseek-ai/dsh-goal/remote` 才能编译，于是形成构建期死锁：host tsc → api/remotes client face → `goal/remote` → host tsdown → 排在 host tsc 之后。
 
-所需的客户端符号在测试侧**镜像**了一份：`scaffold.ts` 导出 e2e 文件使用的 welcome-notice 常量，因此这些测试不再导入那 4 个 Client 消费包。这让对应消费者离开 host 图，`apps/cli/tsconfig.json` 中原先保留的 Client 工程引用也不再承担 owner-map 职责。镜像值与源逐字一致，漂移的表现是选择器失配或通知未被抑制，都是响亮失败。
+所需的客户端符号在测试侧**镜像**了一份（`scaffold.ts` 导出镜像后的 welcome-notice 常量，两个 chat e2e 直接引 `dsh-client-runtime/client` 因为 `runtime` 工程本来就在 host 图里），从而让那 4 个消费者离开了 host 图；`apps/cli/tsconfig.json` 里 15 条 client 工程引用随之失去 owner-map 职责，已一并删除。镜像值与源逐字一致，漂移的表现是选择器失配或通知未被抑制，都是响亮失败。
 
 ### 改动清单
 
@@ -154,7 +154,7 @@ Client 要求首项是带非空 `clientId` 与 `host.home` 的 `ready`；后续 
 | 根 `tsconfig.base.json` | 加 `dsh-settings/types`、`dsh-credentials/types`、`dsh-api-remotes/types` 三条 `paths`，全部指向**源**平面 |
 | `dsh-commands` / `dsh-settings` / `dsh-credentials` | `interface Events` 子块移入各自 client-safe 的 `./types`（settings/credentials 新建该出口，brand 与纯类型一并移入，index 继续 re-export 并留住构造器；`files` 补 `lib/types/**/*.js`） |
 | `dsh-session` | `isJsonValue` 供 `api/remotes` Host source 校验每个事件参数 |
-| Session 与 Workspace Controller | 分别拥有原先由 `client/runtime` 汇集的 Session 与 Workspace Client 状态；Host frame subscription bridge 继续保持不存在 |
+| `client/runtime` | 删除 Host frame 到 Remote subscription table 的桥；只继续在 Connection generation 建立后发布 `connection/reset` |
 | 消费方 | Client 插件直接订阅 `ctx.remote.$on(...)`，type-only 引入 owner 事件声明并把 `'remote'` 加进 `inject` |
 | `client/connection` | 提供唯一 generation source 注册位；`ConnectionController` 发布 `$events` ready 携带的 Host 信息，fixture 也从同一 source 产生事件 |
 | `apps/web/tests` + `apps/cli` | 客户端符号镜像（见上节）；`apps/cli/tsconfig.json` 删 15 条 client 工程引用 |

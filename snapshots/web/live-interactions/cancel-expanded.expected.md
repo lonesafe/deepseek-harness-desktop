@@ -9,7 +9,6 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-    - tab "Files"
 - button "System prompt":
   - img
   - img
@@ -46,5 +45,4 @@
   - text: DeepSeek-V4-Flash
   - img
 - button "Send message" [disabled]
-- tooltip "Send message"
 - text: 1 turns · 1 steps LLM {{duration}} TTFT avg {{duration}}

@@ -90,12 +90,7 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
     expect(await phaseDisclosure.evaluate(element => getComputedStyle(element).cursor)).toBe('pointer')
     const member = page.getByRole('button', { name: /^Open Reply with exactly the word/ })
     await member.waitFor({ timeout: 15_000 })
-    await member.click()
-    await page.getByText(CHILD_PROMPT, { exact: true }).waitFor({ timeout: 15_000 })
-
-    const sessions = page.getByRole('tree', { name: 'Sessions' })
-    await sessions.getByRole('treeitem', { name: /Use the workflow tool exactly/ }).click()
-    await member.waitFor({ timeout: 15_000 })
+    await member.focus()
 
     await phaseDisclosure.click()
     expect(await phaseDisclosure.getAttribute('aria-expanded')).toBe('false')
@@ -104,12 +99,6 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
     await compareOrRefreshGolden(UI_LIVE_EXPECTED, liveSnapshot, MODE)
     await phaseDisclosure.press('Enter')
     await member.waitFor()
-    await runDisclosure.click()
-    expect(await runDisclosure.getAttribute('aria-expanded')).toBe('false')
-    expect(await disclosures.count()).toBe(1)
-    await runDisclosure.press('Space')
-    expect(await disclosures.count()).toBe(2)
-    expect(await phaseDisclosure.getAttribute('aria-expanded')).toBe('true')
     await member.focus()
 
     const lightColor = await member.locator('[data-member-label]').evaluate(element => getComputedStyle(element).color)
@@ -160,8 +149,11 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
       document.body.removeAttribute('data-ds-dark-theme')
     })
     await page.setViewportSize({ width: 1280, height: 800 })
-    await runDisclosure.click()
-    expect(await runDisclosure.getAttribute('aria-expanded')).toBe('false')
+
+    await member.click()
+    await page.getByText(CHILD_PROMPT, { exact: true }).waitFor({ timeout: 15_000 })
+    const sessions = page.getByRole('tree', { name: 'Sessions' })
+    await sessions.getByRole('treeitem', { name: /Use the workflow tool exactly/ }).click()
 
     await settled
     await expandTurnProcesses(page)

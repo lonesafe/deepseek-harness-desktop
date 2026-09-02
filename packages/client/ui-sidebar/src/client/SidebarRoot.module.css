@@ -370,6 +370,7 @@
   }
 
   .collapsed .toggle {
+    border: 0;
     background: var(--dsw-alias-button-floating-fill);
     box-shadow: var(--dsw-shadow-lv2);
     pointer-events: auto;

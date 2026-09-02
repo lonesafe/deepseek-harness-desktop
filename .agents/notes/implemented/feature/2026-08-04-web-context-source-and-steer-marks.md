@@ -36,8 +36,8 @@ The Chat Message Definition attaches a `provenance` view containing the producer
 
 ## Testing
 
-- `packages/client/ui-chat` and `packages/client/ui-trajectory` unit coverage pin each source kind, the label fallbacks when a name field is missing, empty, or wrongly typed, the unnamed degradation for a source with no readable kind, and durable steering reconstruction.
-- `packages/client/ui-chat` jsdom coverage pins the role title, the producer label beside it, the label's survival while expanded, and the roleless header.
+- `packages/client/runtime` unit coverage pins each source kind, the label fallbacks when a name field is missing, empty, or wrongly typed, the unnamed degradation for a source with no readable kind, and steering reconstruction on reset and live append paths.
+- `packages/client/ui-conversation` jsdom coverage pins the role title, the producer label beside it, the label's survival while expanded, and the roleless header.
 - The keyless assembled-Web goldens carry the named header, so the assembled transcript — not only component tests — proves the marks.
 
 ## Consequences

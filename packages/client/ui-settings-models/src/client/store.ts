@@ -22,12 +22,6 @@ import type { SettingsSchemaOperations } from './schema-operations.ts'
  */
 const PROBE_ROUTE = '\u0000probe'
 
-/** LLM Remote methods used by the Models page. */
-export type ModelsLlm = Pick<
-  ClientContext['remote']['llm'],
-  'balance' | 'discoverModels' | 'listConfigurableProviders' | 'listProviders'
->
-
 /** One provider row after joining the configurable directory with live routes. */
 export interface ProviderDirectoryEntry {
   readonly provider: string

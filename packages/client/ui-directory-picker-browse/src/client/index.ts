@@ -9,8 +9,7 @@
  * package owns its own strings.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: pulls the generated Remote service and fixed Host facts.
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 // Type-only: pulls the SlotMap merge declaring the directory-flow holes.
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
@@ -18,9 +17,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { BrowseFlowInjected } from './flow.ts'
 import { BrowseDirectoryFlow } from './flow.ts'
 
-/** Client-side interaction selection supplied by the auto Host chooser. */
+/** Client-side selection policy for an adaptive desktop directory picker. */
 export interface Config {
-  /** Use the OS chooser for loopback pages; remote pages always browse in-app. */
+  /** Use the OS chooser only from a loopback desktop page. */
   nativeOnLoopback?: boolean
 }
 
@@ -28,7 +27,7 @@ export interface Config {
 const LOCALE_NS = 'directory-browser'
 
 /** Required services (cordis fiber inject): the slot registry, workspace UI service, and locale. */
-export const inject = ['slots', 'uiWorkspace', 'locale', 'remote']
+export const inject = ['slots', 'uiWorkspace', 'locale', 'connection']
 
 /**
  * Client plugin body: register the dialog's dictionaries and the browse flow
@@ -37,6 +36,7 @@ export const inject = ['slots', 'uiWorkspace', 'locale', 'remote']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext, config: Config = {}): void {
+  const connection = ctx.get('connection') as ConnectionHandle
   ctx.effect(() => {
     // The two dictionaries land as a unit: if the second registration hits a
     // rival owner of the namespace, the first rolls back before the throw —
@@ -87,7 +87,7 @@ export function apply(ctx: ClientContext, config: Config = {}): void {
     listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
     createDirectory: (path, name) => ctx.uiWorkspace.createDirectory(path, name),
     pick: () => ctx.uiWorkspace.pickDirectory(),
-    isLoopback: ctx.remote.$host.isLoopback,
+    isLoopback: connection.isLoopback,
     nativeOnLoopback: config.nativeOnLoopback === true,
     t: ctx.locale.bind(LOCALE_NS),
   })

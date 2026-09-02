@@ -54,7 +54,7 @@ export interface SpawnInternals {
   spawn?: (program: string, args: readonly string[], options: SpawnOptions) => ChildProcess
   /** Windows tree-termination runner (defaults to `taskkill /PID <pid> /T /F`). */
   taskkill?: (pid: number) => void
-  /** Host platform override for process creation and signalling decisions. */
+  /** Host platform override for signalling decisions. */
   platform?: NodeJS.Platform
   /** Linux process-group member probe (defaults to `/proc` inspection). */
   linuxProcessGroupHasLiveMembers?: (processGroupId: number) => boolean | undefined
@@ -361,11 +361,6 @@ export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInter
     // `detached` gives teardown a tree root on POSIX (its own process group);
     // Windows terminates by root pid through taskkill /T instead.
     detached: platform !== 'win32',
-    // Electron is a GUI process and owns no visible console. Without this,
-    // Windows creates a transient console window for pwsh.exe/cmd.exe and for
-    // the ACL sandbox runner on every tool call. The confined child itself
-    // keeps its existing creation flags and inherits the runner's hidden
-    // environment, avoiding the restricted-token CREATE_NO_WINDOW failure.
     windowsHide: platform === 'win32',
   })
 

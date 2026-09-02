@@ -1,10 +1,7 @@
 // An enclosing `[data-conversation-scroll]` owns scrolling when present;
 // otherwise this view owns it. Each row subscribes to one stable node key.
 
-import {
-  memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
-  type ComponentProps, type KeyboardEvent as ReactKeyboardEvent,
-} from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import type {
   ConversationTimelineSnapshot, RenderMessageImages,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -510,12 +507,6 @@ export function ChatView({
       const row = anchorElement(local, anchor.key)
       if (row !== null) el.scrollTop += flowTop(row, el) - anchor.top
       observedTopRef.current = el.scrollTop
-      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD + 1
-      atBottomRef.current = isAtBottom
-      setAtBottom(isAtBottom)
-      const position = isAtBottom ? null : scrollPosition(local, el)
-      if (isAtBottom) chatScroll.save(null)
-      else if (position !== null) chatScroll.save(position)
       // A jump chunk lands here: scroll to the target once its rows exist;
       // until then keep holding the reader's row for the next chunk.
       if (!realizePendingJump(local, el, false) && row !== null) {
@@ -586,7 +577,6 @@ export function ChatView({
     if (isAtBottom) chatScroll.save(null)
     else if (position !== null) chatScroll.save(position)
     observedTopRef.current = el.scrollTop
-    scheduleActiveTurn()
     if (
       movedByReader
       && el.scrollTop <= HISTORY_LOAD_THRESHOLD
@@ -596,6 +586,7 @@ export function ChatView({
     ) {
       loadOlderAnchored()
     }
+    scheduleActiveTurn()
   }
 
   // Raw scroll events only schedule work. Geometry is sampled at most once
@@ -730,35 +721,6 @@ export function ChatView({
     loadOlder()
   }
 
-  const onTranscriptKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
-    const target = event.target
-    if (!(target instanceof HTMLElement)) return
-    if (target.closest('input, textarea, select, [contenteditable="true"]') !== null) return
-    const el = scrollerOf(event.currentTarget)
-    const page = Math.max(1, el.clientHeight * 0.9)
-    switch (event.key) {
-      case 'End':
-        el.scrollTop = el.scrollHeight
-        break
-      case 'Home':
-        el.scrollTop = 0
-        break
-      case 'PageDown':
-        el.scrollTop += page
-        break
-      case 'PageUp':
-        el.scrollTop -= page
-        break
-      default:
-        return
-    }
-    // Chromium does not consistently route paging keys from nested buttons
-    // to the outer conversation scrollport. Leave the scroll ledger unchanged
-    // so the next scroll event classifies this movement as reader-owned.
-    event.preventDefault()
-  }
-
   // Identity feeds the memoized rail; a fresh closure per render would defeat it.
   const navigateToTurn = useCallback((item: TurnRailItem): void => {
     const local = listRef.current
@@ -800,7 +762,7 @@ export function ChatView({
 
   return (
     <div className={css.root}>
-      <div ref={listRef} className={css.scroll} onKeyDown={onTranscriptKeyDown}>
+      <div ref={listRef} className={css.scroll}>
         <TurnNavigator
           items={railItems}
           activeTurn={activeTurn}

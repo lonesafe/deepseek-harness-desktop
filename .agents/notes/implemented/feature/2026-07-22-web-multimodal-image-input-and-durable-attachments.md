@@ -155,8 +155,8 @@ Malformed base64, unsupported or mismatched media, truncated image payloads, exc
 | `packages/llm/llm-deepseek` | Resolve official vision input to deterministic request versions and Files API ids. |
 | `packages/compaction/compaction-basic` | Preserve images in summary input and reject non-text checkpoint output explicitly. |
 | `packages/host/apiproxy` and `packages/bundle/base` | Narrow upload wire, shared batch admission, limits and routed-model preflight, persist-before-event ordering, session-authorized reads, and default profile composition. |
-| `packages/client/connection` and `packages/api/session-controller` | Bounded request buffering, wire types, fixture images, prompt uploads, attachment reads, and durable-reference folding. |
-| `packages/client/ui-conversation`, `packages/client/ui-attachment`, and `packages/client/ui-chat` | Per-session draft images, attachment rail, user and assistant image controls, and original preview. |
+| `packages/client/connection` and `packages/client/runtime` | Bounded request buffering, wire types, fixture images, prompt uploads, attachment reads, and durable-reference folding. |
+| `packages/client/ui-conversation` | Per-session draft images, attachment rail, user and assistant image controls, and original preview. |
 | `packages/acp/acp` | Conditional native image capability, atomic inline-image admission, and verified assistant-image delivery. |
 | `packages/mcp/mcp-client` | Lossless canonical MCP results plus capability-gated durable image projection and explicit diagnostics for unsupported rich blocks. |
 | `packages/core/tools` | Generic PTC mode forwarding of settled image-bearing sub-results after the outer result. |

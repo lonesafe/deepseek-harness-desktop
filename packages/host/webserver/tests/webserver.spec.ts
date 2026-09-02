@@ -37,14 +37,10 @@ afterEach(async () => {
 /** Write a cordis.yml with one webserver row, then boot it through the real Loader. */
 async function loadComposition(
   port = 0,
-  options: {
-    gzip?: boolean
-    host?: '127.0.0.1' | '0.0.0.0'
-    accessToken?: string
-  } = {},
+  gzip = false,
+  host: '127.0.0.1' | '0.0.0.0' = '127.0.0.1',
+  accessToken = '',
 ): Promise<Context> {
-  const host = options.host ?? '127.0.0.1'
-  const accessToken = options.accessToken ?? ''
   root = await mkdtemp(join(tmpdir(), 'dsh-webserver-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -52,14 +48,14 @@ async function loadComposition(
     '  config:',
     `    host: '${host}'`,
     `    port: ${String(port)}`,
-    `    accessToken: '${accessToken}'`,
-    ...(options.gzip === true
+    ...(gzip
       ? [
         '    compression: gzip',
         '    compressionLevel: 1',
         '    compressionThresholdBytes: 16',
       ]
       : []),
+    `    accessToken: '${accessToken}'`,
     '',
   ].join('\n'))
 
@@ -127,7 +123,7 @@ describe('real Loader composition', () => {
       host: '127.0.0.1', port: 0, compressionLevel: 10,
     })).toThrow()
 
-    const loaded = await loadComposition(0, { gzip: true })
+    const loaded = await loadComposition(0, true)
     const server = loaded.webServer
     const body = 'compressible response '.repeat(8)
     server.register({
@@ -398,7 +394,7 @@ describe('real Loader composition', () => {
   })
 
   it('rejects an all-interfaces bind without a strong access token', { timeout: 60_000 }, async () => {
-    await expect(loadComposition(0, { host: '0.0.0.0', accessToken: 'too-short' })).rejects.toThrow(
+    await expect(loadComposition(0, false, '0.0.0.0', 'too-short')).rejects.toThrow(
       `requires an accessToken of at least ${String(MIN_LAN_ACCESS_TOKEN_LENGTH)} characters`,
     )
   })
@@ -423,6 +419,13 @@ describe('LAN access authentication', () => {
     expect(isAuthorizedPeer('192.168.1.9', 'Bearer anything', accessToken)).toBe(false)
     expect(isAuthorizedPeer('192.168.1.9', `Basic ${Buffer.from(`${LAN_ACCESS_USERNAME}:wrong`).toString('base64')}`, accessToken)).toBe(false)
     expect(isAuthorizedPeer('192.168.1.9', `Basic ${Buffer.from(`other:${accessToken}`).toString('base64')}`, accessToken)).toBe(false)
+  })
+
+  it('lets downstream authenticated routes recognize the accepted LAN credentials', async () => {
+    const loaded = await loadComposition(0, false, '0.0.0.0', accessToken)
+    expect(loaded.webServer.isLanAuthenticated({ authorization })).toBe(true)
+    expect(loaded.webServer.isLanAuthenticated(new Headers({ authorization }))).toBe(true)
+    expect(loaded.webServer.isLanAuthenticated({ authorization: 'Bearer wrong' })).toBe(false)
   })
 
   it('accepts only the opaque session cookie derived from the configured token', () => {

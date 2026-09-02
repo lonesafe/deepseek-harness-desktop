@@ -1066,7 +1066,7 @@ describe('runScenario', () => {
     )).rejects.toThrow(new RegExp(`did not persist session/title after turn/end within ${titleDiagnosticTimeoutMs}ms`))
   })
 
-  it('waitForEventAfterTurnEnd holds the app for a typed post-boundary record', { timeout: 20_000 }, async () => {
+  it('waitForEventAfterTurnEnd holds the app for a typed post-boundary record and times out otherwise', { timeout: 20_000 }, async () => {
     const late = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,
@@ -1090,9 +1090,7 @@ describe('runScenario', () => {
       { agent: AGENT, mode: 'replay', fixtureFile: late.fixtureFile },
     )
     expect(result.sessionLogs[0]?.content).toMatch(/"turn\/end"[\s\S]*"user\/message"/)
-  })
 
-  it('waitForEventAfterTurnEnd times out when the typed record precedes the boundary', { timeout: 20_000 }, async () => {
     const early = await scenario({
       prompt: 'hang-until-cancel',
       persistLogsOnCancel: true,

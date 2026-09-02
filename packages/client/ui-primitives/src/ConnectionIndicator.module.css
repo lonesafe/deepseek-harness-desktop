@@ -64,12 +64,7 @@
 }
 
 .warning:is(:hover, :focus-visible) .stateLabel {
-  visibility: hidden;
-}
-
-.warning:is(:hover, :focus-visible) .stateLabel .dots span {
-  visibility: hidden;
-  animation: none;
+  display: none;
 }
 
 .hoverLabel {

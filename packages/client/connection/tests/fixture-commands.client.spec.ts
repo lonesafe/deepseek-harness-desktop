@@ -20,16 +20,6 @@ async function callRemote<T>(
 const sid = (id: string): SessionId => id as SessionId
 
 describe('createFixtureApi commands/skills', () => {
-  it('settles the empty dynamic Cordis boot mirrors without transport failures', async () => {
-    const { rpc } = createFixtureFaces()
-    await expect(rpc.call('/api', 'dynamicCordisRunner/syncInspectManifest', {
-      args: { providers: [] },
-    })).resolves.toEqual({ ok: true, value: null })
-    await expect(rpc.call('/api', 'dynamicCordisRunner/inventory', {
-      args: {},
-    })).resolves.toEqual({ ok: true, value: [] })
-  })
-
   it('serves the addressed session catalog', async () => {
     const { rpc } = createFixtureFaces()
     const commands = await callRemote<{ name: string; input?: { hint: string; images?: boolean } }[]>(

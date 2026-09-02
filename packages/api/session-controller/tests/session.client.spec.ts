@@ -6,7 +6,10 @@ import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import {
-  JUMP_PAGE_MESSAGES, resolveHistoryPageMessages, Session, type SessionOptions,
+  JUMP_PAGE_MESSAGES,
+  resolveHistoryPageMessages,
+  Session,
+  type SessionOptions,
 } from '../src/client/sessions/session.ts'
 import { FakeApiClient, deferred, err, fakeRemote, ok } from './fake-api.client.ts'
 import { entries, ev, historyValue, plainTurn } from './event-script.client.ts'
@@ -14,7 +17,7 @@ import { entries, ev, historyValue, plainTurn } from './event-script.client.ts'
 const SID = 'fk-s1' as SessionId
 const PARENT = 'fk-parent' as SessionId
 
-it('uses small remote portal history pages without changing direct pages', () => {
+it('uses one message per remote portal page while keeping direct pages wide', () => {
   expect(resolveHistoryPageMessages('/api/rpc')).toBe(1)
   expect(resolveHistoryPageMessages(undefined)).toBe(50)
   expect(resolveHistoryPageMessages('/api/other')).toBe(50)

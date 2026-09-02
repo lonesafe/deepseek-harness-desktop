@@ -45,7 +45,7 @@ function ApprovalFlow({ pending, detail, t }: {
           <Button variant="outline" className={css.reject} disabled={answered} onClick={() => { answer('rejected') }}>
             {t('reject')}
           </Button>
-          <Button variant={pending.allowAlways ? 'outline' : 'primary'} disabled={answered} onClick={() => { answer('allowed-once') }}>
+          <Button variant="outline" disabled={answered} onClick={() => { answer('allowed-once') }}>
             {t('allowOnce')}
           </Button>
           {pending.allowAlways && (

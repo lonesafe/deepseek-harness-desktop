@@ -64,7 +64,7 @@ export interface ToolCallOwnerProps {
   /** Host account home; POSIX home-rooted summaries display as `~`. */
   home?: string | undefined
   /** Open a Tool argument path through the Host. */
-  openFile?: ((path: string) => void) | undefined
+  openFile: (path: string) => void
   /**
    * Session-authorized image loader for the `tool.call.images` slot, supplied
    * by the chat node that owns this call. A composed chat node always

@@ -80,6 +80,7 @@ export function apply(ctx: Context): void {
     ctx, ctx.remote.directoryPicker, workspaces, sessions)
   ctx.slots.provideRoot({ hooks: { workspaces: workspaces.list } })
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-workspace: dictionaries')
+  const t = ctx.locale.bind(NS)
 
   const searchSessions: WorkspaceBrowserInjected['searchSessions'] = async (query, signal) => {
     const result = await sessions.search(query, signal)
@@ -168,7 +169,7 @@ export function apply(ctx: Context): void {
       id: 'workspace-files',
       order: 20,
       locale: NS,
-      label: () => ctx.locale.bind(NS)('files.tab'),
+      label: () => t('files.tab'),
       inject: () => filesInjected,
     },
     WorkspaceFilesView,

@@ -205,7 +205,7 @@ export const longProbe = 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 +
 
     expect(result.error).toBeUndefined()
     expect(result.status, normalizedOutput(result)).toBe(0)
-  }, 90_000)
+  })
 
   it('keeps repository lint workflows Oxlint-only', async () => {
     const packageJson = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8')) as unknown
@@ -347,7 +347,7 @@ export const longProbe = 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 +
     } finally {
       await rm(path, { force: true })
     }
-  }, 20_000)
+  })
 
   it.each(['--fix', '--fix-suggestions', '--fix-dangerously'])(
     'converges overlapping staged stylistic fixes through Oxlint under %s',

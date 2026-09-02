@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 
-const READY_PATTERN = /^dsh web: (http:\/\/127\.0\.0\.1:\d+)(?: \(LAN: (http:\/\/[^\s)]+)\))?(?:\s|$)/m
+const READY_PATTERN = /^dsh web: (http:\/\/127\.0\.0\.1:\d+(?:\/[^\s)]*)?)(?: \(LAN: (http:\/\/[^\s)]+)\))?(?:\s|$)/m
 const STARTUP_TIMEOUT_MS = 120_000
 const SHUTDOWN_GRACE_MS = 5_000
 const MAX_DIAGNOSTIC_CHARS = 16_384

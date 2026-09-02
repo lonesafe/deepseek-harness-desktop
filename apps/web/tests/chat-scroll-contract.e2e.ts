@@ -5,7 +5,7 @@
 import { access, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Browser, Page, Route } from 'playwright'
+import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -28,7 +28,7 @@ const TOOL_SESSION_ID = 'chat-scroll-tool-e2e'
 const RESTORE_SESSION_A_ID = 'chat-scroll-restore-a-e2e'
 const RESTORE_SESSION_B_ID = 'chat-scroll-restore-b-e2e'
 const REPLAY_CONTEXT_WINDOW = 10_000_000
-const STREAM_PACE_MS = 100
+const STREAM_PACE_MS = 24
 const GEOMETRY_TOLERANCE = 2
 const RESPONSIVE_REFLOW_TOLERANCE = 32
 const LIVE_TEXT_PROMPT = 'CHAT_SCROLL_LIVE_USER Continue this long conversation while I inspect older history.'
@@ -430,40 +430,22 @@ async function expectMarkerAboveComposer(page: Page, marker: string): Promise<vo
 }
 
 async function loadEarlierWithAnchor(page: Page): Promise<void> {
-  let held = false
-  let releaseGate: (() => void) | undefined
-  const gate = new Promise<void>((resolve) => { releaseGate = resolve })
-  const releaseHistory = (): void => { releaseGate?.() }
-  const handler = async (route: Route): Promise<void> => {
-    const request = route.request().postDataJSON() as {
-      method?: string
-      payload?: { args?: { request?: { beforeSeq?: number } } }
-    }
-    if (!held && request.method === 'session/page'
-      && request.payload?.args?.request?.beforeSeq !== undefined) {
-      held = true
-      await gate
-    }
-    await route.continue()
-  }
-  await page.route('**/api/session/page', handler)
+  await wheelToHistoryStart(page)
+  const older = page.getByRole('button', { name: 'Load earlier', exact: true })
+  const loading = page.getByRole('button', { name: 'Loading…', exact: true })
+  await older.waitFor({ timeout: 10_000 })
+  const anchor = await visibleFlowAnchor(page)
   const before = await loadedFlowRows(page)
-  try {
-    await wheelToHistoryStart(page)
-    await expect.poll(() => held, { timeout: 10_000 }).toBe(true)
-    const anchor = await visibleFlowAnchor(page)
-    releaseHistory()
-    await expect.poll(() => loadedFlowRows(page), { timeout: 30_000 }).toBeGreaterThan(before)
-    await nextPaint(page)
-    if (await page.getByRole('button', { name: 'Load earlier', exact: true }).count() === 0) {
-      expect(await page.locator('[data-turn-process][aria-expanded="false"]').count()).toBeGreaterThan(0)
-      return
-    }
-    await expectSameFlowTop(page, anchor)
-  } finally {
-    releaseHistory()
-    await page.unroute('**/api/session/page', handler)
+  await older.click()
+  await expect.poll(async () => (
+    await loadedFlowRows(page) > before && await loading.count() === 0
+  ), { timeout: 30_000 }).toBe(true)
+  await nextPaint(page)
+  if (await page.getByRole('button', { name: 'Load earlier', exact: true }).count() === 0) {
+    expect(await page.locator('[data-turn-process][aria-expanded="false"]').count()).toBeGreaterThan(0)
+    return
   }
+  await expectSameFlowTop(page, anchor)
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -532,8 +514,9 @@ describe('web e2e: long Chat scroll contract', () => {
         await composer.fill(LIVE_TEXT_PROMPT)
         await world.page.getByRole('button', { name: 'Send message', exact: true }).click()
         await world.page.getByText(LIVE_TEXT_FIRST, { exact: false }).last().waitFor({ timeout: 15_000 })
-        const beforeRows = await loadedFlowRows(world.page)
         await wheelToHistoryStart(world.page)
+        const beforeRows = await loadedFlowRows(world.page)
+        await world.page.getByRole('button', { name: 'Load earlier', exact: true }).click()
         await expect.poll(() => held, { timeout: 10_000 }).toBe(true)
 
         await wheelTranscript(world.page, 420)
@@ -559,6 +542,7 @@ describe('web e2e: long Chat scroll contract', () => {
 
       let additionalPages = 0
       while (additionalPages < 8) {
+        await wheelToHistoryStart(world.page)
         if (await world.page.getByRole('button', { name: 'Load earlier', exact: true }).count() === 0) break
         await loadEarlierWithAnchor(world.page)
         additionalPages += 1
@@ -728,11 +712,7 @@ describe('web e2e: long Chat scroll contract', () => {
       await liveRow.click()
       await expect.poll(() => liveRow.getAttribute('aria-expanded'), { timeout: 10_000 }).toBe('true')
       await expectSameFlowTop(world.page, toolAnchor)
-      await wheelTranscript(world.page, -100_000)
-      await expect.poll(
-        () => world.page.locator('[data-chat-flow] button:disabled').count(),
-        { timeout: 30_000 },
-      ).toBe(0)
+      await wheelToHistoryStart(world.page)
       await world.page.getByRole('button', { name: 'Back to bottom', exact: true }).click()
       await expectBottom(world.page)
       await wheelUntilMounted(world.page, liveRowSelector, -1_100)
@@ -759,7 +739,7 @@ describe('web e2e: long Chat scroll contract', () => {
       )
       await loadEarlierWithAnchor(world.page)
       await loadEarlierWithAnchor(world.page)
-      await loadEarlierWithAnchor(world.page)
+      await wheelToHistoryStart(world.page)
       await wheelTranscript(world.page, 1_300)
       const sessionAnchor = await visibleFlowAnchor(world.page)
 

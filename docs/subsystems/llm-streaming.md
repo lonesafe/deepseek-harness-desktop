@@ -451,32 +451,6 @@ interface LlmProviderInfo {
 }
 ```
 
-Adapters that expose account billing return exact decimal strings, not JavaScript numbers, so every transport preserves provider precision.
-
-```ts type-equiv
-/** One currency row returned by a provider's account-balance endpoint. */
-interface LlmBalanceInfo {
-  /** ISO-style currency code reported by the provider (for example CNY or USD). */
-  currency: string
-  /** Total spendable balance, preserved as a decimal string. */
-  totalBalance: string
-  /** Promotional or granted portion of the total balance. */
-  grantedBalance: string
-  /** User-funded portion of the total balance. */
-  toppedUpBalance: string
-}
-```
-
-```ts type-equiv
-/** Provider account availability and its per-currency balances. */
-interface LlmAccountBalance {
-  /** Whether the provider currently considers the account usable. */
-  isAvailable: boolean
-  /** Detached balance rows in provider order. */
-  balances: readonly LlmBalanceInfo[]
-}
-```
-
 Adapter plugins additionally declare which routes *could* run through `registerConfigurableProviders()`, addressing each one's user-settings section, so configuration surfaces can offer dormant providers before any route registers.
 
 ```ts type-equiv
@@ -809,6 +783,14 @@ declare abstract class LlmAdapter {
    */
   imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;
   /**
+   * Read the account balance associated with this route's current credential.
+   * Adapters without a balance endpoint reject with a stable capability code.
+   * @param _provider - one provider route owned by this adapter.
+   * @param _signal - cancellation for the provider request.
+   * @returns provider account availability and exact decimal balance strings.
+   */
+  accountBalance(_provider: string, _signal?: AbortSignal): Promise<LlmAccountBalance>;
+  /**
    * List models this adapter can currently advertise for one owned provider.
    * The result is advisory: an adapter may accept unlisted model ids, and
    * consumers must not turn absence into request rejection.
@@ -840,14 +822,6 @@ declare abstract class LlmAdapter {
    * @returns model metadata and a one-generation stream entry point.
    */
   async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;
-  /**
-   * Read the account balance associated with this route's current credential.
-   * Adapters without a balance endpoint reject with a stable capability code.
-   * @param _provider - one provider route owned by this adapter.
-   * @param _signal - cancellation for the provider request.
-   * @returns provider account availability and exact decimal balance strings.
-   */
-  accountBalance(_provider: string, _signal?: AbortSignal): Promise<LlmAccountBalance>;
   /**
    * Stream one model call as raw chunks. The only required method.
    * @param options - the fully-assembled request; implementations must honor `options.signal`.
@@ -916,6 +890,23 @@ registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHa
  * @returns detached provider metadata in registration order.
  */
 @Remote listProviders(): LlmProviderInfo[]
+
+/**
+ * Read and validate one registered provider's account balance.
+ * Decimal amounts remain strings so the wire never rounds money.
+ * @param provider - registered provider route to inspect.
+ * @param signal - optional cancellation for the adapter request.
+ * @returns validated, detached provider account-balance metadata.
+ */
+async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>
+
+/**
+ * Remote adapter for a provider account-balance query.
+ * @param provider - registered provider route to inspect.
+ * @param signal - caller cancellation supplied by the Remote carrier.
+ * @returns validated provider account-balance metadata.
+ */
+@Remote('accountBalance') async remoteAccountBalance(provider: string, signal: AbortSignal): Promise<LlmAccountBalance>
 
 /**
  * Declare provider routes an adapter plugin can activate through
@@ -992,24 +983,6 @@ imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | u
  * @returns detached model metadata in adapter-preferred order.
  */
 async listModels(provider: string): Promise<LlmModelInfo[]>
-
-/**
- * Read and validate one registered provider's account balance.
- * Decimal amounts remain strings so the wire never rounds money.
- * @param provider - registered provider route to inspect.
- * @param signal - optional cancellation for the adapter request.
- * @returns validated, detached provider account-balance metadata.
- */
-async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>
-
-/**
- * Read one registered provider's account balance over the Client Remote.
- * @param provider - registered provider route to inspect.
- * @param signal - cancellation supplied by the Remote carrier.
- * @returns exact decimal balance strings and provider availability.
- * @throws RemoteError with `llm/balance-failed` when the route or provider refuses the request.
- */
-@Remote('balance') async remoteAccountBalance(provider: string, signal: AbortSignal): Promise<LlmAccountBalance>
 
 /**
  * Resolve and validate all metadata from the adapter that owns one exact

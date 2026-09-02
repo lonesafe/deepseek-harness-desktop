@@ -4,11 +4,11 @@ import {
   desktopUpdateDownloadState, fetchDesktopUpdate, UPDATE_CHECK_INTERVAL_MS,
   type DesktopUpdate, type DesktopUpdateDownloadState,
 } from './desktop-update.ts'
-import type { SettingsRootComponentProps } from './shell-contract.ts'
 import css from './DesktopUpdateBadge.module.css'
+import type { SettingsRootComponentProps } from './shell-contract.ts'
 
 /** Desktop-only update affordance next to the sidebar Settings trigger. */
-export function DesktopUpdateBadge({ wide, t }: { wide: boolean } & Pick<SettingsRootComponentProps, 't'>) {
+export function DesktopUpdateBadge({ wide, t }: { wide: boolean; t: SettingsRootComponentProps['t'] }) {
   const configuration = useMemo(() => desktopUpdateConfiguration(window.location.search), [])
   const [update, setUpdate] = useState<DesktopUpdate | undefined>()
   const [download, setDownload] = useState<DesktopUpdateDownloadState>({ status: 'idle' })
@@ -55,12 +55,12 @@ export function DesktopUpdateBadge({ wide, t }: { wide: boolean } & Pick<Setting
   const transfer = 'version' in download ? download : undefined
   const progress = transfer === undefined ? 0 : Math.round((transfer.received / transfer.total) * 100)
   const status = download.status === 'checking'
-    ? t('update.status.checking')
+    ? t('update.checking')
     : download.status === 'verifying'
-      ? t('update.status.verifying')
+      ? t('update.verifying')
       : download.status === 'cancelling'
-        ? t('update.status.cancelling')
-        : t('update.status.downloading')
+        ? t('update.cancelling')
+        : t('update.downloading')
   return (
     <>
       <a
@@ -68,10 +68,10 @@ export function DesktopUpdateBadge({ wide, t }: { wide: boolean } & Pick<Setting
         href="dsh-update://download"
         target="_blank"
         rel="noopener noreferrer"
-        title={t('update.download.title', { version: update.version, fileName: update.fileName })}
+        title={t('update.downloadTitle', { version: update.version, fileName: update.fileName })}
         aria-label={t('update.available', { version: update.version })}
       >
-        <span aria-hidden="true">↓</span>{wide && t('update.label')}
+        <span aria-hidden="true">↓</span>{wide && t('update.action')}
       </a>
       {active && (
         <section className={css.progressCard} role="status" aria-live="polite">
@@ -85,8 +85,8 @@ export function DesktopUpdateBadge({ wide, t }: { wide: boolean } & Pick<Setting
               href={DESKTOP_UPDATE_CANCEL_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={t('update.cancel.aria')}
-              title={t('update.cancel')}
+              aria-label={t('update.cancel')}
+              title={t('update.cancelTitle')}
             >
               <span aria-hidden="true">×</span>
             </a>
@@ -117,7 +117,7 @@ export function DesktopUpdateBadge({ wide, t }: { wide: boolean } & Pick<Setting
 
 /** Compact byte totals for the desktop update progress card. */
 function formatBytes(bytes: number, t: SettingsRootComponentProps['t']): string {
-  if (bytes < 1024) return t('update.size.bytes', { value: bytes })
-  if (bytes < 1024 * 1024) return t('update.size.kib', { value: (bytes / 1024).toFixed(1) })
-  return t('update.size.mib', { value: (bytes / 1024 / 1024).toFixed(1) })
+  if (bytes < 1024) return t('update.bytes', { value: bytes })
+  if (bytes < 1024 * 1024) return t('update.kibibytes', { value: (bytes / 1024).toFixed(1) })
+  return t('update.mebibytes', { value: (bytes / 1024 / 1024).toFixed(1) })
 }

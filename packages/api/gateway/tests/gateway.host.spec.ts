@@ -143,7 +143,7 @@ class FakeConnectionService extends Service {
   }
 }
 
-function fakeHttpServer(routes: WebRoute[]): Pick<WebServer, 'register' | 'tapIndex' | 'port'> {
+function fakeHttpServer(routes: WebRoute[]): Pick<WebServer, 'register' | 'tapIndex' | 'isLanAuthenticated' | 'port'> {
   return {
     register(route) {
       if (routes.some(candidate => candidate.kind === route.kind && candidate.path === route.path)) {
@@ -153,6 +153,7 @@ function fakeHttpServer(routes: WebRoute[]): Pick<WebServer, 'register' | 'tapIn
       return () => { routes.splice(routes.indexOf(route), 1) }
     },
     tapIndex: () => () => {},
+    isLanAuthenticated: () => false,
     port: 0,
   }
 }

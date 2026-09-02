@@ -675,7 +675,9 @@ jobs:
     # (DSH_CI_FAILOVER_LINUX), not the Windows one, because it aggregates the
     # required Linux workers and runs on the vm-backup pool.
     runs-on: >-
-      ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+      ${{ github.repository != 'deepseek-ai/deepseek-harness'
+          && 'ubuntu-latest'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}

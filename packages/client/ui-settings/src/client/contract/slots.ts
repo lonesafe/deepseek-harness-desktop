@@ -23,13 +23,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'settings.trigger': { kind: 'single'; scope: 'root'; owner: SettingsTriggerOwnerProps }
     /**
-     * Ordered utilities rendered in the sidebar footer after the Settings
-     * trigger and before desktop-only version/update chrome. Each utility
-     * owns its button and compact/hidden behavior; the shell supplies the
-     * current wide/rail state so entries do not crowd the collapsed rail.
-     */
-    'settings.footer.utility': { kind: 'list'; scope: 'root'; owner: SettingsFooterUtilityOwnerProps }
-    /**
      * The panel title text seat. Content renders inside the nav heading row;
      * the dialog's accessible name points at that node via aria-labelledby.
      * Absent contribution leaves the heading empty.
@@ -111,12 +104,6 @@ export interface SettingsPluginsTabOwnerProps {
 /** Owner share of the trigger content seat: the sidebar column state. */
 export interface SettingsTriggerOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail, icon only). */
-  wide: boolean
-}
-
-/** Owner share of a utility beside the Settings trigger. */
-export interface SettingsFooterUtilityOwnerProps {
-  /** Whether the sidebar renders wide content (false = 56px rail). */
   wide: boolean
 }
 

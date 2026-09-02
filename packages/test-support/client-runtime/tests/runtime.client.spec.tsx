@@ -478,6 +478,10 @@ describe('workspaces action face', () => {
     expect(created.title).toBe('/tmp/alpha')
     const registered = await ws.create({ path: '/tmp/beta' })
     expect(registered.path).toBe('/tmp/beta')
+    expect(await ws.listFiles('w1' as WorkspaceId, 'src')).toEqual({
+      path: 'src', entries: [], truncated: false,
+    })
+    expect((await ws.readFile('w1' as WorkspaceId, 'README.md')).name).toBe('README.md')
     const renamed = await ws.rename('w1' as WorkspaceId, 'Renamed')
     expect(renamed.title).toBe('Renamed')
     await ws.delete('w1' as WorkspaceId)
@@ -487,32 +491,32 @@ describe('workspaces action face', () => {
     // Default archive mirrors the production effect: the id joins the list
     // state's archive set (features render against the same snapshot).
     await ws.archiveSession('s1' as SessionId)
-    await expect(ws.listFiles('w1' as WorkspaceId, 'docs')).resolves.toEqual({
-      path: 'docs', entries: [], truncated: false,
-    })
-    await expect(ws.readFile('w1' as WorkspaceId, 'docs/readme.txt')).resolves.toMatchObject({
-      path: 'docs/readme.txt', name: 'readme.txt', kind: 'text', content: '',
-    })
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
     expect(ws.calls.map(c => c.method)).toEqual(
-      [
-        'create', 'create', 'rename', 'delete', 'insertBefore', 'insertSessionBefore', 'archiveSession',
-        'listFiles', 'readFile',
-      ])
+      ['create', 'create', 'listFiles', 'readFile', 'rename', 'delete', 'insertBefore',
+        'insertSessionBefore', 'archiveSession'])
 
     ws.stub('create', () => Promise.resolve({ workspaceId: 'ws-x', title: 'X', path: '/x', sessionIds: [] } as never))
+    ws.stub('listFiles', (_workspaceId, path = '') => Promise.resolve({ path, entries: [], truncated: true }))
+    ws.stub('readFile', (_workspaceId, path) => Promise.resolve({
+      path,
+      name: 'stub.md',
+      mime: 'text/markdown',
+      size: 4,
+      modifiedAt: '2026-01-01T00:00:00.000Z',
+      kind: 'markdown',
+      encoding: 'utf8',
+      content: 'stub',
+    }))
     ws.stub('rename', () => Promise.resolve({ workspaceId: 'w1', title: 'S', path: '/s', sessionIds: [] } as never))
     ws.stub('delete', () => Promise.resolve())
     const insertBefore = vi.fn(() => Promise.resolve())
     ws.stub('insertBefore', insertBefore)
     ws.stub('insertSessionBefore', () => Promise.resolve({ workspaceId: 'w1', title: '', path: '', sessionIds: [] } as never))
     ws.stub('archiveSession', () => Promise.resolve())
-    ws.stub('listFiles', async (_workspaceId, path) => ({ path, entries: [], truncated: true }))
-    ws.stub('readFile', async (_workspaceId, path) => ({
-      path, name: 'stub.txt', mime: 'text/plain', size: 4,
-      modifiedAt: '2026-01-01T00:00:00.000Z', kind: 'text' as const, encoding: 'utf8' as const, content: 'stub',
-    }))
     expect((await ws.create({ path: '/y' })).title).toBe('X')
+    expect((await ws.listFiles('w1' as WorkspaceId, 'docs')).truncated).toBe(true)
+    expect((await ws.readFile('w1' as WorkspaceId, 'docs/a.md')).content).toBe('stub')
     expect((await ws.rename('w1' as WorkspaceId, 'z')).title).toBe('S')
     await ws.delete('w1' as WorkspaceId)
     await ws.insertBefore('w2' as WorkspaceId)
@@ -520,8 +524,6 @@ describe('workspaces action face', () => {
     expect((await ws.insertSessionBefore('w1' as WorkspaceId, 's1' as SessionId)).sessionIds).toEqual([])
     // The stub replaces the default set mutation: the set stays as-is.
     await ws.archiveSession('s2' as SessionId)
-    await expect(ws.listFiles('w1' as WorkspaceId, 'docs')).resolves.toMatchObject({ truncated: true })
-    await expect(ws.readFile('w1' as WorkspaceId, 'docs/stub.txt')).resolves.toMatchObject({ content: 'stub' })
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
     await runtime.dispose()
   })

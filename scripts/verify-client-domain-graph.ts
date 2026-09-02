@@ -22,8 +22,15 @@ const CLIENT_DIR = join(root, 'packages/client')
 
 /** Directory names treated as the shared contract layer (importable by all). */
 const CONTRACT_DIRS = new Set(['contract'])
-/** Top-level client files allowed to import across domains (assembly layer). */
-const ASSEMBLY_FILES = new Set(['apply.ts', 'index.ts', 'index.tsx'])
+/** Client files that deliberately assemble more than one sibling domain. */
+const ASSEMBLY_FILES = new Set([
+  'apply.ts',
+  'index.ts',
+  'index.tsx',
+  // The upstream composer entry binds the input machine/editor to skeleton
+  // chrome; it is an assembly boundary despite living beside that chrome.
+  'skeleton/InputBar.tsx',
+])
 
 interface Violation { file: string; imported: string; reason: string }
 
@@ -56,7 +63,7 @@ function checkPackage(pkgName: string, clientDir: string): Violation[] {
   const files = listSources(clientDir)
   for (const rel of files) {
     const fromDomain = domainOf(rel)
-    const isAssembly = fromDomain === '' && ASSEMBLY_FILES.has(rel)
+    const isAssembly = ASSEMBLY_FILES.has(rel)
     if (isAssembly) continue
     const source = readFileSync(join(clientDir, rel), 'utf8')
     for (const match of source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {

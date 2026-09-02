@@ -133,12 +133,12 @@ class FakeWorkspaces implements IWorkspaces {
   }
 
   declare readonly create: IWorkspaces['create']
+  declare readonly listFiles: IWorkspaces['listFiles']
+  declare readonly readFile: IWorkspaces['readFile']
   declare readonly rename: IWorkspaces['rename']
   declare readonly delete: IWorkspaces['delete']
   declare readonly insertBefore: IWorkspaces['insertBefore']
   declare readonly insertSessionBefore: IWorkspaces['insertSessionBefore']
-  declare readonly listFiles: IWorkspaces['listFiles']
-  declare readonly readFile: IWorkspaces['readFile']
 
   constructor(initial: WorkspaceSnapshot) {
     this.list = new MutableSource(initial)

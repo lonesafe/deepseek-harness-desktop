@@ -3,16 +3,17 @@ import {
   IconChevronLeftOutline14, IconChevronRightOutline14, IconDownloadOutline16,
   IconFolderClose16, IconRefreshOutline14, MarkdownText,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   WorkspaceFileEntry, WorkspaceFileListing, WorkspaceFilePreview,
-} from '@deepseek-ai/dsh-api-workspace-controller/client'
+} from '@deepseek-ai/dsh-api-workspace-controller/types'
 import type { WorkspaceFilesProps } from './contract/slots.ts'
 import css from './WorkspaceFilesView.module.css'
 
 function formatBytes(bytes: number, t: WorkspaceFilesProps['t']): string {
-  if (bytes < 1_024) return t('files.size.bytes', { value: bytes })
-  if (bytes < 1_048_576) return t('files.size.kib', { value: (bytes / 1_024).toFixed(bytes < 10_240 ? 1 : 0) })
-  return t('files.size.mib', { value: (bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0) })
+  if (bytes < 1_024) return t('files.unit.bytes', { value: bytes })
+  if (bytes < 1_048_576) return t('files.unit.kibibytes', { value: (bytes / 1_024).toFixed(bytes < 10_240 ? 1 : 0) })
+  return t('files.unit.mebibytes', { value: (bytes / 1_048_576).toFixed(bytes < 10_485_760 ? 1 : 0) })
 }
 
 function errorMessage(reason: unknown): string {
@@ -27,17 +28,17 @@ function dataHref(preview: WorkspaceFilePreview): string | undefined {
   return undefined
 }
 
-function FilePreview({ preview, t }: Pick<WorkspaceFilesProps, 't'> & { preview: WorkspaceFilePreview }) {
+function FilePreview({ preview, t, labels }: Pick<WorkspaceFilesProps, 't'> & {
+  preview: WorkspaceFilePreview
+  labels: MarkdownLabels
+}) {
   const [markdownMode, setMarkdownMode] = useState<'preview' | 'source'>('preview')
   useEffect(() => { setMarkdownMode('preview') }, [preview.path])
   const href = dataHref(preview)
   let body
   if (preview.kind === 'markdown') {
     body = markdownMode === 'preview'
-      ? <div className={css.markdown}><MarkdownText text={preview.content} labels={{
-        code: { copyLabel: t('files.copy'), copiedLabel: t('files.copied') },
-        footnotes: t('files.footnotes'),
-      }} /></div>
+      ? <div className={css.markdown}><MarkdownText text={preview.content} labels={labels} /></div>
       : <pre className={css.textPreview}>{preview.content}</pre>
   } else if (preview.kind === 'text') {
     body = <pre className={css.textPreview}>{preview.content}</pre>
@@ -99,6 +100,10 @@ export function WorkspaceFilesView({
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewPending, setPreviewPending] = useState(false)
   const previewController = useRef<AbortController | null>(null)
+  const markdownLabels = useMemo<MarkdownLabels>(() => ({
+    code: { copyLabel: t('files.copyCode'), copiedLabel: t('files.copiedCode') },
+    footnotes: t('files.footnotes'),
+  }), [t])
 
   useEffect(() => {
     setPath('')
@@ -145,7 +150,6 @@ export function WorkspaceFilesView({
   }, [])
 
   const openFile = useCallback((entry: WorkspaceFileEntry) => {
-    /* v8 ignore next -- A file-row callback is never rendered without a registered Workspace. */
     if (workspace === undefined) return
     previewController.current?.abort()
     const controller = new AbortController()
@@ -224,7 +228,7 @@ export function WorkspaceFilesView({
               }}
             >
               <span className={css.fileIcon} aria-hidden="true">
-                {entry.kind === 'directory' ? <IconFolderClose16 /> : entry.name.split('.').at(-1)?.slice(0, 4).toUpperCase() || t('files.fileFallback')}
+                {entry.kind === 'directory' ? <IconFolderClose16 /> : entry.name.split('.').at(-1)?.slice(0, 4).toUpperCase() || t('files.fileType')}
               </span>
               <span className={css.fileName}>{entry.name}</span>
               <span className={css.fileSize}>{entry.kind === 'file' ? formatBytes(entry.size, t) : ''}</span>
@@ -244,7 +248,7 @@ export function WorkspaceFilesView({
         {previewPending && <p className={css.emptyCopy}>{t('files.loading')}</p>}
         {previewError !== null && <p className={css.error}>{t('files.error', { message: previewError })}</p>}
         {!previewPending && previewError === null && preview === null && <p className={css.emptyCopy}>{t('files.noSelection')}</p>}
-        {preview !== null && <FilePreview preview={preview} t={t} />}
+        {preview !== null && <FilePreview preview={preview} t={t} labels={markdownLabels} />}
       </section>
     </div>
   )

@@ -27,9 +27,6 @@ import { createModelsOperations } from './operations.ts'
 import { createSettingsSchemaOperations } from './schema-operations.ts'
 import { en, zh, type ModelsKey } from './locales.ts'
 import { WELCOME_NOTICE_SETTINGS_NAMESPACE } from '../onboarding-copy.ts'
-import { BalanceIndicator } from './BalanceIndicator.tsx'
-import type { BalanceIndicatorInjected } from './BalanceIndicator.tsx'
-import { BalanceStore } from './balance-store.ts'
 
 export type { ModelsSectionInjected, ModelsSectionProps } from './ModelsSection.tsx'
 export type { ModelsFooterOwnerProps, ProviderCardExtrasOwnerProps } from './slot-contract.ts'
@@ -111,12 +108,6 @@ export function apply(ctx: ClientContext): void {
     hooks: { welcome: welcomeController.store },
     t,
   })
-  const balanceController = new BalanceStore(ctx.remote.llm)
-  const balanceInjected = (): BalanceIndicatorInjected => ({
-    hooks: { balance: balanceController.store },
-    refresh: () => { void balanceController.load() },
-  })
-  void balanceController.load()
 
   // Pushed invalidations converge every open surface without polling. The
   // settingsScope injection makes ui-settings activate first, and remote
@@ -126,19 +117,10 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => {
     const refreshModels = (): void => { refreshIfLoaded(controller) }
     const disposers = [
-      ctx.remote.$on('settings/document-updated', (ns) => {
-        refreshModels()
-        if (ns === 'llm-deepseek') void balanceController.load()
-      }),
-      ctx.remote.$on('credentials/reference-updated', (ref) => {
-        refreshModels()
-        if (ref === 'DEEPSEEK_API_KEY') void balanceController.load()
-      }),
+      ctx.remote.$on('settings/document-updated', () => { refreshModels() }),
+      ctx.remote.$on('credentials/reference-updated', refreshModels),
       ctx.remote.$on('llm/adapters-updated', refreshModels),
-      ctx.on('connection/reset', () => {
-        refreshModels()
-        void balanceController.load()
-      }),
+      ctx.on('connection/reset', refreshModels),
     ]
     return () => {
       welcomeController.dispose()
@@ -169,11 +151,4 @@ export function apply(ctx: ClientContext): void {
     order: 0,
     inject: deepSeekOnboardingInjected,
   }, DeepSeekOnboardingDialog))
-  ctx.slots.inject('settings.footer.utility', () => ctx.slots.register({
-    name: 'settings.footer.utility',
-    id: 'deepseek-balance',
-    order: 0,
-    locale: NS,
-    inject: balanceInjected,
-  }, BalanceIndicator))
 }

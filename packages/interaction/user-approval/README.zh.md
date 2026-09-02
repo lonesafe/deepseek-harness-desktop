@@ -1,5 +1,5 @@
 ---
-description: "与通道无关的一次性审批 seam；供组合应答者、设置策略或排查以拒绝方式关闭的权限决定的用户与维护者阅读。"
+description: "与通道无关的审批 seam，支持单次与会话内记忆授权，供组合应答者和排查权限决定的用户与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-user-approval` 让敏感的工具操作暂停等待一次性的允许／拒绝决定：`ctx.approval.request(req)` 向已组合的应答者询问某个具体操作是否可以继续，并返回 `allowed-once`、`rejected`、`cancelled` 或 `unavailable`。应答者缺失、不负责或抛出异常时，请求以 `unavailable` 关闭；授权也只适用于所请求的操作。按会话策略——`ask`（默认）或 `never`——决定在任何应答者运行之前发生什么：`ask` 委托给已组合的应答者，`never` 确定性地拒绝每个请求，不提示任何人。每个请求都会记录在发起请求的会话审计日志中；模型只会看到发起请求的消费方的工具结果，以及运行时上下文快照中的当前策略。UI 通道提供人类应答者；ACP（Agent Client Protocol）自动化桥接层为其自有 agent 作答。
+`dsh-user-approval` 让敏感工具操作暂停等待允许／拒绝决定：`ctx.approval.request(req)` 向已组合的应答者询问某个具体操作是否可以继续，并返回 `allowed-once`、`allowed-always`、`rejected`、`cancelled` 或 `unavailable`。请求方可以提供稳定规则键；此时 `allowed-always` 会在同一会话内记住该规则，自动放行后续匹配请求。应答者缺失、不负责或抛出异常时，请求以 `unavailable` 关闭。按会话策略——`ask`（默认）或 `never`——决定在任何应答者运行之前发生什么：`ask` 委托给已组合的应答者；`never` 确定性拒绝每个请求，并优先于已记住的授权。每个请求都会记录在发起请求的会话审计日志中；模型只会看到发起请求的消费方的工具结果，以及运行时上下文快照中的当前策略。UI 通道提供人类应答者；ACP（Agent Client Protocol）自动化桥接层为其自有 agent 作答。
 
 ## 目录
 
@@ -49,7 +49,7 @@ kind: "package-reference"
 
 ### 请求决定
 
-`request(req)` 指名 agent、工具、可选的调用 id 与原因，以及一个中止信号。它要求当前处于尚未结束的轮次中：空闲或在轮次之间调用会在审计前抛出异常。中止会撤回问题——请求以 `cancelled` 结算，迟到的回答被丢弃。若任一审计事件在提交前失败，请求会被拒绝，而不会返回一项未记录的决定。
+`request(req)` 指名 agent、工具、可选的调用 id 与原因、可选的稳定 `alwaysAllowKey`，以及一个中止信号。如果同一会话中已有该键对应的完整 `allowed-always` 审计事件对，匹配请求会直接获准而不再提示。它要求当前处于尚未结束的轮次中：空闲或在轮次之间调用会在审计前抛出异常。中止会撤回问题——请求以 `cancelled` 结算，迟到的回答被丢弃。若任一审计事件在提交前失败，请求会被拒绝，而不会返回一项未记录的决定。
 
 ### 模型与用户看到什么
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 
 ### 分发
 
-`decide()` 让应答者 waterfall 与请求信号赛跑，并包含所有应答者失败：抛出异常的监听器让问题以 `unavailable` 关闭，不合词汇的返回值被规范化为 `unavailable`。`never` 策略在服务内部、waterfall 分发之前执行，因此之后以 `prepend` 注册的监听器也无法绕过确定性的拒绝。请求必须处于未结束的轮次内，因为轮次是持久日志的提交／回放边界——轮次之间的裸事件与崩溃尾部无法区分。
+`decide()` 让应答者 waterfall 与请求信号赛跑，并包含所有应答者失败：抛出异常的监听器让问题以 `unavailable` 关闭，不合词汇的返回值被规范化为 `unavailable`。`never` 策略在查询记忆授权与 waterfall 分发之前执行，因此已保存规则和之后以 `prepend` 注册的监听器都无法绕过确定性拒绝。请求必须处于未结束的轮次内，因为轮次是持久日志的提交／回放边界——轮次之间的裸事件与崩溃尾部无法区分。
 
 ### 策略与运行时上下文快照
 
@@ -83,7 +83,7 @@ kind: "package-reference"
 
 ### 审计
 
-`request()` 先追加携带请求身份与工具的 `approval/asked`，再追加携带封闭结果的 `approval/decided`；确切追加字段见 [`src/index.ts`](src/index.ts)。两者都只写入日志；不变式在同一个未结束轮次内按 id 校验这一事件对与封闭的结果词汇。
+`request()` 先追加携带请求身份、工具与可选记忆规则键的 `approval/asked`，再追加携带封闭结果的 `approval/decided`；确切追加字段见 [`src/index.ts`](src/index.ts)。两者都只写入日志；不变式在同一个未结束轮次内按 id 校验事件对，并拒绝没有非空规则键的 `allowed-always`。
 
 </details>
 
@@ -152,7 +152,7 @@ Approval prompts are disabled in this session: actions that require approval are
 这些限制说明该 seam 何时不合适，或何时需要特别的组合注意。它们是当前包约束，不是通用权限对比。
 
 - **请求只在尚未结束的轮次内有效**：在空闲时或轮次之间发起调用，会在审计前抛出异常；持久化的轮次外审批工作流仍属延期工作。
-- **仅存在一次性授权**：结果词汇包含 `allowed-once`，但不含 `allow-always`、已记住的规则、撤销或授权存储；会话策略只有 `ask`／`never`。
+- **记忆授权仅限当前会话**：`allowed-always` 只对同一会话内具有相同稳定键的后续请求生效；新会话会再次询问，目前没有独立的持久授权存储或撤销界面。
 - **请求不携带工具参数**：应答者会看到工具名称、原因和可选调用 id；ACP 机器通道要求调用 id，并会委托不含 id 的请求。
 - **没有内置应答者**：无头或组合不完整的部署会返回 `unavailable` 并以拒绝方式关闭；服务自身绝不会提示人类。
 

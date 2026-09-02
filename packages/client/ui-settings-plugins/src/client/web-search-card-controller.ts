@@ -77,20 +77,17 @@ export interface WebSearchCardFace extends CardActions {
 export class WebSearchCardController {
   private readonly form: CardForm<WebSearchSettings>
   private readonly store: SnapshotStore<WebSearchCardState>
-  private credential: CredentialState
+  private credential: CredentialState = { ref: '', configured: false, writable: true }
 
   /**
    * @param scope - the bound settings scope for the `web-search-deepseek` namespace.
    * @param ctx - the card plugin's context, whose `remote.credentials` namespace
    * answers for the credential the section references.
-   * @param allowCredentialWrites - whether this browser can reach Host credential mutation.
    */
   constructor(
     private readonly scope: SettingsScope<WebSearchSettings>,
     private readonly ctx: ClientContext,
-    private readonly allowCredentialWrites = ctx.remote.$host.isLoopback,
   ) {
-    this.credential = { ref: '', configured: false, writable: allowCredentialWrites }
     this.form = new CardForm(
       scope,
       [textField('baseURL'), numberField('maxUses')],
@@ -125,15 +122,10 @@ export class WebSearchCardController {
     if (ref !== this.credential.ref) {
       // A new reference knows nothing yet; keeping the old answer would claim
       // the key is configured under a name nobody has checked.
-      this.credential = { ref, configured: false, writable: this.allowCredentialWrites }
+      this.credential = { ref, configured: false, writable: true }
       this.store.set(this.projection())
     }
-    let response: Awaited<ReturnType<ClientContext['remote']['credentials']['describe']>>
-    try {
-      response = await this.ctx.remote.credentials.describe([ref])
-    } catch {
-      return
-    }
+    const response = await this.ctx.remote.credentials.describe([ref])
     if (!response.ok || ref !== refOf(this.scope.getSnapshot())) return
     const view = response.value[ref]
     const next: CredentialState = {
@@ -141,7 +133,7 @@ export class WebSearchCardController {
       configured: view?.configured ?? false,
       // An unknown reference is treated as writable: the control stays usable
       // and the Host is what refuses, rather than the card guessing a refusal.
-      writable: this.allowCredentialWrites && (view?.writable ?? true),
+      writable: view?.writable ?? true,
     }
     if (next.configured === this.credential.configured && next.writable === this.credential.writable) return
     this.credential = next
@@ -175,7 +167,6 @@ export class WebSearchCardController {
    * @returns whether the Host reports a configured credential afterwards.
    */
   private async writeKey(value: string): Promise<boolean> {
-    if (!this.allowCredentialWrites) return false
     // Refusals surface through the re-read below: the Host is the only
     // authority on whether the key now exists.
     await this.ctx.remote.credentials.set(refOf(this.scope.getSnapshot()), value)

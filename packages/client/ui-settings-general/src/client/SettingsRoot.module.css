@@ -1,11 +1,9 @@
-/* Preserve room for desktop version and update controls while the settings
-   action follows the sidebar footer's 42px vertical rhythm. */
 .triggerRow {
   position: relative;
   flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: calc(100% + 4px);
   margin: 4px -2px;
 }
@@ -249,8 +247,8 @@
   white-space: nowrap;
 }
 
-/* Phone layout keeps title and actions on the first row, moves section
-   navigation to a horizontal rail, and gives the active section full width. */
+/* Phone layout: title/actions remain the first row, section navigation becomes
+   a horizontal rail, and the active section receives the panel's full width. */
 @media (max-width: 640px) {
   .overlay {
     box-sizing: border-box;

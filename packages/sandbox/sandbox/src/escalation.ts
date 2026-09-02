@@ -4,10 +4,8 @@
  * strictly-wider ladder, the argument-pairing validation, the model-facing
  * denial/hint markers, and {@link approveEscalation} — the ordered fail-closed
  * sequence that resolves a `sandbox_permissions` request through a
- * user-approval channel BEFORE anything executes. A user may remember the
- * grant for the same tool and target mode for the rest of the session. One
- * home keeps the two families' approval ordering and verbatim error texts
- * from drifting apart.
+ * user-approval channel BEFORE anything executes. One home keeps the two
+ * families' approval ordering and verbatim error texts from drifting apart.
  *
  * The channel is a minimal STRUCTURAL function shape ({@link EscalationAsk}),
  * not the approval service type: the tool layer — which owns the agent, the
@@ -161,8 +159,7 @@ export interface EscalationRequest {
  * non-widening request never prompts a human.
  * @param request - the escalation to judge (see {@link EscalationRequest}).
  * @param approval - the approval ingredients the tool holds (see {@link EscalationApproval}).
- * @returns the granted mode for the current call; the approval service, not
- *   this helper, owns any remembered grant for later matching calls.
+ * @returns the granted mode, consumed by the one call that asked.
  */
 export async function approveEscalation<A, C>(request: EscalationRequest, approval: EscalationApproval<A, C>): Promise<SandboxMode> {
   const { requestedMode: mode, effectiveMode, justification, subject } = request

@@ -17,10 +17,7 @@ export type JobListActionProps =
 /** Stable empty list so a session with no jobs keeps one array identity. */
 const NO_TASKS: readonly JobView[] = []
 
-/** Viewport clearance shared by narrow phones and desktop browser windows. */
 const MENU_VIEWPORT_MARGIN = 12
-
-/** Design width of the job card before a narrow viewport constrains it. */
 const MENU_WIDTH = 336
 
 /** A job the registry still holds open, and whose duration therefore ticks. */

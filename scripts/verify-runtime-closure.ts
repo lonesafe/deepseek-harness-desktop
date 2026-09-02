@@ -30,8 +30,8 @@ interface RuntimePlatform {
 
 type RuntimePlatformManifest = Record<string, RuntimePlatform>
 
-const DEFAULT_RUNTIME_MANIFEST = 'python/sdk-runtime/package.json'
 const AGENT_PRESET_GLOB = 'packages/preset/agent-presets/presets/*/agent.cordis.yml'
+const DEFAULT_RUNTIME_MANIFEST = 'python/sdk-runtime/package.json'
 
 export interface RuntimeClosureResult {
   failures: string[]
@@ -51,7 +51,10 @@ export async function verifyRuntimeClosure(
 ): Promise<RuntimeClosureResult> {
   const runtimeManifest = await loadManifest(resolve(root, manifestPath))
   const runtimeName = runtimeManifest.name ?? manifestPath
-  const workspace = await loadWorkspacePackages(root)
+  // The upstream Python closure intentionally treats the CLI as its deploy
+  // root. Other runtime manifests (notably the desktop app) must traverse app
+  // packages as ordinary workspace dependencies as well.
+  const workspace = await loadWorkspacePackages(root, manifestPath !== DEFAULT_RUNTIME_MANIFEST)
   const runtimeDependencies = runtimeManifest.dependencies ?? {}
   const checkShippedPresets = manifestPath === DEFAULT_RUNTIME_MANIFEST
   const platforms = checkShippedPresets
@@ -112,7 +115,7 @@ if (import.meta.main) {
   })
   const result = await verifyRuntimeClosure(root, values.manifest)
   if (result.failures.length > 0) {
-    console.error('verify-runtime-closure: preset plugins or required workspace peers are missing from runtime dependencies:')
+    console.error('verify-runtime-closure: preset plugins or required workspace peers are missing from python/sdk-runtime dependencies:')
     for (const failure of result.failures) console.error(`  ${failure}`)
     process.exitCode = 1
   } else {
@@ -204,8 +207,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-async function loadWorkspacePackages(root: string): Promise<Map<string, WorkspacePackage>> {
-  const paths = globSync(['apps/*/package.json', 'packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root })
+async function loadWorkspacePackages(root: string, includeApps: boolean): Promise<Map<string, WorkspacePackage>> {
+  const globs = [
+    'packages/*/*/package.json',
+    'vendor/*/package.json',
+    ...(includeApps ? ['apps/*/package.json'] : []),
+  ]
+  const paths = globSync(globs, { cwd: root })
     .sort()
     .map(relative => resolve(root, relative))
   const result = new Map<string, WorkspacePackage>()

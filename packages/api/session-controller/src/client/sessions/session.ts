@@ -36,29 +36,29 @@ import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
 import { SessionQueueMirror } from './queue-mirror.ts'
 
-const DEFAULT_PAGE_MESSAGES = 50
-const REMOTE_PAGE_MESSAGES = 1
-
-/**
- * Resolve the history page size before the first Session opens.
- * @param remoteRpcPath - desktop portal transport selection, when injected by the remote page.
- * @returns one message for the remote portal, otherwise the normal local page size.
- */
-export function resolveHistoryPageMessages(remoteRpcPath: unknown): number {
-  return remoteRpcPath === '/api/rpc' ? REMOTE_PAGE_MESSAGES : DEFAULT_PAGE_MESSAGES
-}
-
-/** Messages requested per history page for the active browser transport. */
-export const PAGE_MESSAGES = resolveHistoryPageMessages(
-  (globalThis as { __DSH_REMOTE_RPC__?: unknown }).__DSH_REMOTE_RPC__,
-)
-
 function projectionsBaseline(value: SessionProjectionBaseline): ProjectionsBaseline {
   return {
     ...value,
     asOfSeq: value.asOfSeq === -1 ? -1 : SessionSeq(value.asOfSeq),
   }
 }
+
+const DEFAULT_PAGE_MESSAGES = 50
+const REMOTE_PAGE_MESSAGES = 1
+
+/**
+ * Resolve the initial history page size for direct and portal transports.
+ * @param remoteRPCPath - configured RPC path; `/api/rpc` identifies the portal tunnel.
+ * @returns messages requested in the first history page.
+ */
+export function resolveHistoryPageMessages(remoteRPCPath: unknown): number {
+  return remoteRPCPath === '/api/rpc' ? REMOTE_PAGE_MESSAGES : DEFAULT_PAGE_MESSAGES
+}
+
+/** Messages requested per history page; remote clients begin with only the newest message. */
+export const PAGE_MESSAGES = resolveHistoryPageMessages(
+  (globalThis as { __DSH_REMOTE_RPC__?: unknown }).__DSH_REMOTE_RPC__,
+)
 
 /** Messages requested per page while a turn jump loops backwards (fewer, larger round trips). */
 export const JUMP_PAGE_MESSAGES = 200

@@ -7,6 +7,7 @@
  * The settings SLOT types (what registrants contribute) stay in ui-settings.
  */
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
@@ -15,6 +16,7 @@ import type {
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 // Type-only: pulls the settings slot declarations the shell renders into.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { BalanceState } from './balance-store.ts'
 
 /** One nav row projected from a settings.section registration's options. */
 export interface SettingsSectionRow {
@@ -37,7 +39,11 @@ export interface SettingsOnboardingStep {
 export type SettingsRootInjected = {
   /** Request a fresh logical generation and physical WebSocket immediately. */
   reconnect: () => void
+  /** Explicitly refresh the DeepSeek account balance. */
+  refreshBalance: () => void
   hooks: {
+    /** Account balance shown beside Settings. */
+    balance: SnapshotStore<BalanceState>
     /** Connection-owned state for the current Host connection. */
     connectionState: HostObservable<ConnectionState | undefined>
     /** settings.section ledger projected into ordered nav rows. */
@@ -57,7 +63,6 @@ export type SettingsRootComponentProps =
   PropsRuntime<'sidebar.settings'>
   & PropsRenderSlots<
     | 'settings.trigger'
-    | 'settings.footer.utility'
     | 'settings.header'
     | 'settings.action'
     | 'settings.close'

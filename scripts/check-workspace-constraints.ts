@@ -48,10 +48,8 @@ const repositoryUrl = 'git+https://github.com/deepseek-harness/deepseek-harness.
  * their trusted publishing against the repository that runs the workflow.
  */
 const publishedRepositoryUrl = 'git+https://github.com/deepseek-ai/deepseek-harness.git'
-/** Product forks whose published source lives outside the upstream monorepo. */
-const publishedRepositoryUrlByPackage: Readonly<Record<string, string>> = {
-  '@deepseek-ai/dsh-desktop': 'git+https://github.com/lonesafe/deepseek-harness-desktop.git',
-}
+/** Desktop wrapper source home; the other release members remain upstream-derived packages. */
+const desktopRepositoryUrl = 'git+https://github.com/lonesafe/deepseek-harness-desktop.git'
 /** Private packages that participate in workspace checks but not releases. */
 const experimentalPackageDirectory = /^packages\/experimental\/[^/]+$/
 /** npm namespace reserved for private experimental packages. */
@@ -315,9 +313,9 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     if (manifest.publishConfig?.access !== 'public') {
       errors.push(`${label}: release member must set publishConfig.access to "public"`)
     }
-    const expectedRepositoryUrl = manifest.name === undefined
-      ? publishedRepositoryUrl
-      : publishedRepositoryUrlByPackage[manifest.name] ?? publishedRepositoryUrl
+    const expectedRepositoryUrl = manifest.name === '@deepseek-ai/dsh-desktop'
+      ? desktopRepositoryUrl
+      : publishedRepositoryUrl
     if (manifest.repository?.type !== 'git'
       || manifest.repository.url !== expectedRepositoryUrl
       || manifest.repository.directory !== dir) {

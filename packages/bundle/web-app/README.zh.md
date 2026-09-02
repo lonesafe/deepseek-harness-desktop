@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-运行 `dsh --profile web`，界面会在你的默认浏览器中打开，即可与 agent（智能体）交互式聊天。你会获得会话视图、模型与设置管理以及会话历史，背后与其他表层相同的模型访问、工具与安全默认值。该命令会打印带 token 的启动 URL；浏览器用该 token 换取签名会话 cookie，再重定向到干净的根 URL。你可以从命令行更改端口、关闭浏览器交接、允许额外主机或启用经过认证的 LAN 访问。需要浏览器中的交互式工作时选择它；`dsh-headless` 是一次性的命令行兄弟表层。
+运行 `dsh --profile web`，界面会在你的默认浏览器中打开，即可与 agent（智能体）交互式聊天。你会获得会话视图、模型与设置管理以及会话历史，背后与其他表层相同的模型访问、工具与安全默认值。该命令会打印带 token 的启动 URL；浏览器用该 token 换取签名会话 cookie，再重定向到干净的根 URL。你可以从命令行更改端口、关闭浏览器交接并允许额外主机；有意不支持绑定所有网络接口。需要浏览器中的交互式工作时选择它；`dsh-headless` 是一次性的命令行兄弟表层。
 
 ## 目录
 
@@ -32,7 +32,6 @@ kind: "package-bundle"
 ```sh
 dsh --profile web
 dsh --profile web --no-open --port 8080
-dsh --profile web --host 0.0.0.0 --access-token <at-least-24-characters>
 ```
 
 启动后你会看到 `dsh web:` 行，其根 URL 携带新的进程 token。除非 `--no-open` 或 SSH 会话抑制，否则默认浏览器会打开该 URL、取得签名 cookie，再重定向到干净的根页面。页面加载且你可以与 agent（智能体）对话，就说明成功了。两种可预期的失败：前端未构建时，启动会以构建提示停止（checkout 中运行 `pnpm run build`）；浏览器无法打开时，stderr 会打印不含凭据的诊断，但服务器会继续运行——请自行打开已打印的启动 URL。
@@ -52,7 +51,7 @@ dsh --profile web --host 0.0.0.0 --access-token <at-least-24-characters>
 
 ### LAN 访问与可信主机
 
-默认情况下 GUI 只接受本机的连接。只有 `--access-token` 提供至少 24 个字符时，`--host 0.0.0.0` 才会启用 LAN 访问，此时打印的 URL 会附带一个 LAN 地址；`--trusted-host` 在两种情况下都能添加额外主机。非回环浏览器必须先用用户名 `deepseek` 与访问 token 完成认证，页面和 API 才会被服务。Host 与 Origin 检查还会控制可达性，启动 token 交换则把每个浏览器 session 认证到 Host API 方法与 WebSocket stream。LAN 地址只在启动时采样一次，因此之后的网络变化不会被感知——重启 GUI 以重新公告。
+默认情况下 GUI 只接受本机的连接。绑定所有网络接口的部署也会允许 LAN 内的浏览器访问，此时打印的 URL 会附带一个 LAN 地址；`--trusted-host` 在两种情况下都能添加额外主机。Host 与 Origin 检查控制可达性，token 交换则认证每个 Host API 方法与 WebSocket stream。LAN 地址只在启动时采样一次，因此之后的网络变化不会被感知——重启 GUI 以重新公告。
 
 ### 通过 SSH 运行
 
@@ -147,7 +146,7 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 - **只能观察到交接的启动**——GUI 只报告浏览器被请求打开，而不是它确实打开了；之后的浏览器退出永远不会上报，打印的 URL 是你的手动回退路径。
 - **SSH 会话保留 URL 但跳过浏览器交接**——打印的 URL 指向远端宿主机 loopback 端点；SSH 客户端或编辑器必须暴露并打开本地转发地址。
 - **`BROWSER` 覆盖只能来自环境**——被发现的 `.env` 不能设置 `BROWSER`；只有继承值能为自动交接选择可执行文件。
-- **LAN 访问使用明文 HTTP**——绑定所有网卡需要强访问 token，但不提供 TLS；只能在可信 LAN 中使用，或置于 TLS 终止代理之后。
+- **不支持绑定所有网络接口**——出于安全考虑，`--host 0.0.0.0` 会在启动时被拒绝；请使用默认 loopback 主机。
 
 <a id="dev-note"></a>
 ### 开发备注

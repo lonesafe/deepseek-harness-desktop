@@ -447,9 +447,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async request(req: ApprovalRequest): Promise<ApprovalOutcome>',
-        description: 'Ask the composed answerers to decide one readonly same-process request. The service borrows the request, agent, session, and live signal directly. The request requires an open turn because the audit pair must be enclosed by the durable log\'s commit/replay boundary; an idle ask rejects before appending anything. The answerer phase always produces an outcome: an aborted signal yields `\'cancelled\'`, the `\'never\'` policy rejects before consulting remembered grants, and a matching remembered grant resolves `\'allowed-always\'` without opening another interactive prompt. A missing or throwing answerer yields `\'unavailable\'` (fail closed); a rogue non-vocabulary return value, or `\'allowed-always\'` without a stable key, is normalized to `\'unavailable\'`. A failure that prevents either audit append from committing still rejects because returning an unlogged decision would violate the pair. Session contains post-commit observer failures, so an authoritative append cannot reject the request or suppress its matching audit event.',
+        description: 'Ask the composed answerers to decide one readonly same-process request. The service borrows the request, agent, session, and live signal directly. The request requires an open turn because the audit pair must be enclosed by the durable log\'s commit/replay boundary; an idle ask rejects before appending anything. The answerer phase always produces an outcome: an aborted signal yields `\'cancelled\'`, a missing or throwing answerer yields `\'unavailable\'` (fail closed), and a rogue non-vocabulary return value is normalized to `\'unavailable\'`. A failure that prevents either audit append from committing still rejects because returning an unlogged decision would violate the pair. Session contains post-commit observer failures, so an authoritative append cannot reject the request or suppress its matching audit event.',
         parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, reason, signal).' }],
-        returns: 'the closed outcome; `\'allowed-once\'` and `\'allowed-always\'` grant the current request.',
+        returns: 'the closed outcome; one-shot and valid remembered grants allow the action.',
         throws: ['when no turn is open or either audit event fails before the session append commit point.'],
       },
       {
@@ -1112,6 +1112,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'detached provider metadata in registration order.',
       },
       {
+        signature: 'async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>',
+        description: 'Read and validate one registered provider\'s account balance. Decimal amounts remain strings so the wire never rounds money.',
+        parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }, { name: 'signal', description: 'optional cancellation for the adapter request.' }],
+        returns: 'validated, detached provider account-balance metadata.',
+      },
+      {
+        signature: '@Remote(\'accountBalance\') async remoteAccountBalance(provider: string, signal: AbortSignal): Promise<LlmAccountBalance>',
+        description: 'Remote adapter for a provider account-balance query.',
+        parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }, { name: 'signal', description: 'caller cancellation supplied by the Remote carrier.' }],
+        returns: 'validated provider account-balance metadata.',
+      },
+      {
         signature: 'registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle',
         description: 'Declare provider routes an adapter plugin can activate through configuration. Registration is all-or-nothing: an empty list, invalid entry, or a provider already declared by any registration throws `LlmError` without registering the rest. Disposed with the fiber.',
         parameters: [{ name: 'entries', description: 'every configurable provider this plugin owns.' }],
@@ -1159,19 +1171,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Discover models advertised by one registered provider. Catalog membership is advisory and never changes routing or request validation.',
         parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }],
         returns: 'detached model metadata in adapter-preferred order.',
-      },
-      {
-        signature: 'async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>',
-        description: 'Read and validate one registered provider\'s account balance. Decimal amounts remain strings so the wire never rounds money.',
-        parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }, { name: 'signal', description: 'optional cancellation for the adapter request.' }],
-        returns: 'validated, detached provider account-balance metadata.',
-      },
-      {
-        signature: '@Remote(\'balance\') async remoteAccountBalance(provider: string, signal: AbortSignal): Promise<LlmAccountBalance>',
-        description: 'Read one registered provider\'s account balance over the Client Remote.',
-        parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }, { name: 'signal', description: 'cancellation supplied by the Remote carrier.' }],
-        returns: 'exact decimal balance strings and provider availability.',
-        throws: ['RemoteError with `llm/balance-failed` when the route or provider refuses the request.'],
       },
       {
         signature: 'async resolveModelInfo( provider: string, model: string, signal?: AbortSignal, ): Promise<LlmResolvedModelInfo>',
@@ -2687,6 +2686,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'The browser HTTP carrier service. Activation listens immediately. Route registration order does not affect requests because configured named routes must be distinct, and the fallback handler answers anything not yet claimed during startup with 404 until its owner registers. A listen failure rejects initialization, and the boot process reports the failed fiber.',
     methods: [
       {
+        signature: 'isLanAuthenticated(headers: RequestHeaders): boolean',
+        description: 'Verify credentials already accepted by the outer LAN access fence. This lets authenticated LAN browsers enter Connection\'s independently guarded index and API routes without exposing the configured secret to them.',
+        parameters: [{ name: 'headers', description: 'node:http or Fetch-compatible request headers.' }],
+        returns: 'Whether the request carries the configured LAN credential.',
+      },
+      {
         signature: 'register(route: WebRoute): () => void',
         description: 'Register a named route. Duplicate (kind, path) throws — route patterns are a composition-level contract, so a collision is a misconfiguration.',
         parameters: [{ name: 'route', description: 'kind, path, and the owning handler.' }],
@@ -2749,6 +2754,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Host service backing the generated `ctx.remote.workspace` namespace.',
     methods: [
       {
+        signature: '@Remote(\'listFiles\') listFiles(request: WorkspaceFileListRequest, signal: AbortSignal): Promise<WorkspaceFileListing>',
+        description: 'List one bounded directory level inside a registered Workspace.',
+        parameters: [{ name: 'request', description: 'Workspace identity and optional relative directory path.' }, { name: 'signal', description: 'cancellation lifetime for the filesystem scan.' }],
+        returns: 'the sorted, workspace-contained file listing.',
+      },
+      {
+        signature: '@Remote(\'readFile\') readFile(request: WorkspaceFileReadRequest, signal: AbortSignal): Promise<WorkspaceFilePreview>',
+        description: 'Read one bounded regular file inside a registered Workspace.',
+        parameters: [{ name: 'request', description: 'Workspace identity and relative file path.' }, { name: 'signal', description: 'cancellation lifetime for the file read.' }],
+        returns: 'a size-limited text, image, or PDF preview payload.',
+      },
+      {
         signature: '@Remote(\'create\') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>',
         description: 'Create or idempotently resolve one Workspace over an existing directory.',
         parameters: [{ name: 'request', description: 'directory path to register.' }],
@@ -2783,18 +2800,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Hide one known Session from Workspace grouping surfaces.',
         parameters: [{ name: 'request', description: 'Session identity to archive.' }],
         returns: 'the complete resulting archive set.',
-      },
-      {
-        signature: '@Remote(\'listFiles\') async listFiles( request: WorkspaceListFilesRequest, signal: AbortSignal, ): Promise<WorkspaceFileListing>',
-        description: 'List one bounded directory level without exposing Host absolute paths.',
-        parameters: [{ name: 'request', description: 'Workspace identity and portable relative directory.' }, { name: 'signal', description: 'caller cancellation for filesystem iteration.' }],
-        returns: 'direct children in directory-first order.',
-      },
-      {
-        signature: '@Remote(\'readFile\') async readFile( request: WorkspaceReadFileRequest, signal: AbortSignal, ): Promise<WorkspaceFilePreview>',
-        description: 'Read one bounded regular file for preview or download.',
-        parameters: [{ name: 'request', description: 'Workspace identity and portable relative file path.' }, { name: 'signal', description: 'caller cancellation checked before projection.' }],
-        returns: 'typed UTF-8 or Base64 preview content.',
       },
       {
         signature: '@Remote({ mode: \'stream\' }) follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>',
@@ -3467,11 +3472,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ApprovalRequest',
-    declaration: 'export interface ApprovalRequest extends ApprovalRequestEvent {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly alwaysAllowKey?: string;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface ApprovalRequest extends Omit<ApprovalRequestEvent, \'allowAlways\'> {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly alwaysAllowKey?: string;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'ApprovalRequestEvent',
-    declaration: 'export interface ApprovalRequestEvent {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly alwaysAllowKey?: string;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface ApprovalRequestEvent {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: ToolCallId;\n    readonly reason?: string;\n    readonly allowAlways?: boolean;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'AskUserQuestionAnswer',
@@ -4259,7 +4264,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    accountBalance(_provider: string, _signal?: AbortSignal): Promise<LlmAccountBalance>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    accountBalance(_provider: string, _signal?: AbortSignal): Promise<LlmAccountBalance>;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmBalanceInfo',
@@ -4323,7 +4328,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>;\n    @Remote(\'balance\')\n    async remoteAccountBalance(provider: string, signal: AbortSignal): Promise<LlmAccountBalance>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: Abort /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>;\n    @Remote(\'accountBalance\')\n    async remoteAccountBalance(provider: string, signal: AbortSignal): Promise<LlmAccountBalance>;\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal? /* …truncated — full shape in source */',
   },
   {
     name: 'LspHover',
@@ -6162,8 +6167,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface WorkspaceFileListing {\n    readonly path: string;\n    readonly entries: readonly WorkspaceFileEntry[];\n    readonly truncated: boolean;\n}',
   },
   {
+    name: 'WorkspaceFileListRequest',
+    declaration: 'export interface WorkspaceFileListRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path?: string;\n}',
+  },
+  {
     name: 'WorkspaceFilePreview',
     declaration: 'export interface WorkspaceFilePreview {\n    readonly path: string;\n    readonly name: string;\n    readonly mime: string;\n    readonly size: number;\n    readonly modifiedAt: string;\n    readonly kind: \'markdown\' | \'text\' | \'image\' | \'pdf\' | \'binary\' | \'unsupported\';\n    readonly encoding: \'utf8\' | \'base64\' | \'none\';\n    readonly content: string;\n    readonly reason?: \'too-large\';\n}',
+  },
+  {
+    name: 'WorkspaceFileReadRequest',
+    declaration: 'export interface WorkspaceFileReadRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n}',
   },
   {
     name: 'WorkspaceFollowFrame',
@@ -6182,16 +6195,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface WorkspaceInsertSessionBeforeRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly sessionId: SessionId;\n    readonly beforeSessionId?: SessionId;\n}',
   },
   {
-    name: 'WorkspaceListFilesRequest',
-    declaration: 'export interface WorkspaceListFilesRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path?: string;\n}',
-  },
-  {
     name: 'WorkspaceOrderValue',
     declaration: 'export interface WorkspaceOrderValue {\n    readonly workspaceIds: readonly WorkspaceId[];\n}',
-  },
-  {
-    name: 'WorkspaceReadFileRequest',
-    declaration: 'export interface WorkspaceReadFileRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n}',
   },
   {
     name: 'WorkspaceRenameRequest',

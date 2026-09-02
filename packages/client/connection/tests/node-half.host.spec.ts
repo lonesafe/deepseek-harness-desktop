@@ -16,7 +16,8 @@ import { provideBrowserCredentials } from './browser-credentials.ts'
 function fakeHttpServer(
   routes: WebRoute[],
   upgrades: WebUpgradeRoute[],
-): Pick<WebServer, 'register' | 'registerUpgrade' | 'tapIndex' | 'port'> {
+  lanAuthenticated = false,
+): Pick<WebServer, 'register' | 'registerUpgrade' | 'tapIndex' | 'isLanAuthenticated' | 'port'> {
   return {
     register(route) {
       if (routes.some(candidate => candidate.kind === route.kind && candidate.path === route.path)) {
@@ -30,6 +31,7 @@ function fakeHttpServer(
       return () => { upgrades.splice(upgrades.indexOf(route), 1) }
     },
     tapIndex: () => () => {},
+    isLanAuthenticated: () => lanAuthenticated,
     port: 0,
   }
 }
@@ -81,7 +83,7 @@ function fakeResponse(): {
   return { response, state }
 }
 
-async function mounted(config?: { trustedHosts?: string[] }): Promise<{
+async function mounted(config?: { trustedHosts?: string[]; lanAuthenticated?: boolean }): Promise<{
   routes: WebRoute[]
   upgrades: WebUpgradeRoute[]
   connection: HostConnectionHandle
@@ -91,8 +93,11 @@ async function mounted(config?: { trustedHosts?: string[] }): Promise<{
   const routes: WebRoute[] = []
   const upgrades: WebUpgradeRoute[] = []
   provideBrowserCredentials(ctx)
-  ctx.provide('webServer', fakeHttpServer(routes, upgrades) as WebServer)
-  const fiber = ctx.plugin({ inject: [...inject], apply }, config)
+  ctx.provide('webServer', fakeHttpServer(routes, upgrades, config?.lanAuthenticated) as WebServer)
+  const fiber = ctx.plugin(
+    { inject: [...inject], apply },
+    config?.trustedHosts === undefined ? {} : { trustedHosts: config.trustedHosts },
+  )
   await fiber.await()
   return {
     routes,
@@ -235,6 +240,20 @@ describe('connection node half', () => {
       host: 'harness.example',
       cookie: browserCookie(connection, 'harness.example'),
     }))).toBeUndefined()
+    await dispose()
+  })
+
+  it('accepts an outer-webserver authenticated LAN browser on index and API routes', async () => {
+    const { routes, connection, dispose } = await mounted({
+      trustedHosts: ['192.168.1.5'],
+      lanAuthenticated: true,
+    })
+    const request = fakeRequest({ host: '192.168.1.5:3080' })
+    expect(connection.authorizeIndex(request, fakeResponse().response)).toBe(true)
+    expect(connection.requestRejection(request)).toBeUndefined()
+    const response = fakeResponse()
+    await routes[0]!.handler(request, response.response)
+    expect(response.state.status).toBe(404)
     await dispose()
   })
 

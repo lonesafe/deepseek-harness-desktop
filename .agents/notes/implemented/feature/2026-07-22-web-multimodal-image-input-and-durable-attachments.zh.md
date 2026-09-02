@@ -155,8 +155,8 @@ Pi-AI 与直接 DeepSeek 适配器都会在请求时解析 `ctx.attachments`，�
 | `packages/llm/llm-deepseek` | 把官方视觉输入解析为确定性请求版本和 Files API ID。 |
 | `packages/compaction/compaction-basic` | 在摘要输入中保留图片，并明确拒绝非文本检查点输出。 |
 | `packages/host/apiproxy` 和 `packages/bundle/base` | 范围狭窄的上传协议、共享批量准入、限制和路由模型前置检查、先持久化再追加事件的顺序、会话授权读取，以及默认 profile 组合。 |
-| `packages/client/connection` 和 `packages/api/session-controller` | 有界请求缓冲、协议类型、fixture（测试前置数据）图片、提示词上传、附件读取和持久引用折叠。 |
-| `packages/client/ui-conversation`、`packages/client/ui-attachment` 和 `packages/client/ui-chat` | 每个会话的草稿图片、附件栏、用户与助手图片控件和原图预览。 |
+| `packages/client/connection` 和 `packages/client/runtime` | 有界请求缓冲、协议类型、fixture（测试前置数据）图片、提示词上传、附件读取和持久引用折叠。 |
+| `packages/client/ui-conversation` | 每个会话的草稿图片、附件栏、用户与助手图片控件和原图预览。 |
 | `packages/acp/acp` | 条件式原生图片能力、原子内联图片准入，以及经过校验的助手图片交付。 |
 | `packages/mcp/mcp-client` | 无损规范 MCP 结果、经能力门禁的持久图片投影，以及针对不受支持丰富块的明确诊断。 |
 | `packages/core/tools` | 在外层结果之后通用转发已经结算且含图片的 PTC mode 子结果。 |

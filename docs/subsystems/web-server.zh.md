@@ -35,7 +35,7 @@ interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
-  /** Login token required from non-loopback peers; at least 24 characters. @default '' */
+  /** Login token required from non-loopback peers; at least 24 characters. */
   accessToken?: string
   /** Response compression for socket-backed HTTP requests. @default 'none' */
   compression?: 'none' | 'gzip'
@@ -46,7 +46,7 @@ interface Config {
 }
 ```
 
-`host` 只接受 `127.0.0.1`（默认姿态）和 `0.0.0.0`（刻意的网络暴露）。绑定所有网卡时必须提供至少 24 个字符的 `accessToken`。非回环浏览器通过内置登录表单以用户名 `deepseek` 和该 token 换取 HttpOnly cookie；非浏览器客户端与 upgrade 请求可使用 HTTP Basic 凭据。载体不拥有 TLS，因此只应在可信 LAN 中直接开放，或部署在 TLS 终止代理之后。`compression` 默认为 `none`；随附的 Web 组合选择 gzip level 1 和 1024 字节阈值。随附的 `dsh web` 命令选择 loopback 并拒绝 `--host 0.0.0.0`；其 Connection 插件为每个 Host API route 与 stream 提供 Host/Origin 校验。其他组合仍自行拥有绑定选择，以及服务器 LAN 入口认证以外的逐路由授权。dist 位置是认领席位的前端插件的组装事实。
+`host` 只接受 `127.0.0.1`（默认姿态）和 `0.0.0.0`（刻意的网络暴露）。绑定全部网络接口时，必须提供至少 24 个字符的 `accessToken`；外层服务器防线通过内置登录流程或 HTTP Basic 凭据，对非回环的 HTTP 与 WebSocket 请求进行认证。载体不提供 TLS 或 Origin 策略，因此局域网开放应只用于可信网络或置于 HTTPS 之后，同时由 Connection 插件继续执行 Host/Origin 校验。`compression` 默认为 `none`；随附的 Web 组合选择 gzip level 1 和 1024 字节阈值。随附的 `dsh web` 命令默认使用 loopback，也可通过 `--host 0.0.0.0 --access-token <token>` 明确开启经过认证的局域网访问。其他组合自行决定绑定策略。dist 位置是认领席位的前端插件的组装事实。
 
 ## 服务
 
@@ -69,6 +69,15 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 The browser HTTP carrier service. Activation listens immediately. Route registration order does not affect requests because configured named routes must be distinct, and the fallback handler answers anything not yet claimed during startup with 404 until its owner registers. A listen failure rejects initialization, and the boot process reports the failed fiber.
 
 ```ts cordis-catalog
+/**
+ * Verify credentials already accepted by the outer LAN access fence. This
+ * lets authenticated LAN browsers enter Connection's independently guarded
+ * index and API routes without exposing the configured secret to them.
+ * @param headers - node:http or Fetch-compatible request headers.
+ * @returns Whether the request carries the configured LAN credential.
+ */
+isLanAuthenticated(headers: RequestHeaders): boolean
+
 /**
  * Register a named route. Duplicate (kind, path) throws — route patterns are
  * a composition-level contract, so a collision is a misconfiguration.

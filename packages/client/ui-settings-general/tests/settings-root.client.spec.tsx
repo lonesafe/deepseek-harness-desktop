@@ -6,15 +6,12 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
 import { en } from '../src/client/locales.ts'
+import type { BalanceState } from '../src/client/balance-store.ts'
 
 afterEach(() => {
   cleanup()
-  vi.unstubAllGlobals()
   vi.useRealTimers()
-  window.history.replaceState({}, '', '/')
 })
-
-const desktopSearch = '?dsh_desktop_version=1.0.0-beta.11&dsh_desktop_platform=darwin&dsh_desktop_arch=arm64&dsh_update_origin=https%3A%2F%2Fdsh.roubsite.com'
 
 type Row = { id: string; order: number; label: string }
 type Step = { id: string; order: number }
@@ -31,6 +28,8 @@ type AttentionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useSe
 type ConnectionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useConnectionState']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionPendingInteraction: SettingsRootComponentProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+const readyBalance: BalanceState = { status: 'ready', isAvailable: true, balances: [], error: null }
+const useBalance: SettingsRootComponentProps['useBalance'] = selector => selector(readyBalance)
 
 function mount({
   wide = true,
@@ -59,10 +58,10 @@ function mount({
   const listeners = new Set<() => void>()
   const connectionListeners = new Set<() => void>()
   const reconnect = vi.fn()
+  const refreshBalance = vi.fn()
   const renderSlot = vi.fn(
     ((key: string, _owner: unknown, opts?: { only?: string }) => {
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
-      if (key === 'settings.footer.utility') return <span data-testid="footer-utility">Balance</span>
       return SEAT_CONTENT[key]
     }) as SettingsRootComponentProps['renderSlot'],
   )
@@ -80,6 +79,8 @@ function mount({
     useWorkspaces: unusedHook,
     wide,
     reconnect,
+    refreshBalance,
+    useBalance,
     t: makeTranslate(en),
     useConnectionState: (select) => {
       const [, force] = useState(0)
@@ -131,8 +132,6 @@ describe('SettingsRoot trigger', () => {
     const trigger = screen.getByRole('button', { name: 'Settings' })
     expect(trigger.hasAttribute('aria-label')).toBe(false)
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: true })
-    expect(renderSlot).toHaveBeenCalledWith('settings.footer.utility', { wide: true })
-    expect(trigger.compareDocumentPosition(screen.getByTestId('footer-utility')) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(trigger)
     expect(screen.getByRole('dialog')).toBeTruthy()
@@ -142,16 +141,6 @@ describe('SettingsRoot trigger', () => {
   it('hands the rail state to the trigger seat', () => {
     const { renderSlot } = mount({ wide: false })
     expect(renderSlot).toHaveBeenCalledWith('settings.trigger', { wide: false })
-    expect(renderSlot).toHaveBeenCalledWith('settings.footer.utility', { wide: false })
-  })
-
-  it('places footer utilities before the desktop version label', () => {
-    window.history.replaceState({}, '', desktopSearch)
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ update_available: false }), { status: 200 })))
-    mount()
-    const utility = screen.getByTestId('footer-utility')
-    const version = screen.getByText('v1.0.0-beta.11')
-    expect(utility.compareDocumentPosition(version) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
   })
 
   it('shows outage, retry progress, and a two-second recovery confirmation', () => {

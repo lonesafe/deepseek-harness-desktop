@@ -31,7 +31,7 @@ import type { SessionSearchResultItem } from '@deepseek-ai/dsh-api-session-contr
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
   WorkspaceFileListing, WorkspaceFilePreview, WorkspaceId, WorkspaceView,
-} from '@deepseek-ai/dsh-api-workspace-controller/client'
+} from '@deepseek-ai/dsh-api-workspace-controller/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { createWorkspaceViewStore } from '../stores.ts'
 
@@ -180,17 +180,9 @@ export type WorkspacePickerProps =
 /** Read-only Host actions injected into the per-session Workspace files view. */
 export interface WorkspaceFilesInjected {
   /** List one Workspace-relative directory level. */
-  listFiles: (
-    workspaceId: WorkspaceId,
-    path: string,
-    signal: AbortSignal,
-  ) => Promise<WorkspaceFileListing>
+  listFiles: (workspaceId: WorkspaceId, path: string, signal: AbortSignal) => Promise<WorkspaceFileListing>
   /** Read one bounded Workspace-relative file. */
-  readFile: (
-    workspaceId: WorkspaceId,
-    path: string,
-    signal: AbortSignal,
-  ) => Promise<WorkspaceFilePreview>
+  readFile: (workspaceId: WorkspaceId, path: string, signal: AbortSignal) => Promise<WorkspaceFilePreview>
 }
 
 /** Full props of the Workspace files conversation view. */

@@ -183,23 +183,22 @@ export interface Config {
   maxEntries: number
 }
 
-/** The `ctx.directoryPicker` browse implementation (stable capability object per service life). */
+/** Filesystem operations reusable by browse-only and adaptive desktop services. */
 export class BrowseDirectoryOperations {
-  /** Stable capability face shared by the browse and adaptive service wrappers. */
+  /** Stable browse capability delegating to this operation set. */
   readonly capability: DirectoryPickerBrowseCapability = {
     kind: 'browse',
     list: (path, signal) => this.list(path, signal),
     createDirectory: (path, name) => this.createDirectory(path, name),
   }
 
-  /** @param config - bounded listing policy. */
   constructor(private readonly config: Config) {}
 
   /**
-   * List one fully qualified filesystem level for the browser picker.
-   * @param path - directory to enumerate; absent starts at the Host home directory.
-   * @param signal - optional caller lifetime propagated through filesystem waits.
-   * @returns the bounded, sorted directory listing and its breadcrumb metadata.
+   * List one directory level with bounded memory and deterministic ordering.
+   * @param path - fully qualified directory, or absent for the Host home.
+   * @param signal - optional cancellation for filesystem operations.
+   * @returns the directory identity, crumbs, and enterable child directories.
    */
   async list(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {
     const home = homedir()
@@ -284,10 +283,10 @@ export class BrowseDirectoryOperations {
   }
 
   /**
-   * Create one child directory beneath the displayed parent.
-   * @param path - fully qualified existing parent directory.
-   * @param name - one validated child path segment.
-   * @returns the fully qualified path of the created directory.
+   * Create one direct child directory.
+   * @param path - fully qualified parent directory.
+   * @param name - one non-empty path segment.
+   * @returns the fully qualified created directory path.
    */
   async createDirectory(path: string, name: string): Promise<string> {
     // Same fully-qualified fence as list: never rebase a parent under the
@@ -317,23 +316,16 @@ export class BrowseDirectoryOperations {
 }
 
 /**
- * Create the browse primitive face for an adaptive desktop service.
- * @param config - bounded listing policy; defaults to 1,000 entries per level.
- * @returns a stable browse capability backed by filesystem operations.
+ * Create browser filesystem primitives for an adaptive desktop picker.
+ * @param config - bounded listing configuration.
+ * @returns a stable browse capability backed by local filesystem operations.
  */
 export function createBrowseDirectoryCapability(config: Config = { maxEntries: 1000 }): DirectoryPickerBrowseCapability {
   return new BrowseDirectoryOperations(config).capability
 }
 
-/** Cordis directory-picker service exposing the fixed browse interaction. */
+/** The `ctx.directoryPicker` browse implementation (stable capability object per service life). */
 export default class BrowseDirectoryPicker extends DirectoryPicker {
-  /**
-   * `maxEntries` bounds the complete listing level a single `list` call may
-   * materialize and put on the wire: at most this many child-directory rows
-   * (hidden rows included), with `truncated` flagging a cut level. The
-   * default follows GitHub's web UI, which truncates directory listings at
-   * 1,000 entries.
-   */
   static Config: z<Config> = z.object({
     maxEntries: z.natural().min(1).default(1000),
   })
@@ -345,10 +337,6 @@ export default class BrowseDirectoryPicker extends DirectoryPicker {
     this.browseCapability = createBrowseDirectoryCapability(config)
   }
 
-  /**
-   * The browse interaction capability.
-   * @returns the stable `browse` capability object.
-   */
   capability(): DirectoryPickerCapability {
     return this.browseCapability
   }

@@ -571,7 +571,6 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   })
   let port = 0
   let baseUrl = ''
-  let hostBaseUrl = ''
   let authenticatedUrl = ''
   let cookieHeader = ''
   let replayHandle: ReplayHandle | undefined
@@ -702,10 +701,9 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         new RouteOnlyAdapter(replayProviders(options.replayContextWindow)),
       ), 'web e2e scaffold: route-only adapter')
     }
-    hostBaseUrl = `http://127.0.0.1:${String(port)}`
     baseUrl = `http://${browserHost}:${String(port)}`
     authenticatedUrl = ctx.connection.authenticatedUrl(baseUrl)
-    const login = await fetch(ctx.connection.authenticatedUrl(hostBaseUrl), { redirect: 'manual' })
+    const login = await fetch(authenticatedUrl, { redirect: 'manual' })
     const setCookie = login.headers.get('set-cookie')
     if (login.status !== 303 || login.headers.get('location') !== '/' || setCookie === null) {
       throw new Error('web e2e scaffold: browser token exchange did not return its session cookie')
@@ -738,7 +736,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     hostFetch(path: string, init: RequestInit = {}): Promise<Response> {
       const headers = new Headers(init.headers)
       headers.set('cookie', cookieHeader)
-      return fetch(new URL(path, hostBaseUrl), { ...init, headers })
+      return fetch(new URL(path, baseUrl), { ...init, headers })
     },
     // Barrier stack: the in-process turn/end identifies the session, its
     // explicit flush makes the transcript durable, and the caller's browser

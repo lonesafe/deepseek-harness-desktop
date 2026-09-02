@@ -11,9 +11,11 @@ import type {
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteValue,
-  WorkspaceInsertSessionBeforeRequest,
   WorkspaceFileListing,
+  WorkspaceFileListRequest,
   WorkspaceFilePreview,
+  WorkspaceFileReadRequest,
+  WorkspaceInsertSessionBeforeRequest,
   WorkspaceOrderValue,
   WorkspaceValue,
   WorkspaceId,
@@ -88,6 +90,32 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     const result = await this.remote.create(input)
     if (result.ok) this.upsert(result.value.workspace)
     return result
+  }
+
+  /**
+   * List one bounded directory level inside a registered Workspace.
+   * @param request - Workspace identity and relative directory path.
+   * @param signal - optional cancellation for the Remote request.
+   * @returns the generated Remote result containing one directory level.
+   */
+  listFiles(
+    request: WorkspaceFileListRequest,
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<WorkspaceFileListing>> {
+    return this.remote.listFiles(request, signal)
+  }
+
+  /**
+   * Read one bounded regular file inside a registered Workspace.
+   * @param request - Workspace identity and relative file path.
+   * @param signal - optional cancellation for the Remote request.
+   * @returns the generated Remote result containing a bounded preview.
+   */
+  readFile(
+    request: WorkspaceFileReadRequest,
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<WorkspaceFilePreview>> {
+    return this.remote.readFile(request, signal)
   }
 
   /**
@@ -170,36 +198,6 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
     const result = await this.remote.archiveSession({ sessionId })
     if (result.ok) this.installArchived(result.value.archivedSessionIds)
     return result
-  }
-
-  /**
-   * Read one Workspace-relative directory level.
-   * @param workspaceId - registered Workspace to inspect.
-   * @param path - portable relative directory path; empty selects the root.
-   * @param signal - optional caller cancellation.
-   * @returns generated Remote result containing bounded direct children.
-   */
-  listFiles(
-    workspaceId: WorkspaceId,
-    path: string,
-    signal?: AbortSignal,
-  ): Promise<RemoteResult<WorkspaceFileListing>> {
-    return this.remote.listFiles({ workspaceId, path }, signal)
-  }
-
-  /**
-   * Read one bounded Workspace-relative file.
-   * @param workspaceId - registered Workspace to inspect.
-   * @param path - portable non-empty relative file path.
-   * @param signal - optional caller cancellation.
-   * @returns generated Remote result containing typed preview content.
-   */
-  readFile(
-    workspaceId: WorkspaceId,
-    path: string,
-    signal?: AbortSignal,
-  ): Promise<RemoteResult<WorkspaceFilePreview>> {
-    return this.remote.readFile({ workspaceId, path }, signal)
   }
 
   /**

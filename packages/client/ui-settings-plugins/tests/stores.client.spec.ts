@@ -48,7 +48,7 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
 
 /** The card plugin's context, scripted down to the namespaces a card reaches. */
 function ctxWith(namespaces: object) {
-  return { remote: { $host: { isLoopback: true }, ...namespaces } } as never
+  return { remote: namespaces } as never
 }
 
 function credentialsApi(configured: boolean) {
@@ -985,25 +985,6 @@ describe('WebSearchCardController', () => {
       apiKeyConfigured: false,
       baseURL: { text: 'https://search.test/v1' },
     })
-  })
-
-  it('keeps credential mutation unavailable to a remote browser even when describe fails', async () => {
-    const host = stubSettingsScope<WebSearchSettings>()
-    const describe = vi.fn(() => Promise.reject(new Error('offline')))
-    const set = vi.fn(() => Promise.reject(new Error('must not be called')))
-    const controller = new WebSearchCardController(
-      host.scope,
-      ctxWith({ credentials: { describe, set } }),
-      false,
-    )
-    const face = controller.inject()
-    await vi.waitFor(() => { expect(describe).toHaveBeenCalled() })
-
-    expect(face.hooks.webSearchCard.getSnapshot().apiKeyWritable).toBe(false)
-    face.edit('apiKey', 'ds-secret')
-    face.save()
-    await Promise.resolve()
-    expect(set).not.toHaveBeenCalled()
   })
 
   it('ignores a credential read the Host refused', async () => {

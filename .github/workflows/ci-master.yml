@@ -14,9 +14,11 @@ on:
           - larger-runner-benchmark
           - consolidated-runner-benchmark
 
-# An official master push carries two self-hosted standby drills and the Wine
-# apt cache seeder, so it is exempt from cancellation. A fork push carries only
-# the cache seeder and cancels stale runs. workflow_dispatch keeps cancelling.
+# A master push may carry only the two self-hosted standby drills and the Wine
+# apt cache seeder; those drills outlast the interval between master merges, so
+# push is exempt from cancellation (see ci-failover-runbook). workflow_dispatch
+# keeps cancelling: a re-dispatched runner benchmark holds up to 12 larger
+# runners for 15 minutes in this same group.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.repository != 'deepseek-ai/deepseek-harness' || github.event_name != 'push' }}

@@ -1,9 +1,11 @@
 /**
- * Attended-desktop backend of the directory-picker seam: registers the stable
- * `adaptive` capability, opening a native OS chooser for loopback pages and
- * serving browse operations to authenticated remote pages. Native selection
- * uses macOS `osascript`, Linux Zenity with a KDialog fallback, or a spawned
- * Windows `IFileOpenDialog` child process.
+ * Native backend of the directory-picker seam: registers `ctx.directoryPicker`
+ * with the `native` capability, opening one native OS chooser on the host
+ * display per pick (macOS `osascript`, Linux Zenity with a KDialog fallback;
+ * Windows opens the modern `IFileOpenDialog` in a spawned child process — a
+ * koffi-driven COM conversation on the child's main thread). Only viable when
+ * the operator sits at the host's screen; remote deployments compose the
+ * browse backend instead.
  * @module @deepseek-ai/dsh-host-directory-picker-native
  */
 
@@ -15,7 +17,7 @@ import { pickNativeDirectory } from './native-picker.ts'
 export type { DirectoryPickerInternals, DirectoryPickerRunner } from './native-picker.ts'
 export { pickNativeDirectory } from './native-picker.ts'
 
-/** Desktop implementation serving native loopback and browser-based remote selection together. */
+/** The `ctx.directoryPicker` native implementation (stable capability object per service life). */
 export default class NativeDirectoryPicker extends DirectoryPicker {
   private readonly browseCapability = createBrowseDirectoryCapability()
   private readonly adaptiveCapability: DirectoryPickerCapability = {
@@ -27,8 +29,8 @@ export default class NativeDirectoryPicker extends DirectoryPicker {
   }
 
   /**
-   * The desktop interaction capability.
-   * @returns the stable `adaptive` capability object.
+   * The native interaction capability.
+   * @returns the stable `native` capability object.
    */
   capability(): DirectoryPickerCapability {
     return this.adaptiveCapability

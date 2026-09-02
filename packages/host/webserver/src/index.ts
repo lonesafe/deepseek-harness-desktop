@@ -1,9 +1,9 @@
 /**
  * @deepseek-ai/dsh-host-webserver — node:http route registration with optional
- * gzip, authenticated LAN access, structured index injection, raw index taps,
- * and one fallback seat. It knows no harness concepts and serves no files; the
- * composing application owns dist serving. Route handlers retain direct
- * response ownership. The package never prints the URL.
+ * gzip, index injection, and one fallback seat. It knows no harness concepts
+ * and serves no files; the composing application owns dist serving. Electron
+ * uses file:// plus IPC instead, and this package never prints the URL.
+ * Route handlers retain direct response ownership.
  */
 
 import { createHash, timingSafeEqual } from 'node:crypto'
@@ -62,7 +62,7 @@ export interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
-  /** Login token required from non-loopback peers; at least 24 characters. @default '' */
+  /** Login token required from non-loopback peers; at least 24 characters. */
   accessToken?: string
   /** Response compression for socket-backed HTTP requests. @default 'none' */
   compression?: 'none' | 'gzip'
@@ -70,6 +70,63 @@ export interface Config {
   compressionLevel?: number
   /** Minimum known response length eligible for gzip; unknown-length streams are eligible. @default 1024 */
   compressionThresholdBytes?: number
+}
+
+const DEFAULT_COMPRESSION = 'none' as const
+const DEFAULT_COMPRESSION_LEVEL = 1
+const DEFAULT_COMPRESSION_THRESHOLD_BYTES = 1024
+
+interface ResolvedConfig extends Omit<Config, 'accessToken' | 'compression' | 'compressionLevel' | 'compressionThresholdBytes'> {
+  accessToken: string
+  compression: 'none' | 'gzip'
+  compressionLevel: number
+  compressionThresholdBytes: number
+}
+
+type NodeMiddleware = (
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: () => void,
+) => void
+
+type RequestHeaders = Readonly<Record<string, string | readonly string[] | undefined>> | {
+  get(name: string): string | null
+}
+
+/** Read one header from either node:http or Fetch-compatible headers. */
+function requestHeader(headers: RequestHeaders, name: string): string | undefined {
+  if ('get' in headers && typeof headers.get === 'function') return headers.get(name) ?? undefined
+  const value = (headers as Readonly<Record<string, string | readonly string[] | undefined>>)[name.toLowerCase()]
+  return typeof value === 'string' ? value : value?.at(0)
+}
+
+function createGzipMiddleware(config: ResolvedConfig): NodeMiddleware {
+  // `compression` is typed for Express, but its runtime uses only the
+  // node:http request and response members supplied here.
+  const middleware = compressionMiddleware({
+    level: config.compressionLevel,
+    threshold: config.compressionThresholdBytes,
+    filter(request, response) {
+      if (response.getHeader('content-range') !== undefined) return false
+      const contentType = response.getHeader('content-type')
+      if (typeof contentType === 'string' && contentType.toLowerCase().startsWith('text/event-stream')) return false
+      return compressionMiddleware.filter(request, response)
+    },
+  }) as unknown as NodeMiddleware
+
+  return (req, res, next) => {
+    // The Web Worker tunnel has no socket and transfers identity bytes.
+    if ((res as { socket?: unknown }).socket === undefined) {
+      next()
+      return
+    }
+    const encoding = new Negotiator(req).encoding(['gzip', 'identity'])
+    const gzipRequest = Object.create(req) as IncomingMessage
+    Object.defineProperty(gzipRequest, 'headers', {
+      value: { ...req.headers, 'accept-encoding': encoding === 'gzip' ? 'gzip' : 'identity' },
+    })
+    middleware(gzipRequest, res, next)
+  }
 }
 
 /** Fixed LAN username used by the login page and HTTP Basic clients. */
@@ -233,54 +290,6 @@ async function handleLanLogin(req: IncomingMessage, res: ServerResponse, accessT
   res.end()
 }
 
-const DEFAULT_COMPRESSION = 'none' as const
-const DEFAULT_COMPRESSION_LEVEL = 1
-const DEFAULT_COMPRESSION_THRESHOLD_BYTES = 1024
-
-interface ResolvedConfig {
-  host: Config['host']
-  port: number
-  accessToken: string
-  compression: 'none' | 'gzip'
-  compressionLevel: number
-  compressionThresholdBytes: number
-}
-
-type NodeMiddleware = (
-  req: IncomingMessage,
-  res: ServerResponse,
-  next: () => void,
-) => void
-
-function createGzipMiddleware(config: ResolvedConfig): NodeMiddleware {
-  // `compression` is typed for Express, but its runtime uses only the
-  // node:http request and response members supplied here.
-  const middleware = compressionMiddleware({
-    level: config.compressionLevel,
-    threshold: config.compressionThresholdBytes,
-    filter(request, response) {
-      if (response.getHeader('content-range') !== undefined) return false
-      const contentType = response.getHeader('content-type')
-      if (typeof contentType === 'string' && contentType.toLowerCase().startsWith('text/event-stream')) return false
-      return compressionMiddleware.filter(request, response)
-    },
-  }) as unknown as NodeMiddleware
-
-  return (req, res, next) => {
-    // The Web Worker tunnel has no socket and transfers identity bytes.
-    if ((res as { socket?: unknown }).socket === undefined) {
-      next()
-      return
-    }
-    const encoding = new Negotiator(req).encoding(['gzip', 'identity'])
-    const gzipRequest = Object.create(req) as IncomingMessage
-    Object.defineProperty(gzipRequest, 'headers', {
-      value: { ...req.headers, 'accept-encoding': encoding === 'gzip' ? 'gzip' : 'identity' },
-    })
-    middleware(gzipRequest, res, next)
-  }
-}
-
 /**
  * The browser HTTP carrier service. Activation listens immediately. Route
  * registration order does not affect requests because configured named routes
@@ -292,10 +301,10 @@ export class WebServer extends Service {
   static Config: z<Config> = z.object({
     host: z.union([z.const('127.0.0.1'), z.const('0.0.0.0')]).required(),
     port: z.natural().max(65535).required(),
-    accessToken: z.string().role('secret').default(''),
     compression: z.union([z.const('none'), z.const('gzip')]).default(DEFAULT_COMPRESSION),
     compressionLevel: z.number().step(1).min(0).max(9).default(DEFAULT_COMPRESSION_LEVEL),
     compressionThresholdBytes: z.natural().default(DEFAULT_COMPRESSION_THRESHOLD_BYTES),
+    accessToken: z.string().role('secret').default(''),
   })
 
   private readonly exact = new Map<string, WebRoute>()
@@ -307,23 +316,21 @@ export class WebServer extends Service {
   private server!: Server
   private listenedPort!: number
   private readonly gzip: NodeMiddleware | undefined
-
   private readonly config: ResolvedConfig
 
   constructor(ctx: Context, config: Config) {
     super(ctx, 'webServer')
     this.config = {
-      host: config.host,
-      port: config.port,
+      ...config,
       accessToken: config.accessToken ?? '',
       compression: config.compression ?? DEFAULT_COMPRESSION,
       compressionLevel: config.compressionLevel ?? DEFAULT_COMPRESSION_LEVEL,
       compressionThresholdBytes: config.compressionThresholdBytes ?? DEFAULT_COMPRESSION_THRESHOLD_BYTES,
     }
+    this.gzip = this.config.compression === 'gzip' ? createGzipMiddleware(this.config) : undefined
     if (this.config.host === '0.0.0.0' && this.config.accessToken.length < MIN_LAN_ACCESS_TOKEN_LENGTH) {
       throw new Error(`webserver: an all-interfaces bind requires an accessToken of at least ${String(MIN_LAN_ACCESS_TOKEN_LENGTH)} characters`)
     }
-    this.gzip = this.config.compression === 'gzip' ? createGzipMiddleware(this.config) : undefined
   }
 
   /** The listening port (the OS-assigned value when config.port is 0). */
@@ -334,6 +341,19 @@ export class WebServer extends Service {
   /** The configured bind host (the loopback or all-interfaces literal). */
   get host(): Config['host'] {
     return this.config.host
+  }
+
+  /**
+   * Verify credentials already accepted by the outer LAN access fence. This
+   * lets authenticated LAN browsers enter Connection's independently guarded
+   * index and API routes without exposing the configured secret to them.
+   * @param headers - node:http or Fetch-compatible request headers.
+   * @returns Whether the request carries the configured LAN credential.
+   */
+  isLanAuthenticated(headers: RequestHeaders): boolean {
+    if (this.config.accessToken.length < MIN_LAN_ACCESS_TOKEN_LENGTH) return false
+    return hasLanAccessCookie(requestHeader(headers, 'cookie'), this.config.accessToken)
+      || hasBasicCredentials(requestHeader(headers, 'authorization'), this.config.accessToken)
   }
 
   /**

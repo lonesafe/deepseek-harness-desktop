@@ -24,6 +24,9 @@ async function bench() {
   const settings = {
     describe: async () => ({ ok: false, error: new RemoteError('gateway/internal', 'no settings', {}) }),
   }
+  const llm = {
+    accountBalance: async () => ({ ok: true, value: { isAvailable: true, balances: [] } }),
+  }
   const reconnect = vi.fn()
   const connectionState = {
     getSnapshot: () => 'connected' as const,
@@ -34,7 +37,9 @@ async function bench() {
     $on: () => () => {},
     $host: { home: undefined, isLoopback: false },
     settings,
+    llm,
   } as never)
+  ctx.provide('remote.llm', llm as never)
   ctx.provide('remote.settings', settings as never)
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
   return { ctx, slots: ctx.get('slots') as SlotRegistry, connectionState, reconnect }
@@ -55,7 +60,6 @@ function injectedOf(slots: SlotRegistry): SettingsRootInjected {
 /** The shell's child declarations (chrome, actions, sections, and onboarding overlays). */
 const CHILD_SPECS = {
   'settings.trigger': { kind: 'single', scope: 'root' },
-  'settings.footer.utility': { kind: 'list', scope: 'root' },
   'settings.header': { kind: 'single', scope: 'root' },
   'settings.action': { kind: 'list', scope: 'root' },
   'settings.close': { kind: 'single', scope: 'root' },
@@ -66,7 +70,7 @@ const CHILD_SPECS = {
 describe('ui-settings apply', () => {
   it('declares only the slot registry (a pure composition face, no locale)', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'connection', 'remote', 'remote.settings', 'settingsScope',
+      'slots', 'locale', 'connection', 'remote', 'remote.llm', 'remote.settings', 'settingsScope',
     ])
   })
 

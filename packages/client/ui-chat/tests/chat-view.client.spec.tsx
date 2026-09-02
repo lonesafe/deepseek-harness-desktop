@@ -823,8 +823,6 @@ describe('ChatView', () => {
       h.setChat({ nodes: [assistant(2, 'older'), user(9, 'first visible'), user(10, 'next visible')] })
     })
     expect(scroller.scrollTop).toBe(590) // latest 90 + the anchored row's 500px prepend shift
-    expect(h.chatScroll.read()).toMatchObject({ scrollTop: 590 })
-    expect(view.getByLabelText('回到底部')).toBeTruthy()
   })
 
   it('bounds no-anchor hit testing before using the mounted-row fallback', () => {
@@ -2305,39 +2303,6 @@ describe('ChatView', () => {
     expect(view.queryByLabelText('回到底部')).toBeNull()
   })
 
-  it('routes transcript paging keys from nested non-editable controls to the scrollport', () => {
-    const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
-    const view = render(<h.ChatView {...h.props} />)
-    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
-    Object.defineProperty(scroller, 'scrollHeight', { value: 1_000, writable: true })
-    Object.defineProperty(scroller, 'clientHeight', { value: 300, writable: true })
-    const control = document.createElement('button')
-    scroller.append(control)
-
-    scroller.scrollTop = 700
-    expect(fireEvent.keyDown(control, { key: 'PageUp' })).toBe(false)
-    expect(scroller.scrollTop).toBe(430)
-    expect(fireEvent.keyDown(control, { key: 'PageDown' })).toBe(false)
-    expect(scroller.scrollTop).toBe(700)
-    expect(fireEvent.keyDown(control, { key: 'Home' })).toBe(false)
-    expect(scroller.scrollTop).toBe(0)
-    expect(fireEvent.keyDown(control, { key: 'End' })).toBe(false)
-    expect(scroller.scrollTop).toBe(1_000)
-
-    for (const modifier of ['altKey', 'ctrlKey', 'metaKey', 'shiftKey'] as const) {
-      scroller.scrollTop = 500
-      expect(fireEvent.keyDown(control, { key: 'PageUp', [modifier]: true })).toBe(true)
-      expect(scroller.scrollTop).toBe(500)
-    }
-    expect(fireEvent.keyDown(control, { key: 'ArrowDown' })).toBe(true)
-    expect(scroller.scrollTop).toBe(500)
-
-    const input = document.createElement('textarea')
-    scroller.append(input)
-    expect(fireEvent.keyDown(input, { key: 'Home' })).toBe(true)
-    expect(scroller.scrollTop).toBe(500)
-  })
-
   it('keeps following when a stream-finalization shrink clamp delivers its scroll', () => {
     const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
     const view = render(<h.ChatView {...h.props} />)
@@ -2596,7 +2561,7 @@ describe('ChatView', () => {
   })
 
   it('loads an older page automatically when reader scrolling reaches the history head', () => {
-    const h = makeHarness({ nodes: [user(5, 'later')], hasMore: true })
+    const h = makeHarness({ nodes: [user(5, 'later')] }, { hasMore: true })
     const view = render(<h.ChatView {...h.props} />)
     const scrollport = view.container.querySelector<HTMLElement>('[data-chat-flow]')?.parentElement
     if (scrollport === null || scrollport === undefined) throw new Error('chat scrollport missing')
@@ -2607,7 +2572,7 @@ describe('ChatView', () => {
     readerScroll(scrollport, 80)
     expect(h.loadOlder).toHaveBeenCalledTimes(1)
 
-    act(() => { h.set({ loadingOlder: true }) })
+    act(() => { h.setSession({ loadingOlder: true }) })
     readerScroll(scrollport, 40)
     expect(h.loadOlder).toHaveBeenCalledTimes(1)
   })

@@ -11,7 +11,6 @@
  * to the step, so a mounted-but-deciding step paints nothing here.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import {
   ConnectionIndicator,
@@ -23,6 +22,7 @@ import type { SettingsRootComponentProps, SettingsSectionRow } from './shell-con
 import css from './SettingsRoot.module.css'
 import { DesktopUpdateBadge } from './DesktopUpdateBadge.tsx'
 import { DesktopVersionLabel } from './DesktopVersionLabel.tsx'
+import { BalanceIndicator } from './BalanceIndicator.tsx'
 
 const RECOVERY_CONFIRMATION_MS = 2_000
 
@@ -65,7 +65,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
   const closeButton = useRef<HTMLButtonElement | null>(null)
   useEffect(() => { closeButton.current?.focus() }, [])
 
-  return createPortal((
+  return (
     <div className={css.overlay} role="presentation">
       <div className={css.mask} aria-hidden="true" onClick={onClose} />
       <div className={css.panel} role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -100,7 +100,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
         </div>
       </div>
     </div>
-  ), document.body)
+  )
 }
 
 /**
@@ -110,7 +110,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
  */
 export function SettingsRoot(props: SettingsRootComponentProps) {
   const {
-    wide, reconnect, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t,
+    wide, reconnect, refreshBalance, useBalance, useConnectionState, useSections, useOnboardingSteps, useSessions, renderSlot, t,
   } = props
   const [open, setOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | undefined>(undefined)
@@ -193,7 +193,7 @@ export function SettingsRoot(props: SettingsRootComponentProps) {
         >
           {renderSlot('settings.trigger', { wide })}
         </button>
-        {renderSlot('settings.footer.utility', { wide })}
+        <BalanceIndicator wide={wide} useBalance={useBalance} refreshBalance={refreshBalance} t={t} />
         <DesktopVersionLabel wide={wide} t={t} />
         <DesktopUpdateBadge wide={wide} t={t} />
         <ConnectionIndicator

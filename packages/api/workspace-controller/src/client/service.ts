@@ -40,6 +40,22 @@ export interface IWorkspaces {
    */
   create(input: { path: string }): Promise<WorkspaceView>
   /**
+   * List one bounded directory level inside a registered Workspace.
+   * @param workspaceId - registered Workspace to browse.
+   * @param path - portable Workspace-relative directory path.
+   * @param signal - optional cancellation for the Remote request.
+   * @returns one bounded directory listing.
+   */
+  listFiles(workspaceId: WorkspaceId, path?: string, signal?: AbortSignal): Promise<WorkspaceFileListing>
+  /**
+   * Read one bounded regular file inside a registered Workspace.
+   * @param workspaceId - registered Workspace containing the file.
+   * @param path - portable Workspace-relative file path.
+   * @param signal - optional cancellation for the Remote request.
+   * @returns a bounded read-only file preview.
+   */
+  readFile(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFilePreview>
+  /**
    * Rename a Workspace.
    * @param workspaceId - target Workspace.
    * @param title - new display title.
@@ -74,22 +90,6 @@ export interface IWorkspaces {
     sessionId: SessionId,
     beforeSessionId?: SessionId,
   ): Promise<WorkspaceView>
-  /**
-   * List one Workspace-relative directory level.
-   * @param workspaceId - registered Workspace to inspect.
-   * @param path - portable relative directory path; empty selects the root.
-   * @param signal - optional caller cancellation.
-   * @returns bounded direct children in directory-first order.
-   */
-  listFiles(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFileListing>
-  /**
-   * Read one bounded Workspace-relative file.
-   * @param workspaceId - registered Workspace to inspect.
-   * @param path - portable non-empty relative file path.
-   * @param signal - optional caller cancellation.
-   * @returns typed preview or download content.
-   */
-  readFile(workspaceId: WorkspaceId, path: string, signal?: AbortSignal): Promise<WorkspaceFilePreview>
 }
 
 /** Owns the bare Workspace snapshot and Workspace-only commands. */
@@ -109,6 +109,26 @@ export class WorkspaceController extends Service implements IWorkspaces {
     const result = await this.model.create(input)
     if (!result.ok) throw new WorkspaceCreateError(result.error)
     return result.value.workspace
+  }
+
+  async listFiles(
+    workspaceId: WorkspaceId,
+    path = '',
+    signal?: AbortSignal,
+  ): Promise<WorkspaceFileListing> {
+    const result = await this.model.listFiles({ workspaceId, path }, signal)
+    if (!result.ok) throw commandError('file listing', result.error)
+    return result.value
+  }
+
+  async readFile(
+    workspaceId: WorkspaceId,
+    path: string,
+    signal?: AbortSignal,
+  ): Promise<WorkspaceFilePreview> {
+    const result = await this.model.readFile({ workspaceId, path }, signal)
+    if (!result.ok) throw commandError('file preview', result.error)
+    return result.value
   }
 
   async rename(workspaceId: WorkspaceId, title: string): Promise<WorkspaceView> {
@@ -140,26 +160,6 @@ export class WorkspaceController extends Service implements IWorkspaces {
     const result = await this.model.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     if (!result.ok) throw commandError('move', result.error)
     return result.value.workspace
-  }
-
-  async listFiles(
-    workspaceId: WorkspaceId,
-    path: string,
-    signal?: AbortSignal,
-  ): Promise<WorkspaceFileListing> {
-    const result = await this.model.listFiles(workspaceId, path, signal)
-    if (!result.ok) throw commandError('file listing', result.error)
-    return result.value
-  }
-
-  async readFile(
-    workspaceId: WorkspaceId,
-    path: string,
-    signal?: AbortSignal,
-  ): Promise<WorkspaceFilePreview> {
-    const result = await this.model.readFile(workspaceId, path, signal)
-    if (!result.ok) throw commandError('file preview', result.error)
-    return result.value
   }
 }
 

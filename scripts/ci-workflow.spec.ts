@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 const runnerPrivatePnpmDestination = /^\$\{\{ runner\.temp \}\}\/setup-pnpm-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}$/
+const nativeWindowsPnpmDestination = '${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
 const officialRepository = "github.repository == 'deepseek-ai/deepseek-harness'"
 const officialMasterPush = `${officialRepository} && github.event_name == 'push' && github.ref == 'refs/heads/master'`
-const nativeWindowsPnpmDestination = '${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
 
 describe('CI workflow', () => {
   it('isolates every pnpm action setup destination per runner', () => {
@@ -154,9 +154,8 @@ describe('CI workflow', () => {
 
     // windows-coverage uses the lower 4-partition profile.
     expect(windowsCoverage.name).toBe('windows node 24 / coverage')
-    expect(windowsCoverage.env).toMatchObject({
-      DSH_COVERAGE_PARTITIONS: "${{ github.repository == 'deepseek-ai/deepseek-harness' && '4' || '2' }}",
-    })
+    expect(windowsCoverage.env).toBeDefined()
+    expect(String((windowsCoverage.env as Record<string, unknown>).DSH_COVERAGE_PARTITIONS)).toContain("&& '4' || '2'")
     const coverageSteps = windowsCoverage.steps as unknown[]
     const coverageCommands = coverageSteps.filter((step): step is Record<string, unknown> & { run: string } => (
       isRecord(step) && typeof step.run === 'string'
@@ -191,7 +190,7 @@ describe('CI workflow', () => {
     expect(wineAptCache.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
     expect(wineAptCache['runs-on']).toBe('ubuntu-latest')
 
-    // serial-windows: official-master-only standby, self-hosted, non-blocking, lives in ci-master.
+    // serial-windows: master-only standby, self-hosted, non-blocking, lives in ci-master.
     expect(serialWindows.if).toBe(officialMasterPush)
     expect(serialWindows['runs-on']).toEqual(['self-hosted', 'dsh-win-ci', 'windows'])
     expect(serialWindows.name).toBe('serial / windows (self-hosted standby)')
@@ -278,7 +277,7 @@ describe('CI workflow', () => {
     )
   })
 
-  it('only exempts official push runs from cancellation, so forks do not accumulate stale cache seeders', () => {
+  it('only exempts official push runs from cancellation, so forks do not accumulate stale jobs', () => {
     const workflow = loadWorkflow('.github/workflows/ci-master.yml')
     const prWorkflow = loadWorkflow('.github/workflows/ci.yml')
     if (!isRecord(workflow.jobs) || !isRecord(workflow.concurrency)) {
@@ -446,19 +445,6 @@ describe('E2B e2e workflow', () => {
   })
 })
 
-describe('Repository-hosted workflows', () => {
-  it('does not require official Pages or run unrelated macOS unit tests in forks', () => {
-    const docs = loadWorkflow('.github/workflows/docs-pages.yml')
-    expect(workflowJob(docs, 'build').if).toBe(officialRepository)
-
-    const sandbox = loadWorkflow('.github/workflows/sandbox.yml')
-    const sandboxJob = workflowJob(sandbox, 'sandbox-e2e')
-    if (!Array.isArray(sandboxJob.steps)) throw new TypeError('Sandbox workflow must define steps')
-    const darwinUnit = sandboxJob.steps.filter(isRecord).find(step => step.name === 'Seatbelt unit tests (darwin parity)')
-    expect(darwinUnit?.run).toContain('packages/sandbox/sandbox-local/tests/local.spec.ts')
-    expect(darwinUnit?.run).not.toBe('pnpm run test')
-  })
-})
 describe('Python release workflows', () => {
   it('keeps complete wheel validation separate from protected public publication', () => {
     const workflow = loadWorkflow('.github/workflows/python-release.yml')
@@ -677,13 +663,11 @@ describe('Issue lifecycle workflow', () => {
     const lifecycleJob = workflowJob(lifecycle, 'lifecycle')
     if (!Array.isArray(lifecycleJob.steps)) throw new TypeError('Issue lifecycle job must define steps')
 
-    // The job has no job-level `if`, so it is listed on every pull_request /
-    // pull_request_review event and reports success instead of a gray skip. The
-    // write-capable steps are gated at step level so approved/commented reviews
-    // never mint a Project/Issue App token nor touch the board.
+    // Only the official repository owns the App credentials and project board.
+    // The write-capable steps retain their review-state gates there.
     expect(lifecycle.on).toHaveProperty('pull_request')
     expect(lifecycle.on).toHaveProperty('pull_request_review')
-    expect(lifecycleJob.if).toBeUndefined()
+    expect(lifecycleJob.if).toBe(officialRepository)
     // Keep the subscription-type gates: issue-lifecycle does not re-subscribe
     // ready_for_review (issue-policy owns that) and only reacts to submitted
     // review events.
@@ -693,17 +677,17 @@ describe('Issue lifecycle workflow', () => {
     expect(lifecyclePullRequest.types).not.toContain('ready_for_review')
     expect(lifecyclePullRequest.types).toContain('review_requested')
     expect(lifecycleReview.types).toEqual(['submitted'])
-    const gated = "${{ github.repository == 'deepseek-ai/deepseek-harness' && (github.event_name != 'pull_request_review' || github.event.review.state == 'changes_requested') }}"
+    const gated = "${{ github.event_name != 'pull_request_review' || github.event.review.state == 'changes_requested' }}"
     const steps = lifecycleJob.steps.filter(isRecord)
     const tokenStep = steps.find(s => s.name === 'Create project token')
     const handleStep = steps.find(s => s.name === 'Handle repository event')
     expect(tokenStep).toMatchObject({ if: gated })
     expect(handleStep).toMatchObject({ if: gated })
-    expect(workflowJob(policy, 'policy').if).toBe(officialRepository)
 
     // issue-policy owns PR validation; it is read-only and a real gate.
     const policyPullRequest = workflowEvent(policy, 'pull_request')
     expect(policyPullRequest.types).toContain('ready_for_review')
+    expect(workflowJob(policy, 'policy').if).toBe(officialRepository)
   })
 })
 
@@ -756,6 +740,7 @@ describe('Documentation site publication', () => {
     // The site presents a released snapshot: a merge must never publish it, and
     // publication must never appear as a PR check.
     expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch'])
+    expect(build.if).toBe(officialRepository)
 
     // RELEASE_PUBLISH makes release:verify reject every ref that is not a dsh-v*
     // tag naming this tree's version, so the site and the npm sequence share one

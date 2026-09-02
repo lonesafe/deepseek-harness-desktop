@@ -46,22 +46,20 @@ export function ProducedFiles({
       <span className={css.label}>{t('produced.label')}</span>
       <div className={css.lane}>
         <div className={css.row} data-produced-files-row>
-          {shown.map(path => canOpenPath
-            ? (
-              <button
-                key={path}
-                type="button"
-                className={css.file}
-                // The full path is the disambiguator when two turns produce files
-                // that share a basename; the chip itself stays short.
-                title={path}
-                aria-label={t('produced.open', { name: path })}
-                onClick={() => { openFile(path) }}
-              >
-                {basename(path)}
-              </button>
-            )
-            : <span key={path} className={css.file} title={path}>{basename(path)}</span>)}
+          {shown.map(path => (
+            <button
+              key={path}
+              type="button"
+              className={css.file}
+              // The full path is the disambiguator when two turns produce files
+              // that share a basename; the chip itself stays short.
+              title={path}
+              aria-label={t('produced.open', { name: path })}
+              onClick={() => { openFile(path) }}
+            >
+              {basename(path)}
+            </button>
+          ))}
           {shown.map((_, index) => {
             const shownCount = index + 1
             const remainder = paths.length - shownCount

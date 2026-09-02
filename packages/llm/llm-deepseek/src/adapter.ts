@@ -438,6 +438,10 @@ export class DeepSeekAdapter extends LlmAdapter {
     })
   }
 
+  stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    return this.streamWithConnection(options, this.config.options())
+  }
+
   /** Query the official/current endpoint associated with this route's key. */
   override async accountBalance(_provider: string, signal?: AbortSignal): Promise<LlmAccountBalance> {
     const connection = this.config.options()
@@ -462,8 +466,7 @@ export class DeepSeekAdapter extends LlmAdapter {
       try {
         providerError = (await response.json() as WireError).error
       } catch {
-        // The HTTP status remains the authoritative failure when a gateway
-        // returns an empty or malformed error body.
+        // The HTTP status remains authoritative when the error body is malformed.
       }
       throw new LlmError(
         providerError?.message ?? `DeepSeek balance API error (HTTP ${response.status})`,
@@ -509,10 +512,6 @@ export class DeepSeekAdapter extends LlmAdapter {
       }
     })
     return { isAvailable: wire.is_available, balances }
-  }
-
-  stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    return this.streamWithConnection(options, this.config.options())
   }
 
   private async * streamWithConnection(

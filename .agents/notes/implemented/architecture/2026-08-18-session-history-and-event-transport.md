@@ -52,8 +52,8 @@ Current ownership is:
 [api/remotes]
 `-- application Remote Event allowlist and Host Cordis source
 
-[api/session-controller + api/workspace-controller]
-`-- publish Session and Workspace Client state to consumers
+[client/runtime]
+`-- compose Session and Workspace domain state for consumers
 ```
 
 API Proxy owns neither the Session or Workspace Remote namespace nor the Host downlink event carrier. `/api/events.host`, `HostFrame`, `stream/error`, `ServerRequest`, and their WebSocket/SSE branches do not participate in this data path.

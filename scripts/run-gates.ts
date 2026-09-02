@@ -266,7 +266,10 @@ export function gatesForMode(selected: Mode): Gate[] {
         pnpmScript('duplication', 'duplication'),
         snapshotGate(),
         expectedOutputGate(),
-        pnpmScript('build', 'build'),
+        // The full test suite exercises the lint contract with temporary .ts
+        // files inside source globs. Keep tsc from observing a fixture between
+        // its creation and removal when local check-all uses multiple workers.
+        pnpmScript('build', 'build', { after: ['test'] }),
         pnpmScript('build:web', 'build:web'),
         ...hygieneLeafGates({ artifactNeeds: ['build'] }),
         ...docSyncLeafGates({
@@ -281,9 +284,6 @@ export function gatesForMode(selected: Mode): Gate[] {
         ...hygieneLeafGates(),
         pnpmScript('cordis-config', 'verify-cordis-config', { label: 'Cordis config' }),
         pnpmScript('runtime-closure', 'verify-runtime-closure', { label: 'runtime closure' }),
-        pnpmScript('desktop-runtime-closure', 'verify-desktop-runtime-closure', {
-          label: 'desktop runtime closure',
-        }),
         pnpmScript('vendored-links', 'verify-vendored-links', { label: 'vendored links' }),
       ]
     case 'doc-sync':

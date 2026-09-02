@@ -32,6 +32,8 @@ env:
 
 jobs:
   preview:
+    # This fork does not own the official Cloudflare project or its secrets.
+    if: github.repository == 'deepseek-ai/deepseek-harness'
     runs-on: dsh-ubuntu-24-04-16core
     name: cloudflare pages preview
     steps:

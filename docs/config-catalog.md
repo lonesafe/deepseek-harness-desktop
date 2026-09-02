@@ -889,7 +889,7 @@ export interface Config {
   host: '127.0.0.1' | '0.0.0.0'
   /** Listen port; zero requests an OS-assigned port. */
   port: number
-  /** Login token required from non-loopback peers; at least 24 characters. @default '' */
+  /** Login token required from non-loopback peers; at least 24 characters. */
   accessToken?: string
   /** Response compression for socket-backed HTTP requests. @default 'none' */
   compression?: 'none' | 'gzip'
@@ -3128,7 +3128,7 @@ export interface Config {
 export type ApprovalPolicy = 'ask' | 'never'
 ```
 
-Source: [`packages/interaction/user-approval/src/index.ts:133`](../packages/interaction/user-approval/src/index.ts)
+Source: [`packages/interaction/user-approval/src/index.ts:129`](../packages/interaction/user-approval/src/index.ts)
 
 <a id="deepseek-aidsh-web"></a>
 

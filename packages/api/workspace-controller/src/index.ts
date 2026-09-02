@@ -1,14 +1,12 @@
 /** Host Workspace Remote owner: explicit commands and reconnect-safe state. */
 
 import { Context } from '@deepseek-ai/cordis'
-import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { WorkspaceId } from '@deepseek-ai/dsh-workspace'
 import { WorkspaceCommands } from './commands.ts'
 import { DirectoryPickerController } from './directory-picker.ts'
 import { WorkspaceFeed } from './feed.ts'
-import {
-  listWorkspaceFiles, readWorkspaceFile, WorkspaceFileError,
-} from './workspace-files.ts'
+import { listWorkspaceFiles, readWorkspaceFile } from './workspace-files.ts'
 import type {
   WorkspaceArchiveSessionRequest,
   WorkspaceArchiveValue,
@@ -17,13 +15,13 @@ import type {
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
   WorkspaceFollowFrame,
+  WorkspaceFileListing,
+  WorkspaceFileListRequest,
+  WorkspaceFilePreview,
+  WorkspaceFileReadRequest,
   WorkspaceInsertBeforeRequest,
   WorkspaceInsertSessionBeforeRequest,
-  WorkspaceFileListing,
-  WorkspaceFilePreview,
-  WorkspaceListFilesRequest,
   WorkspaceOrderValue,
-  WorkspaceReadFileRequest,
   WorkspaceRenameRequest,
   WorkspaceValue,
 } from './types.ts'
@@ -55,6 +53,28 @@ export class WorkspaceController extends TypertRemoteService {
     // stays pending until a picking backend is composed, so a host without one
     // registers no picking namespace instead of answering an unservable verb.
     ctx.plugin(DirectoryPickerController)
+  }
+
+  /**
+   * List one bounded directory level inside a registered Workspace.
+   * @param request - Workspace identity and optional relative directory path.
+   * @param signal - cancellation lifetime for the filesystem scan.
+   * @returns the sorted, workspace-contained file listing.
+   */
+  @Remote('listFiles')
+  listFiles(request: WorkspaceFileListRequest, signal: AbortSignal): Promise<WorkspaceFileListing> {
+    return listWorkspaceFiles(this.requireWorkspacePath(request.workspaceId), request.path ?? '', signal)
+  }
+
+  /**
+   * Read one bounded regular file inside a registered Workspace.
+   * @param request - Workspace identity and relative file path.
+   * @param signal - cancellation lifetime for the file read.
+   * @returns a size-limited text, image, or PDF preview payload.
+   */
+  @Remote('readFile')
+  readFile(request: WorkspaceFileReadRequest, signal: AbortSignal): Promise<WorkspaceFilePreview> {
+    return readWorkspaceFile(this.requireWorkspacePath(request.workspaceId), request.path, signal)
   }
 
   /**
@@ -118,47 +138,6 @@ export class WorkspaceController extends TypertRemoteService {
   }
 
   /**
-   * List one bounded directory level without exposing Host absolute paths.
-   * @param request - Workspace identity and portable relative directory.
-   * @param signal - caller cancellation for filesystem iteration.
-   * @returns direct children in directory-first order.
-   */
-  @Remote('listFiles')
-  async listFiles(
-    request: WorkspaceListFilesRequest,
-    signal: AbortSignal,
-  ): Promise<WorkspaceFileListing> {
-    const path = request.path ?? ''
-    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(request.workspaceId))
-    if (workspace === undefined) throw workspaceFileNotFound(request.workspaceId)
-    try {
-      return await listWorkspaceFiles(workspace.path, path, signal)
-    } catch (error: unknown) {
-      throw workspaceFileFailure(error, signal, request.workspaceId, path, 'listing')
-    }
-  }
-
-  /**
-   * Read one bounded regular file for preview or download.
-   * @param request - Workspace identity and portable relative file path.
-   * @param signal - caller cancellation checked before projection.
-   * @returns typed UTF-8 or Base64 preview content.
-   */
-  @Remote('readFile')
-  async readFile(
-    request: WorkspaceReadFileRequest,
-    signal: AbortSignal,
-  ): Promise<WorkspaceFilePreview> {
-    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(request.workspaceId))
-    if (workspace === undefined) throw workspaceFileNotFound(request.workspaceId)
-    try {
-      return await readWorkspaceFile(workspace.path, request.path, signal)
-    } catch (error: unknown) {
-      throw workspaceFileFailure(error, signal, request.workspaceId, request.path, 'preview')
-    }
-  }
-
-  /**
    * Stream a complete Workspace baseline followed by ordered increments.
    * @param signal - generation cancellation.
    * @returns baseline followed by ordered Workspace increments.
@@ -167,39 +146,14 @@ export class WorkspaceController extends TypertRemoteService {
   follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {
     return this.feed.follow(signal)
   }
+
+  private requireWorkspacePath(workspaceId: WorkspaceId): string {
+    const workspace = this.ctx.workspaceRegistry.get(WorkspaceId(workspaceId))
+    if (workspace === undefined) {
+      throw new RemoteError('workspace/not-found', `Workspace "${workspaceId}" not found`, { workspaceId })
+    }
+    return workspace.path
+  }
 }
 
 export default WorkspaceController
-
-function workspaceFileNotFound(workspaceId: WorkspaceId): RemoteError {
-  return new RemoteError(
-    'workspace/not-found',
-    `Workspace "${workspaceId}" not found`,
-    { workspaceId },
-  )
-}
-
-function workspaceFileFailure(
-  error: unknown,
-  signal: AbortSignal,
-  workspaceId: WorkspaceId,
-  path: string,
-  operation: 'listing' | 'preview',
-): unknown {
-  if (signal.aborted) {
-    return new RemoteError(
-      'gateway/cancelled',
-      `Workspace file ${operation} was aborted`,
-      {},
-    )
-  }
-  if (error instanceof WorkspaceFileError) {
-    return new RemoteError(
-      error.code,
-      error.message,
-      { workspaceId, path },
-      { cause: error },
-    )
-  }
-  return error
-}

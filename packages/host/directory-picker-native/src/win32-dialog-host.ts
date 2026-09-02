@@ -13,9 +13,9 @@ import type { Win32DialogWorkerData } from './win32-dialog-worker.ts'
 
 /**
  * Build the worker environment explicitly, including Electron's Node mode.
- * @param title - title forwarded to the native folder dialog worker.
- * @param base - environment inherited by the worker before dialog-specific values are applied.
- * @returns a fresh worker environment with the dialog title and Electron Node mode.
+ * @param title - title shown by the native folder dialog.
+ * @param base - environment inherited by the worker before required overrides.
+ * @returns a detached worker environment with the dialog title and Node mode.
  */
 export function dialogWorkerEnvironment(
   title: string,

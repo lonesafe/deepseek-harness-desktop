@@ -1,7 +1,6 @@
 /**
- * Service Definition for the approval capability seam, covering requests, cancellation, audit, per-session policy, and
- * session-local remembered grants. Missing answerers fail closed; every grant first applies to the requested action, while
- * an explicit `allowed-always` decision also authorizes later requests carrying the same stable key in that session.
+ * Service Definition for the approval capability seam, covering requests, cancellation, audit, and per-session policy. Missing
+ * answerers fail closed; grants apply only to the requested action.
  * @module @deepseek-ai/dsh-user-approval
  */
 
@@ -101,7 +100,7 @@ export function setApprovalPolicy(session: Session, policy: ApprovalPolicy): voi
  * Readonly same-process permission question. `callId` links to an already
  * presented tool call, so arguments are not duplicated here.
  */
-export interface ApprovalRequest extends ApprovalRequestEvent {
+export interface ApprovalRequest extends Omit<ApprovalRequestEvent, 'allowAlways'> {
   /**
    * The agent on whose behalf the question is asked. Routes the question (a
    * UI answerer only answers for agents it owns) and receives the audit
@@ -117,10 +116,7 @@ export interface ApprovalRequest extends ApprovalRequestEvent {
   readonly callId?: ToolCallId
   /** The asker's human-readable explanation of WHY it is asking. */
   readonly reason?: string
-  /**
-   * Stable identity for equivalent future requests in this session. When
-   * absent, answerers cannot offer or return a remembered grant.
-   */
+  /** Stable identity for equivalent future requests in this session. */
   readonly alwaysAllowKey?: string
   /**
    * Aborting withdraws the question: the request settles `'cancelled'`
@@ -198,18 +194,15 @@ export class ApprovalService extends Service {
    * The request requires an open turn because the audit pair must be enclosed
    * by the durable log's commit/replay boundary; an idle ask rejects before
    * appending anything. The answerer phase always produces an outcome: an
-   * aborted signal yields `'cancelled'`, the `'never'` policy rejects before
-   * consulting remembered grants, and a matching remembered grant resolves
-   * `'allowed-always'` without opening another interactive prompt. A missing or
-   * throwing answerer yields `'unavailable'` (fail closed); a rogue
-   * non-vocabulary return value, or `'allowed-always'` without a stable key, is
+   * aborted signal yields `'cancelled'`, a missing or throwing answerer yields
+   * `'unavailable'` (fail closed), and a rogue non-vocabulary return value is
    * normalized to `'unavailable'`. A failure that prevents either audit append
    * from committing still rejects because returning an unlogged decision would
    * violate the pair. Session contains post-commit observer failures, so an
    * authoritative append cannot reject the request or suppress its matching
    * audit event.
    * @param req - the pending decision (agent, tool identity, reason, signal).
-   * @returns the closed outcome; `'allowed-once'` and `'allowed-always'` grant the current request.
+   * @returns the closed outcome; one-shot and valid remembered grants allow the action.
    * @throws when no turn is open or either audit event fails before the session
    *   append commit point.
    */
@@ -284,9 +277,19 @@ export class ApprovalService extends Service {
     // SYNCHRONOUSLY (before its first await) must land in the same rejection
     // path as an async one — `Promise.resolve(call())` would let it escape
     // the containment into the caller.
+    const event: ApprovalRequestEvent = req.alwaysAllowKey === undefined
+      ? req
+      : {
+        agent: req.agent,
+        toolName: req.toolName,
+        ...req.callId !== undefined ? { callId: req.callId } : {},
+        ...req.reason !== undefined ? { reason: req.reason } : {},
+        allowAlways: true,
+        ...req.signal !== undefined ? { signal: req.signal } : {},
+      }
     const answer: Promise<ApprovalOutcome> = Promise.resolve().then(
       () => this.ctx.waterfall(
-        scopeTarget(req.agent, req.agent), 'approval/request', req,
+        scopeTarget(req.agent, req.agent), 'approval/request', event,
         () => Promise.resolve<ApprovalOutcome>('unavailable'),
       ),
     ).then(
@@ -320,10 +323,11 @@ export class ApprovalService extends Service {
 /** Whether a completed audit pair grants all requests carrying one stable key. */
 function hasRememberedGrant(session: Session, key: string): boolean {
   const keys = new Map<ApprovalRequestId, string>()
-  for (const event of session.snapshotEvents()) {
-    if (event.type === 'approval/asked' && event.data.alwaysAllowKey !== undefined) {
+  for (let seq = 0; seq < session.seq; seq += 1) {
+    const event = session.eventAt(SessionSeq(seq))
+    if (event?.type === 'approval/asked' && event.data.alwaysAllowKey !== undefined) {
       keys.set(event.data.id, event.data.alwaysAllowKey)
-    } else if (event.type === 'approval/decided') {
+    } else if (event?.type === 'approval/decided') {
       if (event.data.outcome === 'allowed-always' && keys.get(event.data.id) === key) return true
       keys.delete(event.data.id)
     }

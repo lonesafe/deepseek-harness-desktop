@@ -115,13 +115,10 @@ describe('web e2e: whole-session stats survive history paging', () => {
     const strip = page.getByText(FULL_COUNTS, { exact: false }).locator('..')
     const stripBeforePaging = await strip.textContent()
 
-    // Loading the earlier page must not move ANY strip figure —
+    // 加载更早: prepending the older page must not move ANY strip figure —
     // counts, wall times, or token groups.
-    await page.locator('[data-conversation-scroll]').evaluate((element) => {
-      element.scrollTop = 0
-    })
+    await page.getByRole('button', { name: 'Load earlier' }).click()
     await expect.poll(() => page.getByText('m1', { exact: true }).count(), { timeout: 10_000 }).toBe(1)
-    await page.getByRole('button', { name: 'Back to bottom', exact: true }).waitFor({ timeout: 10_000 })
     expect(await strip.textContent()).toBe(stripBeforePaging)
     // With the whole log loaded, the window mounts one turn-tail footer per
     // settled turn — the loaded-window probe the scroll/perf lanes count now

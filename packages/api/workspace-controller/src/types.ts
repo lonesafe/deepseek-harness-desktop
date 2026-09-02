@@ -26,7 +26,36 @@ export interface WorkspaceView {
   readonly updatedAt: string
 }
 
-/** One direct child in a read-only Workspace directory listing. */
+declare module '@deepseek-ai/dsh-typert-protocol' {
+  interface RemoteErrorDetailsMap {
+    /** The requested directory cannot back a Workspace. */
+    'workspace/invalid-path': { readonly path: string }
+    /** Another Workspace already uses the requested name. */
+    'workspace/name-conflict': { readonly name: string }
+    /** The Session or its anchor is not in the Workspace's manual order. */
+    'workspace/move-invalid': {
+      readonly workspaceId: WorkspaceId
+      readonly sessionId: SessionId
+      readonly beforeSessionId?: SessionId
+    }
+    /** A Workspace-relative file path is malformed or escapes its root. */
+    'workspace/file-invalid-path': { readonly path: string }
+    /** A Workspace-relative file or directory cannot be read. */
+    'workspace/file-unreadable': { readonly path: string }
+    /** A file-preview request resolved to something other than a regular file. */
+    'workspace/file-not-file': { readonly path: string }
+    /** The verb needs an interaction the composed backend does not serve. */
+    'directory-picker/unavailable': { readonly capability: string }
+    /** The target is not fully qualified, or the backend cannot list it. */
+    'directory-picker/unreadable': { readonly path: string }
+    /** A child of that name is already there. */
+    'directory-picker/exists': { readonly path: string }
+    /** The parent is not fully qualified, the name is not one segment, or creation failed. */
+    'directory-picker/create-failed': { readonly path: string }
+  }
+}
+
+/** One direct child returned by the read-only Workspace file browser. */
 export interface WorkspaceFileEntry {
   readonly name: string
   /** Portable Workspace-relative path using `/` separators. */
@@ -41,14 +70,14 @@ export interface WorkspaceFileEntry {
 
 /** One bounded directory level inside a registered Workspace. */
 export interface WorkspaceFileListing {
-  /** Portable Workspace-relative directory path; empty selects the root. */
+  /** Portable Workspace-relative directory path; empty means the root. */
   readonly path: string
   readonly entries: readonly WorkspaceFileEntry[]
-  /** Whether the Host stopped at its entry bound. */
+  /** True when the host stopped after its entry bound. */
   readonly truncated: boolean
 }
 
-/** Bounded read-only content used by browser preview and download surfaces. */
+/** Bounded read-only content projection for browser preview and download. */
 export interface WorkspaceFilePreview {
   readonly path: string
   readonly name: string
@@ -58,37 +87,20 @@ export interface WorkspaceFilePreview {
   readonly kind: 'markdown' | 'text' | 'image' | 'pdf' | 'binary' | 'unsupported'
   readonly encoding: 'utf8' | 'base64' | 'none'
   readonly content: string
-  /** Present when content is intentionally omitted. */
+  /** Present when the host intentionally omits content. */
   readonly reason?: 'too-large'
 }
 
-declare module '@deepseek-ai/dsh-typert-protocol' {
-  interface RemoteErrorDetailsMap {
-    /** The requested directory cannot back a Workspace. */
-    'workspace/invalid-path': { readonly path: string }
-    /** Another Workspace already uses the requested name. */
-    'workspace/name-conflict': { readonly name: string }
-    /** The Session or its anchor is not in the Workspace's manual order. */
-    'workspace/move-invalid': {
-      readonly workspaceId: WorkspaceId
-      readonly sessionId: SessionId
-      readonly beforeSessionId?: SessionId
-    }
-    /** The verb needs an interaction the composed backend does not serve. */
-    'directory-picker/unavailable': { readonly capability: string }
-    /** The target is not fully qualified, or the backend cannot list it. */
-    'directory-picker/unreadable': { readonly path: string }
-    /** A child of that name is already there. */
-    'directory-picker/exists': { readonly path: string }
-    /** The parent is not fully qualified, the name is not one segment, or creation failed. */
-    'directory-picker/create-failed': { readonly path: string }
-    /** The portable path is invalid or resolves outside its registered Workspace. */
-    'workspace/file-invalid-path': { readonly workspaceId: WorkspaceId; readonly path: string }
-    /** The registered Workspace path cannot be listed or read. */
-    'workspace/file-unreadable': { readonly workspaceId: WorkspaceId; readonly path: string }
-    /** The preview target is not a regular file. */
-    'workspace/file-not-file': { readonly workspaceId: WorkspaceId; readonly path: string }
-  }
+/** Request for a bounded Workspace-relative directory listing. */
+export interface WorkspaceFileListRequest {
+  readonly workspaceId: WorkspaceId
+  readonly path?: string
+}
+
+/** Request for one bounded Workspace-relative file preview. */
+export interface WorkspaceFileReadRequest {
+  readonly workspaceId: WorkspaceId
+  readonly path: string
 }
 
 /** Existing directory requested for Workspace adoption. */
@@ -116,20 +128,6 @@ export interface WorkspaceValue {
 /** Workspace registration deletion. */
 export interface WorkspaceDeleteRequest {
   readonly workspaceId: WorkspaceId
-}
-
-/** Read-only directory listing request inside one registered Workspace. */
-export interface WorkspaceListFilesRequest {
-  readonly workspaceId: WorkspaceId
-  /** Portable relative directory path; absent selects the Workspace root. */
-  readonly path?: string
-}
-
-/** Bounded file preview request inside one registered Workspace. */
-export interface WorkspaceReadFileRequest {
-  readonly workspaceId: WorkspaceId
-  /** Portable non-empty relative file path. */
-  readonly path: string
 }
 
 /** Receipt after one Workspace registration is deleted. */

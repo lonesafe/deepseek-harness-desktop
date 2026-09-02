@@ -139,19 +139,6 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'packages/extensions/ui-cordis/src/client/locales.ts', upstream: ['cordis'] },
 ]
 
-// Harness event identifiers share the `cordis/` spelling with package
-// subpaths, but remain stable when the framework npm package is rescoped.
-const CORDIS_EVENT_SUBPATHS = new Set([
-  '/',
-  '/*',
-  '/dynamic-package',
-  '/dynamic-retract',
-  '/inspect-query',
-  '/inspect-query-resolved',
-  '/request-run',
-  '/request-run-resolved',
-])
-
 /** A string that must appear exactly `count` times once the rescope has run. */
 interface PostCondition {
   readonly file: string
@@ -443,7 +430,6 @@ const VENDORED_LIBRARY = /^@deepseek-ai\\/(cosmokit|schemastery)(\\/|$)/
 /** Files the rescope must never rewrite. */
 function excluded(file: string): boolean {
   if (file === 'scripts/rescope-vendor.ts') return true // the mapping itself
-  if (file === 'scripts/rescope-vendor.spec.ts') return true // fixtures exercise both name states
   if (file.startsWith('.agents/notes/')) return true // notes record what was true when written
   // Recorded model payloads quote documentation verbatim, so they must mirror the
   // sources on disk — including the notes this rescope leaves alone.
@@ -492,11 +478,7 @@ function rewriteLine(line: string, file: string, all: readonly Pattern[]): strin
   let out = line
   for (const pattern of all) {
     if (skipped(file, pattern)) continue
-    out = out.replace(pattern.token, (match, quote: string, subpath: string) => {
-      const semanticSubpath = subpath.endsWith('\\') ? subpath.slice(0, -1) : subpath
-      if (pattern.from === 'cordis' && CORDIS_EVENT_SUBPATHS.has(semanticSubpath)) return match
-      return `${quote}${pattern.to}${subpath}${quote}`
-    })
+    out = out.replace(pattern.token, (_match, quote: string, subpath: string) => `${quote}${pattern.to}${subpath}${quote}`)
     out = out.replace(pattern.yamlName, (_match, prefix: string, suffix: string) => `${prefix}${pattern.to}${suffix}`)
   }
   return out
@@ -531,17 +513,6 @@ function rewrite(text: string, file: string, all: readonly Pattern[]): { text: s
     return next
   })
   return { text: out.join('\n'), lines }
-}
-
-/**
- * Apply only the generic token mapping to an in-memory source for tests.
- * @param text - Source text to rewrite.
- * @param file - Repository-relative path used by the exemption table.
- * @param reverse - Whether to map scoped package names back upstream.
- * @returns Rewritten text and the number of changed lines.
- */
-export function rewriteGenericText(text: string, file: string, reverse = false): { text: string; lines: number } {
-  return rewrite(text, file, patterns(reverse))
 }
 
 function classify(file: string): string {

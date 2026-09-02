@@ -1,30 +1,29 @@
-/** DeepSeek account-balance state shared by the desktop and remote settings footer. */
+/** DeepSeek account-balance state shown beside the Settings trigger. */
 
-import type { LlmBalanceInfo } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ClientRemote, LlmAccountBalance } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ModelsLlm } from './store.ts'
 
 /** Official DeepSeek route whose configured credential owns the balance. */
 export const DEEPSEEK_OFFICIAL_PROVIDER = 'deepseek-official'
 
-/** Settings-footer balance snapshot. */
-export interface BalanceState {
+/** Current balance-query state. */
+export type BalanceState = {
   status: 'loading' | 'ready' | 'error'
   isAvailable: boolean
-  balances: readonly LlmBalanceInfo[]
+  balances: LlmAccountBalance['balances']
   error: string | null
 }
 
-/** Latest-wins controller for the read-only balance RPC. */
+/** Latest-wins controller for the read-only account-balance RPC. */
 export class BalanceStore {
-  /** Observable balance state consumed by the settings-footer indicator. */
+  /** Observable state consumed by the sidebar footer. */
   readonly store: SnapshotStore<BalanceState> = createSnapshotStore<BalanceState>({
     status: 'loading', isAvailable: false, balances: [], error: null,
   })
 
   private generation = 0
 
-  constructor(private readonly llm: Pick<ModelsLlm, 'balance'>) {}
+  constructor(private readonly remote: Pick<ClientRemote, 'llm'>) {}
 
   /** Refresh from the currently configured official DeepSeek credential. */
   async load(): Promise<void> {
@@ -34,7 +33,7 @@ export class BalanceStore {
       state.error = null
     })
     try {
-      const response = await this.llm.balance(DEEPSEEK_OFFICIAL_PROVIDER)
+      const response = await this.remote.llm.accountBalance(DEEPSEEK_OFFICIAL_PROVIDER)
       if (!response.ok) throw new Error(response.error.message)
       const value = response.value
       if (generation !== this.generation) return

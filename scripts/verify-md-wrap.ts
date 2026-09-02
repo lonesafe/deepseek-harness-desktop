@@ -17,13 +17,15 @@ const root = resolve(import.meta.dirname, '..')
 /** Files to check: doc-typecheck's scope, system-prompt expected outputs, and the AGENTS.md pair. */
 const PATTERNS = [
   'README.md',
-  'README.en.md',
   'README.zh.md',
   '.agents/notes/**/*.md',
   'docs/**/*.md',
   'packages/*/*.md',
   'packages/*/*/*.md',
-  'snapshots/**/*.md',
+  // Node 24.13's fs.glob can descend through a matching symlink when the
+  // literal basename follows `**/`, producing ENOTDIR. Match the suffix first;
+  // snapshot Markdown expectations are all prose and belong to this gate.
+  'snapshots/**/*.expected.md',
   'packages/**/system-prompt.expected.md',
   'AGENTS.md',
   'packages/AGENTS.md',
@@ -73,9 +75,7 @@ function findViolations(absPath: string): Violation[] {
 
 const files = uniqueRepoFiles(root, PATTERNS, path => (
   isArchivedAgentNotePath(path)
-  || (path.startsWith('snapshots/')
-    && path !== 'snapshots/AGENTS.md'
-    && !path.endsWith('/system-prompt.expected.md'))
+  || (path.startsWith('snapshots/') && path.endsWith('.expected.md') && !path.endsWith('/system-prompt.expected.md'))
 ))
 const all = files.flatMap(file => findViolations(file.abs))
 const checked = files.length

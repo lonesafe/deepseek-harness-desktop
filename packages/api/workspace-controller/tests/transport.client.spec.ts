@@ -25,14 +25,14 @@ import type {
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
+  WorkspaceFileListing,
+  WorkspaceFileListRequest,
+  WorkspaceFilePreview,
+  WorkspaceFileReadRequest,
   WorkspaceFollowFrame,
   WorkspaceInsertBeforeRequest,
   WorkspaceInsertSessionBeforeRequest,
-  WorkspaceFileListing,
-  WorkspaceFilePreview,
-  WorkspaceListFilesRequest,
   WorkspaceOrderValue,
-  WorkspaceReadFileRequest,
   WorkspaceRenameRequest,
   WorkspaceId,
   WorkspaceValue,
@@ -124,6 +124,14 @@ class ScriptedWorkspaceRemote implements WorkspaceRemote {
     throw new Error('unused')
   }
 
+  listFiles(_request: WorkspaceFileListRequest): Promise<RemoteResult<WorkspaceFileListing>> {
+    throw new Error('unused')
+  }
+
+  readFile(_request: WorkspaceFileReadRequest): Promise<RemoteResult<WorkspaceFilePreview>> {
+    throw new Error('unused')
+  }
+
   rename(_request: WorkspaceRenameRequest): Promise<RemoteResult<WorkspaceValue>> {
     throw new Error('unused')
   }
@@ -141,14 +149,6 @@ class ScriptedWorkspaceRemote implements WorkspaceRemote {
   }
 
   archiveSession(_request: WorkspaceArchiveSessionRequest): Promise<RemoteResult<WorkspaceArchiveValue>> {
-    throw new Error('unused')
-  }
-
-  listFiles(_request: WorkspaceListFilesRequest): Promise<RemoteResult<WorkspaceFileListing>> {
-    throw new Error('unused')
-  }
-
-  readFile(_request: WorkspaceReadFileRequest): Promise<RemoteResult<WorkspaceFilePreview>> {
     throw new Error('unused')
   }
 
@@ -174,6 +174,23 @@ class CommandWorkspaceRemote implements WorkspaceRemote {
     created: true,
   })))
 
+  readonly listFiles = vi.fn<WorkspaceRemote['listFiles']>(request => Promise.resolve(remoteOk({
+    path: request.path ?? '',
+    entries: [],
+    truncated: false,
+  })))
+
+  readonly readFile = vi.fn<WorkspaceRemote['readFile']>(request => Promise.resolve(remoteOk({
+    path: request.path,
+    name: request.path.split('/').at(-1) ?? '',
+    mime: 'text/plain',
+    size: 0,
+    modifiedAt: '1970-01-01T00:00:00.000Z',
+    kind: 'text',
+    encoding: 'utf8',
+    content: '',
+  })))
+
   readonly rename = vi.fn<WorkspaceRemote['rename']>(request => Promise.resolve(remoteOk({
     workspace: workspace(String(request.workspaceId), { title: request.title }),
   })))
@@ -190,21 +207,6 @@ class CommandWorkspaceRemote implements WorkspaceRemote {
 
   readonly archiveSession = vi.fn<WorkspaceRemote['archiveSession']>(request => Promise.resolve(remoteOk({
     archivedSessionIds: [request.sessionId],
-  })))
-
-  readonly listFiles = vi.fn<WorkspaceRemote['listFiles']>(request => Promise.resolve(remoteOk({
-    path: request.path ?? '', entries: [], truncated: false,
-  })))
-
-  readonly readFile = vi.fn<WorkspaceRemote['readFile']>(request => Promise.resolve(remoteOk({
-    path: request.path,
-    name: request.path.split('/').at(-1) ?? request.path,
-    mime: 'text/plain',
-    size: 0,
-    modifiedAt: '2026-01-01T00:00:00.000Z',
-    kind: 'text',
-    encoding: 'utf8',
-    content: '',
   })))
 
   async *follow(_signal?: AbortSignal): AsyncIterable<WorkspaceFollowFrame> {}
@@ -483,16 +485,12 @@ describe('WorkspaceController', () => {
 
     expect(controller.list).toBe(model)
     await expect(controller.create({ path: '/work/created' })).resolves.toMatchObject({ workspaceId: 'created' })
+    await expect(controller.listFiles(wid('created'), 'src')).resolves.toMatchObject({ path: 'src' })
+    await expect(controller.readFile(wid('created'), 'README.md')).resolves.toMatchObject({ name: 'README.md' })
     await expect(controller.rename(wid('one'), 'renamed')).resolves.toMatchObject({ title: 'renamed' })
     await expect(controller.insertBefore(wid('one'))).resolves.toBeUndefined()
     await expect(controller.insertSessionBefore(wid('one'), sid('session'))).resolves.toMatchObject({
       sessionIds: ['session'],
-    })
-    await expect(controller.listFiles(wid('one'), 'docs')).resolves.toEqual({
-      path: 'docs', entries: [], truncated: false,
-    })
-    await expect(controller.readFile(wid('one'), 'README.md')).resolves.toMatchObject({
-      path: 'README.md', name: 'README.md', kind: 'text',
     })
     await expect(controller.archiveSession(sid('session'))).resolves.toBeUndefined()
     await expect(controller.delete(wid('one'))).resolves.toBeUndefined()
@@ -523,11 +521,5 @@ describe('WorkspaceController', () => {
     )))
     await expect(controller.insertSessionBefore(wid('missing'), sid('session')))
       .rejects.toThrow('workspace move failed: workspace/move-invalid: invalid move')
-    remote.listFiles.mockResolvedValueOnce(remoteFailure(missingWorkspace))
-    await expect(controller.listFiles(wid('missing'), 'docs'))
-      .rejects.toThrow('workspace file listing failed: workspace/not-found: gone')
-    remote.readFile.mockResolvedValueOnce(remoteFailure(missingWorkspace))
-    await expect(controller.readFile(wid('missing'), 'README.md'))
-      .rejects.toThrow('workspace file preview failed: workspace/not-found: gone')
   })
 })

@@ -293,9 +293,6 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
    */
   const settleAt = async (width: number): Promise<TableReading[]> => {
     await page.setViewportSize({ width, height: 900 })
-    // AppFrame publishes responsive tracks through ResizeObserver and eases
-    // them for 300ms, including the desktop overlay boundary at 640px.
-    await page.waitForTimeout(350)
     // The wide wrapper follows the transcript width (the fill wrapper caps
     // at the message column and would report "settled" mid-transition).
     let previousWidth = -1
@@ -438,9 +435,7 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
       await hidpiPage.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
       await closeDetailsPane(hidpiPage)
       // The pane collapses ease over the layout transition: compare only a
-      // settled reading after the 300ms track transition. Without this delay,
-      // two equal samples can both precede the first animated frame.
-      await hidpiPage.waitForTimeout(350)
+      // settled reading (two consecutive equal wide-wrapper widths).
       let readings: TableReading[] = []
       let previousWide = -1
       await expect.poll(async () => {

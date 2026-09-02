@@ -277,12 +277,14 @@ export interface LlmModelDiscoveryOperation extends LlmModelDiscoveryRequest {
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
-    /** A provider route refused or could not return its account balance. */
-    'llm/balance-failed': { readonly provider: string }
     /** A draft provider interrogation refused or failed. */
     'llm/model-discovery-rejected': {
       readonly settingsNs: string
       readonly baseURL?: string
+    }
+    /** An account-balance query refused or failed. */
+    'llm/account-balance-rejected': {
+      readonly provider: string
     }
   }
 }

@@ -13,7 +13,6 @@ import {
 import { ModelsSection } from '../src/client/ModelsSection.tsx'
 import { DeepSeekOnboardingDialog } from '../src/client/DeepSeekOnboardingDialog.tsx'
 import { WelcomeNotice } from '../src/client/WelcomeNotice.tsx'
-import { BalanceIndicator } from '../src/client/BalanceIndicator.tsx'
 import { apply as hostApply } from '../src/index.ts'
 
 // These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
@@ -56,7 +55,6 @@ function declare(slots: SlotRegistry): () => void {
       children: {
         'settings.section': { kind: 'list', scope: 'root' },
         'settings.onboarding': { kind: 'list', scope: 'root' },
-        'settings.footer.utility': { kind: 'list', scope: 'root' },
       },
     } as never,
     () => null,
@@ -95,14 +93,6 @@ describe('ui-settings-models apply', () => {
     expect(typeof injected.operations.writeSettings).toBe('function')
     const onboarding = before.slots.entries('settings.onboarding')
     expect(onboarding).toHaveLength(2)
-    const utility = before.slots.entries('settings.footer.utility')[0]!
-    expect(utility.component).toBe(BalanceIndicator)
-    expect(utility.options).toMatchObject({ id: 'deepseek-balance', order: 0 })
-    const utilityInjected = (
-      utility.inject as unknown as () => import('../src/client/BalanceIndicator.tsx').BalanceIndicatorInjected
-    )()
-    expect(utilityInjected.hooks.balance.getSnapshot().status).toBe('error')
-    expect(() => { utilityInjected.refresh() }).not.toThrow()
     expect(onboarding.find(entry => entry.options.id === 'welcome-notice')).toMatchObject({
       component: WelcomeNotice,
       options: { id: 'welcome-notice', order: -100 },
@@ -124,7 +114,6 @@ describe('ui-settings-models apply', () => {
     await Promise.resolve()
     expect(after.slots.entries('settings.section')[0]!.component).toBe(ModelsSection)
     expect(after.slots.entries('settings.onboarding')).toHaveLength(2)
-    expect(after.slots.entries('settings.footer.utility')).toHaveLength(1)
     // The self-inflicted ledger notifications hit the duplicate guard.
     expect(after.slots.entries('settings.section')).toHaveLength(1)
   })
@@ -160,12 +149,10 @@ describe('ui-settings-models apply', () => {
     redeclare()
     expect(b.slots.entries('settings.section')).toHaveLength(0)
     expect(b.slots.entries('settings.onboarding')).toHaveLength(0)
-    expect(b.slots.entries('settings.footer.utility')).toHaveLength(0)
     declare(b.slots)
     await Promise.resolve()
     expect(b.slots.entries('settings.section')[0]!.component).toBe(ModelsSection)
     expect(b.slots.entries('settings.onboarding')).toHaveLength(2)
-    expect(b.slots.entries('settings.footer.utility')).toHaveLength(1)
     // The locale path also recovers through the same ledger re-check.
     b.locale.setLocale('en')
     expect(resolveSlotLabel(b.slots.entries('settings.section')[0]!.options.label)).toBe('Models')
@@ -203,7 +190,6 @@ describe('ui-settings-models apply', () => {
     await fiber.dispose()
     expect(b.slots.entries('settings.section')).toHaveLength(0)
     expect(b.slots.entries('settings.onboarding')).toHaveLength(0)
-    expect(b.slots.entries('settings.footer.utility')).toHaveLength(0)
     // The (ns, locale) seats are free again — the dictionary disposers ran.
     expect(() => b.locale.register('settings.models', 'zh', {})).not.toThrow()
     expect(() => b.locale.register('settings.models', 'en', {})).not.toThrow()
@@ -227,21 +213,6 @@ describe('ui-settings-models apply', () => {
 })
 
 describe('pushed invalidations', () => {
-  it('reloads balance only for DeepSeek settings and credential invalidations', async () => {
-    const balance = vi.fn(() => Promise.resolve({ ok: true as const, value: { isAvailable: true, balances: [] } }))
-    const b = await bench(true, undefined, { balance })
-    declare(b.slots)
-    await b.ctx.plugin({ inject: [...inject], apply }).await()
-    await vi.waitFor(() => { expect(balance).toHaveBeenCalledTimes(1) })
-
-    b.remote.emit('settings/document-updated', ['llm-pi-ai', 1])
-    b.remote.emit('credentials/reference-updated', ['OPENAI_API_KEY'])
-    expect(balance).toHaveBeenCalledTimes(1)
-    b.remote.emit('settings/document-updated', ['llm-deepseek', 2])
-    b.remote.emit('credentials/reference-updated', ['DEEPSEEK_API_KEY'])
-    await vi.waitFor(() => { expect(balance).toHaveBeenCalledTimes(3) })
-  })
-
   it('ignores invalidations before the page ever loaded', async () => {
     const b = await bench()
     declare(b.slots)

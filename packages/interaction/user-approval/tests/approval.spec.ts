@@ -102,16 +102,17 @@ describe('ApprovalService.request', () => {
       .resolves.toBe('rejected')
 
     expect(asked).toBe(2)
-    expect(session.snapshotEvents().filter(event => event.type === 'approval/asked').map(event => event.data))
+    const events = session.snapshotEvents()
+    expect(events.filter(event => event.type === 'approval/asked').map(event => event.data))
       .toEqual(expect.arrayContaining([
         expect.objectContaining({ alwaysAllowKey: 'sandbox:bash:danger-full-access' }),
         expect.objectContaining({ alwaysAllowKey: 'sandbox:write:danger-full-access' }),
       ]))
-    expect(session.snapshotEvents().filter(event => event.type === 'approval/decided').map(event => event.data.outcome))
+    expect(events.filter(event => event.type === 'approval/decided').map(event => event.data.outcome))
       .toEqual(['allowed-always', 'allowed-always', 'rejected'])
   })
 
-  it('fails closed when an answerer returns allowed-always for a request without a rule key', async () => {
+  it('fails closed when an answerer returns allowed-always without a rule key', async () => {
     const ctx = await mounted()
     const { agent, appended } = fakeAgent()
     ctx.on('approval/request', () => Promise.resolve<ApprovalOutcome>('allowed-always'))

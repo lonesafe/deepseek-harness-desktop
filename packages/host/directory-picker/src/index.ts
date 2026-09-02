@@ -2,11 +2,12 @@
  * Service Definition for the `ctx.directoryPicker` capability seam: how the web-GUI host lets an operator
  * select a workspace directory. Backends differ in interaction shape, not
  * just mechanism, so the service exposes a discriminated capability instead
- * of one method set: `native` opens one OS chooser, `browse` serves listing
- * and creation primitives, and an attended desktop exposes `adaptive` so
- * loopback and remote pages use their reachable interaction without replacing
- * the Host service. Consumers switch on `capability().kind`; the union is
- * merge-extensible, and an unknown kind hides the picking affordance.
+ * of one method set: a `native` backend opens one OS chooser on the
+ * host's display, while a `browse` backend serves listing/creation primitives
+ * for an in-app browser (and thereby works for remote clients no OS dialog
+ * can reach). Consumers switch on `capability().kind`; the union is
+ * merge-extensible, and the documented default for an unknown kind is to
+ * hide the picking affordance rather than fail.
  * @module @deepseek-ai/dsh-host-directory-picker
  */
 
@@ -57,20 +58,11 @@ export interface DirectoryPickerBrowseCapability {
   createDirectory(path: string, name: string): Promise<string>
 }
 
-/**
- * A desktop Host serves two kinds of operator at once: its loopback window
- * can reach an OS chooser, while an authenticated remote browser cannot.
- * The adaptive interaction exposes both primitives so the client surface can
- * select the reachable one from the page authority without changing the
- * Host service mounted for the process.
- */
+/** Desktop capability combining a native loopback chooser with remote browser primitives. */
 export interface DirectoryPickerAdaptiveCapability {
   kind: 'adaptive'
-  /** Native chooser used only by a loopback client surface. */
   pick(signal: AbortSignal): Promise<string | null>
-  /** Browser listing used by remote client surfaces. */
   list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>
-  /** Browser directory creation used by remote client surfaces. */
   createDirectory(path: string, name: string): Promise<string>
 }
 

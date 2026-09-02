@@ -109,3 +109,5 @@ web GUI Host 通过一项服务让操作者选择工作区目录；其唯一方�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这个无状态 Service Definition 只定义 capability vocabulary，观察由 backend 与 Remote controller 负责。

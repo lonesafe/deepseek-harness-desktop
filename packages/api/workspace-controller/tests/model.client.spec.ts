@@ -9,6 +9,10 @@ import type {
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
+  WorkspaceFileListing,
+  WorkspaceFileListRequest,
+  WorkspaceFilePreview,
+  WorkspaceFileReadRequest,
   WorkspaceFollowFrame,
   WorkspaceInsertBeforeRequest,
   WorkspaceInsertSessionBeforeRequest,
@@ -67,6 +71,19 @@ class FakeWorkspaceRemote implements WorkspaceRemote {
   readonly calls: Array<{ readonly method: string; readonly request: unknown }> = []
   onCreate: (request: WorkspaceCreateRequest) => Promise<RemoteResult<WorkspaceCreateValue>> = request =>
     Promise.resolve(remoteOk({ workspace: workspace(request.path.split('/').pop() ?? 'workspace'), created: true }))
+  onListFiles: (request: WorkspaceFileListRequest) => Promise<RemoteResult<WorkspaceFileListing>> = request =>
+    Promise.resolve(remoteOk({ path: request.path ?? '', entries: [], truncated: false }))
+  onReadFile: (request: WorkspaceFileReadRequest) => Promise<RemoteResult<WorkspaceFilePreview>> = request =>
+    Promise.resolve(remoteOk({
+      path: request.path,
+      name: request.path.split('/').at(-1) ?? '',
+      mime: 'text/plain',
+      size: 0,
+      modifiedAt: '1970-01-01T00:00:00.000Z',
+      kind: 'text',
+      encoding: 'utf8',
+      content: '',
+    }))
   onRename: (request: WorkspaceRenameRequest) => Promise<RemoteResult<WorkspaceValue>> = request =>
     Promise.resolve(remoteOk({ workspace: { ...workspace(String(request.workspaceId)), title: request.title } }))
   onDelete: (_request: WorkspaceDeleteRequest) => Promise<RemoteResult<WorkspaceDeleteValue>> = () =>
@@ -88,6 +105,22 @@ class FakeWorkspaceRemote implements WorkspaceRemote {
   create(request: WorkspaceCreateRequest): Promise<RemoteResult<WorkspaceCreateValue>> {
     this.record('create', request)
     return this.onCreate(request)
+  }
+
+  listFiles(
+    request: WorkspaceFileListRequest,
+    _signal?: AbortSignal,
+  ): Promise<RemoteResult<WorkspaceFileListing>> {
+    this.record('listFiles', request)
+    return this.onListFiles(request)
+  }
+
+  readFile(
+    request: WorkspaceFileReadRequest,
+    _signal?: AbortSignal,
+  ): Promise<RemoteResult<WorkspaceFilePreview>> {
+    this.record('readFile', request)
+    return this.onReadFile(request)
   }
 
   rename(request: WorkspaceRenameRequest): Promise<RemoteResult<WorkspaceValue>> {
@@ -177,6 +210,17 @@ describe('ClientWorkspaceModel', () => {
     await expect(model.create({ path: '/w/created' })).resolves.toMatchObject({ ok: true })
     expect(remote.calls).toContainEqual({ method: 'create', request: { path: '/w/created' } })
     expect(model.getSnapshot().items[0]?.workspaceId).toBe('created')
+
+    await expect(model.listFiles({ workspaceId: wid('created'), path: 'src' }))
+      .resolves.toEqual(remoteOk({ path: 'src', entries: [], truncated: false }))
+    await expect(model.readFile({ workspaceId: wid('created'), path: 'README.md' }))
+      .resolves.toMatchObject({ ok: true, value: { name: 'README.md' } })
+    expect(remote.calls).toContainEqual({
+      method: 'listFiles', request: { workspaceId: 'created', path: 'src' },
+    })
+    expect(remote.calls).toContainEqual({
+      method: 'readFile', request: { workspaceId: 'created', path: 'README.md' },
+    })
   })
 
   it('lets newer stream order outrank unary echoes and rolls failures back', async () => {

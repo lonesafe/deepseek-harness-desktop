@@ -478,6 +478,10 @@ describe('workspaces action face', () => {
     expect(created.title).toBe('/tmp/alpha')
     const registered = await ws.create({ path: '/tmp/beta' })
     expect(registered.path).toBe('/tmp/beta')
+    expect(await ws.listFiles('w1' as WorkspaceId, 'src')).toEqual({
+      path: 'src', entries: [], truncated: false,
+    })
+    expect((await ws.readFile('w1' as WorkspaceId, 'README.md')).name).toBe('README.md')
     const renamed = await ws.rename('w1' as WorkspaceId, 'Renamed')
     expect(renamed.title).toBe('Renamed')
     await ws.delete('w1' as WorkspaceId)
@@ -489,9 +493,21 @@ describe('workspaces action face', () => {
     await ws.archiveSession('s1' as SessionId)
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
     expect(ws.calls.map(c => c.method)).toEqual(
-      ['create', 'create', 'rename', 'delete', 'insertBefore', 'insertSessionBefore', 'archiveSession'])
+      ['create', 'create', 'listFiles', 'readFile', 'rename', 'delete', 'insertBefore',
+        'insertSessionBefore', 'archiveSession'])
 
     ws.stub('create', () => Promise.resolve({ workspaceId: 'ws-x', title: 'X', path: '/x', sessionIds: [] } as never))
+    ws.stub('listFiles', (_workspaceId, path = '') => Promise.resolve({ path, entries: [], truncated: true }))
+    ws.stub('readFile', (_workspaceId, path) => Promise.resolve({
+      path,
+      name: 'stub.md',
+      mime: 'text/markdown',
+      size: 4,
+      modifiedAt: '2026-01-01T00:00:00.000Z',
+      kind: 'markdown',
+      encoding: 'utf8',
+      content: 'stub',
+    }))
     ws.stub('rename', () => Promise.resolve({ workspaceId: 'w1', title: 'S', path: '/s', sessionIds: [] } as never))
     ws.stub('delete', () => Promise.resolve())
     const insertBefore = vi.fn(() => Promise.resolve())
@@ -499,6 +515,8 @@ describe('workspaces action face', () => {
     ws.stub('insertSessionBefore', () => Promise.resolve({ workspaceId: 'w1', title: '', path: '', sessionIds: [] } as never))
     ws.stub('archiveSession', () => Promise.resolve())
     expect((await ws.create({ path: '/y' })).title).toBe('X')
+    expect((await ws.listFiles('w1' as WorkspaceId, 'docs')).truncated).toBe(true)
+    expect((await ws.readFile('w1' as WorkspaceId, 'docs/a.md')).content).toBe('stub')
     expect((await ws.rename('w1' as WorkspaceId, 'z')).title).toBe('S')
     await ws.delete('w1' as WorkspaceId)
     await ws.insertBefore('w2' as WorkspaceId)

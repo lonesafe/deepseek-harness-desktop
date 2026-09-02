@@ -20,7 +20,9 @@ import type {
   SessionSelectModelValue,
 } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { WorkspaceRemote } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { WorkspaceFollowFrame } from '@deepseek-ai/dsh-api-workspace-controller/types'
+import type {
+  WorkspaceFileListing, WorkspaceFilePreview, WorkspaceFollowFrame,
+} from '@deepseek-ai/dsh-api-workspace-controller/types'
 import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
   RemoteStream,
@@ -175,6 +177,25 @@ export class FakeApiClient {
   onWorkspaceCreate: (payload: unknown) => Promise<RemoteResult<{ workspace: WorkspaceView; created: boolean }>> =
     () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws'), created: true }))
 
+  onWorkspaceListFiles: (payload: unknown) => Promise<RemoteResult<WorkspaceFileListing>> =
+    payload => Promise.resolve(ok({
+      path: (payload as { path?: string }).path ?? '',
+      entries: [],
+      truncated: false,
+    }))
+
+  onWorkspaceReadFile: (payload: unknown) => Promise<RemoteResult<WorkspaceFilePreview>> =
+    payload => Promise.resolve(ok({
+      path: (payload as { path: string }).path,
+      name: (payload as { path: string }).path.split('/').at(-1) ?? '',
+      mime: 'text/plain',
+      size: 0,
+      modifiedAt: '1970-01-01T00:00:00.000Z',
+      kind: 'text',
+      encoding: 'utf8',
+      content: '',
+    }))
+
   onWorkspaceRename: (payload: unknown) => Promise<RemoteResult<{ workspace: WorkspaceView }>> =
     () => Promise.resolve(ok({ workspace: fakeWorkspace('fk-ws') }))
 
@@ -251,6 +272,16 @@ export class FakeApiClient {
       },
       workspace: {
         create: payload => this.record('workspace.create', payload, this.onWorkspaceCreate(payload)),
+        listFiles: payload => this.record(
+          'workspace.listFiles',
+          payload,
+          this.onWorkspaceListFiles(payload),
+        ),
+        readFile: payload => this.record(
+          'workspace.readFile',
+          payload,
+          this.onWorkspaceReadFile(payload),
+        ),
         rename: payload => this.record('workspace.rename', payload, this.onWorkspaceRename(payload)),
         delete: payload => this.record('workspace.delete', payload, this.onWorkspaceDelete(payload)),
         insertBefore: payload => this.record(

@@ -25,6 +25,10 @@ import type {
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
   WorkspaceDeleteValue,
+  WorkspaceFileListing,
+  WorkspaceFileListRequest,
+  WorkspaceFilePreview,
+  WorkspaceFileReadRequest,
   WorkspaceFollowFrame,
   WorkspaceInsertBeforeRequest,
   WorkspaceInsertSessionBeforeRequest,
@@ -120,6 +124,14 @@ class ScriptedWorkspaceRemote implements WorkspaceRemote {
     throw new Error('unused')
   }
 
+  listFiles(_request: WorkspaceFileListRequest): Promise<RemoteResult<WorkspaceFileListing>> {
+    throw new Error('unused')
+  }
+
+  readFile(_request: WorkspaceFileReadRequest): Promise<RemoteResult<WorkspaceFilePreview>> {
+    throw new Error('unused')
+  }
+
   rename(_request: WorkspaceRenameRequest): Promise<RemoteResult<WorkspaceValue>> {
     throw new Error('unused')
   }
@@ -160,6 +172,23 @@ class CommandWorkspaceRemote implements WorkspaceRemote {
   readonly create = vi.fn<WorkspaceRemote['create']>(request => Promise.resolve(remoteOk({
     workspace: workspace('created', { path: request.path }),
     created: true,
+  })))
+
+  readonly listFiles = vi.fn<WorkspaceRemote['listFiles']>(request => Promise.resolve(remoteOk({
+    path: request.path ?? '',
+    entries: [],
+    truncated: false,
+  })))
+
+  readonly readFile = vi.fn<WorkspaceRemote['readFile']>(request => Promise.resolve(remoteOk({
+    path: request.path,
+    name: request.path.split('/').at(-1) ?? '',
+    mime: 'text/plain',
+    size: 0,
+    modifiedAt: '1970-01-01T00:00:00.000Z',
+    kind: 'text',
+    encoding: 'utf8',
+    content: '',
   })))
 
   readonly rename = vi.fn<WorkspaceRemote['rename']>(request => Promise.resolve(remoteOk({
@@ -456,6 +485,8 @@ describe('WorkspaceController', () => {
 
     expect(controller.list).toBe(model)
     await expect(controller.create({ path: '/work/created' })).resolves.toMatchObject({ workspaceId: 'created' })
+    await expect(controller.listFiles(wid('created'), 'src')).resolves.toMatchObject({ path: 'src' })
+    await expect(controller.readFile(wid('created'), 'README.md')).resolves.toMatchObject({ name: 'README.md' })
     await expect(controller.rename(wid('one'), 'renamed')).resolves.toMatchObject({ title: 'renamed' })
     await expect(controller.insertBefore(wid('one'))).resolves.toBeUndefined()
     await expect(controller.insertSessionBefore(wid('one'), sid('session'))).resolves.toMatchObject({

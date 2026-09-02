@@ -50,7 +50,9 @@ async function bootWeb(
   profilePackages: readonly string[] = [],
   profileBundles?: readonly string[],
 ): Promise<Context> {
-  const storageRoot = join(dirname(settingsFile), 'storages')
+  const home = dirname(settingsFile)
+  const sessionRoot = join(home, 'sessions')
+  const storageRoot = join(home, 'storages')
   const overrides: PatchOptions[] = [
     // The settings row defaults to `$DSH_HOME/settings.yaml`. Left alone it
     // reads the developer's own document — and since the default preset is a
@@ -58,6 +60,9 @@ async function bootWeb(
     // outcome. Point it at a temp file for the same reason the roster row
     // below pins `includeUserRoot` off.
     { id: 'settings', config: { path: settingsFile, watch: false } },
+    // Agent creation takes durable write ownership before publication. Keep
+    // fixed test session ids out of the developer's real `$DSH_HOME/sessions`.
+    { id: 'session-persistence-jsonl', config: { root: sessionRoot } },
     // storage-json's root is anchored to the real $DSH_HOME. Unpinned, this
     // file writes the developer's own `~/.dsh/storages/` — and then reads it
     // back on the next run, so a stored document from any other build decides
@@ -109,7 +114,6 @@ async function bootWeb(
   // outside this workspace and bare plugin names cannot resolve by Node's
   // upward walk. The flat fallback the preset boot maintains is what makes
   // them resolvable — the same mechanism, not a test-only shim.
-  const home = dirname(settingsFile)
   await healProfilesModuleFallback({ installAnchor: INSTALL_ANCHOR, home })
   const profileDir = join(home, 'profiles', 'spec')
   await mkdir(profileDir, { recursive: true })

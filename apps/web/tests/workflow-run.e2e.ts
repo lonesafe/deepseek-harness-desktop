@@ -76,8 +76,8 @@ describe.skipIf(MODE === 'record')('web e2e: durable workflow run in Chat', () =
     await input.fill(prompt)
     await input.press('Enter')
 
-    const workflow = page.locator('[data-workflow-run][data-run-status="running"]')
-    await workflow.waitFor({ timeout: 30_000 })
+    await page.locator('[data-workflow-run][data-run-status="running"]').waitFor({ timeout: 30_000 })
+    const workflow = page.locator('[data-workflow-run]')
     const disclosures = workflow.locator('[data-disclosure-row]')
     await disclosures.nth(1).waitFor({ timeout: 15_000 })
     const runDisclosure = disclosures.nth(0)

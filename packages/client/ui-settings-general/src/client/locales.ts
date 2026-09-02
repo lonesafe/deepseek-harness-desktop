@@ -33,6 +33,13 @@ export const zh = {
   'update.mebibytes': '{value} MiB',
   'version.title': 'DeepSeek Harness {version}',
   'version.value': 'v{version}',
+  'balance.title': '余额',
+  'balance.loading': '正在加载账户余额…',
+  'balance.unavailable': '暂时无法获取余额',
+  'balance.accountUnavailable': 'DeepSeek 账户当前不可用',
+  'balance.error': '余额不可用：{message}',
+  'balance.detail': '{currency}：总额 {total} · 充值 {toppedUp} · 赠送 {granted}',
+  'balance.label': '余额：{value}。点击刷新',
 } satisfies Record<string, string>
 
 /** The settings namespace key union. */
@@ -71,4 +78,11 @@ export const en = {
   'update.mebibytes': '{value} MiB',
   'version.title': 'DeepSeek Harness {version}',
   'version.value': 'v{version}',
+  'balance.title': 'Balance',
+  'balance.loading': 'Loading account balance…',
+  'balance.unavailable': 'Balance unavailable',
+  'balance.accountUnavailable': 'The DeepSeek account is currently unavailable',
+  'balance.error': 'Balance unavailable: {message}',
+  'balance.detail': '{currency}: total {total} · topped up {toppedUp} · granted {granted}',
+  'balance.label': 'Balance: {value}. Click to refresh',
 } satisfies Record<SettingsKey, string>

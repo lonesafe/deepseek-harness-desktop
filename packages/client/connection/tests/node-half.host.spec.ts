@@ -94,7 +94,10 @@ async function mounted(config?: { trustedHosts?: string[]; lanAuthenticated?: bo
   const upgrades: WebUpgradeRoute[] = []
   provideBrowserCredentials(ctx)
   ctx.provide('webServer', fakeHttpServer(routes, upgrades, config?.lanAuthenticated) as WebServer)
-  const fiber = ctx.plugin({ inject: [...inject], apply }, { trustedHosts: config?.trustedHosts })
+  const fiber = ctx.plugin(
+    { inject: [...inject], apply },
+    config?.trustedHosts === undefined ? {} : { trustedHosts: config.trustedHosts },
+  )
   await fiber.await()
   return {
     routes,

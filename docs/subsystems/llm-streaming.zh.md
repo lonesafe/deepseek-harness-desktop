@@ -890,6 +890,23 @@ registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHa
 @Remote listProviders(): LlmProviderInfo[]
 
 /**
+ * Read and validate one registered provider's account balance.
+ * Decimal amounts remain strings so the wire never rounds money.
+ * @param provider - registered provider route to inspect.
+ * @param signal - optional cancellation for the adapter request.
+ * @returns validated, detached provider account-balance metadata.
+ */
+async accountBalance(provider: string, signal?: AbortSignal): Promise<LlmAccountBalance>
+
+/**
+ * Remote adapter for a provider account-balance query.
+ * @param provider - registered provider route to inspect.
+ * @param signal - caller cancellation supplied by the Remote carrier.
+ * @returns validated provider account-balance metadata.
+ */
+@Remote('accountBalance') async remoteAccountBalance(provider: string, signal: AbortSignal): Promise<LlmAccountBalance>
+
+/**
  * Declare provider routes an adapter plugin can activate through
  * configuration. Registration is all-or-nothing: an empty list, invalid
  * entry, or a provider already declared by any registration throws

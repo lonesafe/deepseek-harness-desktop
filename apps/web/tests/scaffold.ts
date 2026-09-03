@@ -703,7 +703,13 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     }
     baseUrl = `http://${browserHost}:${String(port)}`
     authenticatedUrl = ctx.connection.authenticatedUrl(baseUrl)
-    const login = await fetch(authenticatedUrl, { redirect: 'manual' })
+    const loginUrl = new URL(authenticatedUrl)
+    const loginHeaders = new Headers()
+    if (options.remoteAuthority !== undefined) {
+      loginUrl.hostname = '127.0.0.1'
+      loginHeaders.set('host', `${options.remoteAuthority}:${String(port)}`)
+    }
+    const login = await fetch(loginUrl, { redirect: 'manual', headers: loginHeaders })
     const setCookie = login.headers.get('set-cookie')
     if (login.status !== 303 || login.headers.get('location') !== '/' || setCookie === null) {
       throw new Error('web e2e scaffold: browser token exchange did not return its session cookie')
@@ -736,7 +742,12 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     hostFetch(path: string, init: RequestInit = {}): Promise<Response> {
       const headers = new Headers(init.headers)
       headers.set('cookie', cookieHeader)
-      return fetch(new URL(path, baseUrl), { ...init, headers })
+      const requestUrl = new URL(path, baseUrl)
+      if (options.remoteAuthority !== undefined) {
+        requestUrl.hostname = '127.0.0.1'
+        headers.set('host', `${options.remoteAuthority}:${String(port)}`)
+      }
+      return fetch(requestUrl, { ...init, headers })
     },
     // Barrier stack: the in-process turn/end identifies the session, its
     // explicit flush makes the transcript durable, and the caller's browser

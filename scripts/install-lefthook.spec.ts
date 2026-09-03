@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process'
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   linkSync,
   mkdirSync,
@@ -217,6 +218,21 @@ function runInstaller(
 // Rationale and the paired hook budget are in
 // .agents/notes/implemented/testing/2026-08-29-windows-lane-hook-and-lefthook-budget.md.
 describe('worktree-local Lefthook installer', { timeout: 90_000 }, () => {
+  it('skips automated installs without development dependencies', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-lefthook-production-'))
+    fixtures.push(root)
+    const isolatedInstaller = join(root, 'install-lefthook.mjs')
+    copyFileSync(installer, isolatedInstaller)
+
+    const result = commandResult(process.execPath, [isolatedInstaller], root, {
+      ...process.env,
+      CI: 'true',
+      GITHUB_ACTIONS: 'false',
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+  })
+
   for (const [label, extraEnv] of [
     ['CI', { CI: 'true' }],
     ['GitHub Actions', { GITHUB_ACTIONS: 'true' }],

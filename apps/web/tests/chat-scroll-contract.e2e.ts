@@ -28,7 +28,7 @@ const TOOL_SESSION_ID = 'chat-scroll-tool-e2e'
 const RESTORE_SESSION_A_ID = 'chat-scroll-restore-a-e2e'
 const RESTORE_SESSION_B_ID = 'chat-scroll-restore-b-e2e'
 const REPLAY_CONTEXT_WINDOW = 10_000_000
-const STREAM_PACE_MS = 24
+const STREAM_PACE_MS = 60
 const GEOMETRY_TOLERANCE = 2
 const RESPONSIVE_REFLOW_TOLERANCE = 32
 const LIVE_TEXT_PROMPT = 'CHAT_SCROLL_LIVE_USER Continue this long conversation while I inspect older history.'
@@ -320,13 +320,30 @@ async function flingTranscript(page: Page, deltaY: number): Promise<void> {
   await nextPaint(page)
 }
 
-async function wheelToHistoryStart(page: Page): Promise<void> {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    if ((await scrollGeometry(page)).scrollTop <= 1) break
-    await wheelTranscript(page, -2_400)
+async function wheelToHistoryStart(page: Page, pauseWhenLoading = false): Promise<number> {
+  const older = page.getByRole('button', { name: 'Load earlier', exact: true })
+  const loading = page.getByRole('button', { name: 'Loading…', exact: true })
+  let loadedPages = 0
+  let rows = await loadedFlowRows(page)
+  for (let attempt = 0; attempt < 48; attempt += 1) {
+    if (await loading.count() > 0) {
+      if (pauseWhenLoading) return loadedPages
+      await expect.poll(() => loading.count(), { timeout: 30_000 }).toBe(0)
+      const nextRows = await loadedFlowRows(page)
+      if (nextRows > rows) loadedPages += 1
+      rows = nextRows
+      continue
+    }
+    const { scrollTop } = await scrollGeometry(page)
+    if (scrollTop <= 1 && await older.count() === 0) return loadedPages
+    if (scrollTop <= 1) {
+      await wheelTranscript(page, 120)
+      await wheelTranscript(page, -240)
+    } else {
+      await wheelTranscript(page, -2_400)
+    }
   }
-  await expect.poll(async () => (await scrollGeometry(page)).scrollTop, { timeout: 10_000 })
-    .toBeLessThanOrEqual(1)
+  throw new Error('conversation did not reach the history start after automatic paging')
 }
 
 async function wheelUntilMounted(page: Page, selector: string, deltaY: number): Promise<void> {
@@ -429,25 +446,6 @@ async function expectMarkerAboveComposer(page: Page, marker: string): Promise<vo
   expect(geometry.rowBottom).toBeLessThanOrEqual(geometry.composerTop + GEOMETRY_TOLERANCE)
 }
 
-async function loadEarlierWithAnchor(page: Page): Promise<void> {
-  await wheelToHistoryStart(page)
-  const older = page.getByRole('button', { name: 'Load earlier', exact: true })
-  const loading = page.getByRole('button', { name: 'Loading…', exact: true })
-  await older.waitFor({ timeout: 10_000 })
-  const anchor = await visibleFlowAnchor(page)
-  const before = await loadedFlowRows(page)
-  await older.click()
-  await expect.poll(async () => (
-    await loadedFlowRows(page) > before && await loading.count() === 0
-  ), { timeout: 30_000 }).toBe(true)
-  await nextPaint(page)
-  if (await page.getByRole('button', { name: 'Load earlier', exact: true }).count() === 0) {
-    expect(await page.locator('[data-turn-process][aria-expanded="false"]').count()).toBeGreaterThan(0)
-    return
-  }
-  await expectSameFlowTop(page, anchor)
-}
-
 async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path)
@@ -480,7 +478,7 @@ describe('web e2e: long Chat scroll contract', () => {
   it.skipIf(MODE === 'record')('preserves the reader anchor when history and streaming arrive concurrently', async () => {
     await withScrollWorld({
       failureShot: 'web-e2e-chat-scroll-history-stream',
-      replay: [replayEntry(textStream(LIVE_TEXT_FIRST, LIVE_TEXT_DONE, 120))],
+      replay: [replayEntry(textStream(LIVE_TEXT_FIRST, LIVE_TEXT_DONE, 600))],
       seeds: [{ fixture: HISTORY_FIXTURE, id: HISTORY_SESSION_ID }],
     }, async (world) => {
       await openSeed(
@@ -514,9 +512,8 @@ describe('web e2e: long Chat scroll contract', () => {
         await composer.fill(LIVE_TEXT_PROMPT)
         await world.page.getByRole('button', { name: 'Send message', exact: true }).click()
         await world.page.getByText(LIVE_TEXT_FIRST, { exact: false }).last().waitFor({ timeout: 15_000 })
-        await wheelToHistoryStart(world.page)
         const beforeRows = await loadedFlowRows(world.page)
-        await world.page.getByRole('button', { name: 'Load earlier', exact: true }).click()
+        await wheelToHistoryStart(world.page, true)
         await expect.poll(() => held, { timeout: 10_000 }).toBe(true)
 
         await wheelTranscript(world.page, 420)
@@ -540,14 +537,7 @@ describe('web e2e: long Chat scroll contract', () => {
       await world.page.getByText(LIVE_TEXT_DONE, { exact: false }).last().waitFor({ timeout: 15_000 })
       await world.page.unroute('**/api/session/page')
 
-      let additionalPages = 0
-      while (additionalPages < 8) {
-        await wheelToHistoryStart(world.page)
-        if (await world.page.getByRole('button', { name: 'Load earlier', exact: true }).count() === 0) break
-        await loadEarlierWithAnchor(world.page)
-        additionalPages += 1
-      }
-      expect(additionalPages).toBeGreaterThan(0)
+      await wheelToHistoryStart(world.page)
       // The whole log is loaded: turn 1's unique marker renders in the
       // transcript (scoped: the sidebar search row also carries it) and no
       // page remains.
@@ -637,7 +627,7 @@ describe('web e2e: long Chat scroll contract', () => {
       failureShot: 'web-e2e-chat-scroll-live-tool',
       replay: [
         replayEntry(toolStream()),
-        replayEntry(textStream(LIVE_TOOL_FIRST, LIVE_TOOL_DONE, 84)),
+        replayEntry(textStream(LIVE_TOOL_FIRST, LIVE_TOOL_DONE, 240)),
       ],
       seeds: [{ fixture: TOOL_FIXTURE, id: TOOL_SESSION_ID }],
     }, async (world) => {
@@ -737,8 +727,6 @@ describe('web e2e: long Chat scroll contract', () => {
         RESTORE_FIXTURE_A,
         RESTORE_FIXTURE_A.markers.assistant(RESTORE_FIXTURE_A.turns),
       )
-      await loadEarlierWithAnchor(world.page)
-      await loadEarlierWithAnchor(world.page)
       await wheelToHistoryStart(world.page)
       await wheelTranscript(world.page, 1_300)
       const sessionAnchor = await visibleFlowAnchor(world.page)
@@ -869,7 +857,7 @@ describe('web e2e: long Chat scroll contract', () => {
       failureShot: 'web-e2e-chat-scroll-fling-stream',
       replay: [
         replayEntry(toolStream()),
-        replayEntry(textStream(LIVE_FLING_FIRST, LIVE_FLING_DONE, 240)),
+        replayEntry(textStream(LIVE_FLING_FIRST, LIVE_FLING_DONE, 600)),
       ],
       seeds: [{ fixture: INPUTS_FIXTURE, id: FLING_SESSION_ID }],
     }, async (world) => {

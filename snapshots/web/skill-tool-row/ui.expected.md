@@ -7,6 +7,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Files"
 - button "System prompt":
   - img
   - img

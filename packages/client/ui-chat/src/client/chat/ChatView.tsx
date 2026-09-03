@@ -25,6 +25,15 @@ function scrollerOf(from: HTMLElement): HTMLElement {
   return (from.closest('[data-conversation-scroll]')) ?? from
 }
 
+/** Classify delivered geometry against the last main-thread delivery or component write. */
+function scrollDelivery(scrollport: HTMLElement, observedTop: number) {
+  const floor = Math.max(0, scrollport.scrollHeight - scrollport.clientHeight)
+  return {
+    floor,
+    movedByReader: Math.abs(scrollport.scrollTop - Math.min(observedTop, floor)) > 0.5,
+  }
+}
+
 interface PagingAnchor {
   /** Stable node/call identity, independent of boundary-spanning group keys. */
   key: string
@@ -310,6 +319,9 @@ export function ChatView({
   const [atBottom, setAtBottom] = useState(() => chatScroll.read() === null)
   const atBottomRef = useRef(atBottom)
   const scrollSamplePendingRef = useRef(false)
+  const pendingFollowRef = useRef(false)
+  // Assigned every render before any delivered scroll sample can invoke it.
+  const followRef = useRef<(() => void) | null>(null)
   const [, setScrollSampleTick] = useState(0)
   const [activeTurn, setActiveTurn] = useState<number | null>(
     () => turnNavigationItems.at(-1)?.turn ?? null,
@@ -466,11 +478,19 @@ export function ChatView({
   }
 
   useLayoutEffect(() => {
-    if (scrollSamplePendingRef.current) return
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: React attaches the ref before layout effects run. */
     if (local === null) return
     const el = scrollerOf(local)
+    const appendedUser = lastKey !== lastKeyRef.current && lastNode?.kind === 'user'
+    if (
+      !appendedUser
+      && scrollSamplePendingRef.current
+      && scrollDelivery(el, observedTopRef.current).movedByReader
+    ) {
+      pendingFollowRef.current = true
+      return
+    }
     // Open completed: jump to the bottom once — unless a scroll position
     // survives from a previous mount (view-tab switch away and back), which
     // is restored instead of snapping the reader back to the floor.
@@ -523,7 +543,6 @@ export function ChatView({
     firstSeqRef.current = firstSeq
     // Own words must be visible: a new trailing user node force-scrolls
     // (send lives in the composer, so arrival is detected here, not armed there).
-    const appendedUser = lastKey !== lastKeyRef.current && lastNode?.kind === 'user'
     const appendedSteering = lastSteeringId !== null && lastSteeringId !== lastSteeringIdRef.current
     const appendedSubmission = lastSubmissionId !== null && lastSubmissionId !== lastSubmissionIdRef.current
     const tipMoved = followSigRef.current !== followSig
@@ -555,12 +574,19 @@ export function ChatView({
     // Browser shrink-clamps land exactly on the floor min and delayed
     // programmatic deliveries land on the ledger itself, so both preserve
     // the current ownership state.
-    const floor = Math.max(0, el.scrollHeight - el.clientHeight)
-    const movedByReader = Math.abs(el.scrollTop - Math.min(observedTopRef.current, floor)) > 0.5
-    const isAtBottom = movedByReader
+    const { floor, movedByReader } = scrollDelivery(el, observedTopRef.current)
+    // A deferred follow proves that a concurrent layout changed the owned
+    // floor. Native anchoring may advance only partway toward that new floor;
+    // complete this downward movement, while an upward move still belongs to
+    // the reader.
+    const partialOwnedGrowth = atBottomRef.current
+      && pendingFollowRef.current
+      && el.scrollTop > observedTopRef.current + 0.5
+    const movedAwayFromOwnedFloor = movedByReader && !partialOwnedGrowth
+    const isAtBottom = movedAwayFromOwnedFloor
       ? floor - el.scrollTop <= FOLLOW_THRESHOLD + 1
       : atBottomRef.current
-    if (!movedByReader && isAtBottom) {
+    if (!movedAwayFromOwnedFloor && isAtBottom) {
       toBottom(el)
       return
     }
@@ -603,6 +629,10 @@ export function ChatView({
       if (sampleTimer !== undefined) window.clearTimeout(sampleTimer)
       sampleTimer = undefined
       onScrollRef.current()
+      if (pendingFollowRef.current) {
+        pendingFollowRef.current = false
+        followRef.current?.()
+      }
       setScrollSampleTick(tick => tick + 1)
     }
     const onScroll = (): void => {
@@ -616,17 +646,19 @@ export function ChatView({
       el.removeEventListener('scrollend', sample)
       if (sampleTimer !== undefined) window.clearTimeout(sampleTimer)
       scrollSamplePendingRef.current = false
+      pendingFollowRef.current = false
     }
   }, [])
 
-  // The ref starts null and is assigned every render, so the placeholder
-  // initializer a function initial value would need never exists.
-  const followRef = useRef<(() => void) | null>(null)
   followRef.current = () => {
-    if (scrollSamplePendingRef.current) return
     const local = listRef.current
     if (local !== null && atBottomRef.current) {
       const el = scrollerOf(local)
+      if (scrollSamplePendingRef.current && scrollDelivery(el, observedTopRef.current).movedByReader) {
+        pendingFollowRef.current = true
+        return
+      }
+      pendingFollowRef.current = false
       el.scrollTop = el.scrollHeight
       observedTopRef.current = el.scrollTop
       chatScroll.save(null)
@@ -641,15 +673,27 @@ export function ChatView({
     if (column === null || local === null || typeof ResizeObserver === 'undefined') return
     const scrollport = scrollerOf(local)
     const composer = scrollport.querySelector<HTMLElement>('[data-composer-seat]')
+    let followFrame: number | undefined
     // Flow-height changes (image loads, tool disclosures) move rows across the
     // reading line without a scroll event, so the active mark resyncs here too.
     const observer = new ResizeObserver(() => {
       followRef.current?.()
+      if (typeof requestAnimationFrame !== 'undefined' && followFrame === undefined) {
+        followFrame = requestAnimationFrame(() => {
+          followFrame = undefined
+          followRef.current?.()
+        })
+      }
       activeTurnRef.current?.()
     })
     observer.observe(column)
     if (composer !== null) observer.observe(composer)
-    return () => { observer.disconnect() }
+    return () => {
+      observer.disconnect()
+      if (followFrame !== undefined && typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(followFrame)
+      }
+    }
   }, [])
 
   // A failed/empty page leaves the head unchanged. Once the request leaves

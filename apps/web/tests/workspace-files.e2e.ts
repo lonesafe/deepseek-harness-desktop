@@ -28,7 +28,7 @@ describe('web e2e: Workspace files and previews', () => {
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspace(page, scaffold.workspaceCwd)
     // A freshly connected Session stays in its composer hero until its first
@@ -97,7 +97,7 @@ describe('web e2e: Workspace files and previews', () => {
 
     await view.getByRole('button', { name: 'Back to file list' }).click()
     await view.getByRole('button', { name: /README\.md/ }).waitFor({ timeout: 10_000 })
-    const composer = page.locator('textarea:enabled').first()
+    const composer = page.locator('[data-composer-input][contenteditable="true"]').first()
     const composerBox = await composer.boundingBox()
     expect(composerBox).not.toBeNull()
     expect(composerBox!.x).toBeGreaterThanOrEqual(12)

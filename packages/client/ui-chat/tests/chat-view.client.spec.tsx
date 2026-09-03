@@ -2373,6 +2373,74 @@ describe('ChatView', () => {
     expect(observe).toHaveBeenCalledTimes(1)
   })
 
+  it('classifies a pending scroll delivery before following a pinned resize', () => {
+    let notify: (() => void) | undefined
+    class ResizeObserverStub {
+      constructor(callback: ResizeObserverCallback) {
+        notify = () => { callback([], this as unknown as ResizeObserver) }
+      }
+
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+    const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    const metrics = installScrollMetrics(scroller, 1_000, 300)
+    readerScroll(scroller, 100)
+    fireEvent.click(view.getByLabelText('回到底部'))
+
+    // A delayed event from the component's own bottom write must not suppress
+    // the final resize correction.
+    fireEvent.scroll(scroller)
+    metrics.setHeight(1_200)
+    act(() => { notify?.() })
+    expect(scroller.scrollTop).toBe(900)
+
+    // Native anchoring can advance only partway toward a growing floor. The
+    // deferred resize follow proves this downward movement is layout-owned.
+    metrics.setHeight(1_400)
+    scroller.scrollTop = 950
+    fireEvent.scroll(scroller)
+    act(() => { notify?.() })
+    expect(scroller.scrollTop).toBe(950)
+    fireEvent(scroller, new Event('scrollend'))
+    expect(scroller.scrollTop).toBe(1_100)
+
+    // A delivered reader position inside the bottom threshold first defers the
+    // resize write, then re-pins exactly after the sampled delivery.
+    scroller.scrollTop = 1_080
+    fireEvent.scroll(scroller)
+    act(() => { notify?.() })
+    expect(scroller.scrollTop).toBe(1_080)
+    fireEvent(scroller, new Event('scrollend'))
+    expect(scroller.scrollTop).toBe(1_100)
+
+    // A reader position delivered before the sampler runs still owns the view.
+    scroller.scrollTop = 400
+    fireEvent.scroll(scroller)
+    metrics.setHeight(1_600)
+    act(() => { notify?.() })
+    expect(scroller.scrollTop).toBe(400)
+    fireEvent(scroller, new Event('scrollend'))
+    expect(scroller.scrollTop).toBe(400)
+    expect(view.getByLabelText('回到底部')).toBeTruthy()
+  })
+
+  it('force-scrolls an appended user node while a reader delivery is pending', () => {
+    const h = makeHarness({ nodes: [user(1, 'q'), assistant(2, 'a')] })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    const metrics = installScrollMetrics(scroller, 1_000, 300)
+    scroller.scrollTop = 100
+    fireEvent.scroll(scroller)
+
+    metrics.setHeight(1_200)
+    act(() => { h.setChat({ nodes: [user(1, 'q'), assistant(2, 'a'), user(3, 'mine')] }) })
+    expect(scroller.scrollTop).toBe(900)
+  })
+
   it('pinned dynamic-height updates select the latest Turn without reading row geometry', () => {
     let notify: (() => void) | undefined
     let nextFrame = 0
@@ -2414,13 +2482,16 @@ describe('ChatView', () => {
 
     metrics.setHeight(1_200)
     act(() => { notify?.() })
+    // A renderer can finish its own layout after the observer callback but
+    // before paint; the queued follow uses that final floor.
+    metrics.setHeight(1_220)
     act(() => {
       const pending = [...frames.values()]
       frames.clear()
       for (const callback of pending) callback(0)
     })
 
-    expect(scroller.scrollTop).toBe(900)
+    expect(scroller.scrollTop).toBe(920)
     expect(view.getByRole('button', { name: '跳转到第 2 轮' }).getAttribute('aria-current')).toBe('true')
     expect(rect).not.toHaveBeenCalled()
   })

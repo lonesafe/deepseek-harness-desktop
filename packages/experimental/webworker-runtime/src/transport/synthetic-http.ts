@@ -64,6 +64,9 @@ export function createSyntheticExchange(frame: TunnelRequestFrame, sink: Respons
     url: frame.url,
     method: frame.method,
     headers: frame.headers,
+    // The route lane is an in-worker call into the loopback-only server. Real
+    // webserver trust checks read this before dispatching any registered route.
+    socket: { remoteAddress: '127.0.0.1' },
     destroy: (): void => { aborted = true },
     async *[Symbol.asyncIterator](): AsyncGenerator<Uint8Array> {
       if (frame.body === undefined || frame.body.byteLength === 0) return

@@ -252,17 +252,15 @@ describe('web e2e: settings modal and General preferences', () => {
   }, 90_000)
 
   it('gives the active settings section the full panel width on phones', async () => {
-    const mobilePage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
-    const mobileTripwire = watchConsole(mobilePage)
-    onTestFailed(() => saveFailureShot(mobilePage, 'web-e2e-settings-phone-layout'))
+    const pageErrorStart = tripwire.pageErrors.length
+    const warningStart = tripwire.warnings.length
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-phone-layout'))
     try {
-      await mobilePage.goto(scaffold.baseUrl, { waitUntil: 'load' })
-      await mobilePage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-      await mobilePage.getByRole('button', { name: '设置', exact: true }).click()
-      const dialog = mobilePage.getByRole('dialog', { name: '设置' })
+      await page.getByRole('button', { name: '设置', exact: true }).click()
+      const dialog = page.getByRole('dialog', { name: '设置' })
       await dialog.waitFor({ timeout: 10_000 })
       await dialog.getByText('语言', { exact: true }).waitFor({ timeout: 10_000 })
-      await mobilePage.setViewportSize({ width: 390, height: 844 })
+      await page.setViewportSize({ width: 390, height: 844 })
 
       const layout = await dialog.evaluate((element) => {
         const nav = element.querySelector('nav')
@@ -294,12 +292,14 @@ describe('web e2e: settings modal and General preferences', () => {
 
       await dialog.getByRole('button', { name: 'Agent 预设' }).click()
       await dialog.getByRole('heading', { name: 'Agent 预设' }).waitFor({ timeout: 10_000 })
-      await dialog.getByRole('button', { name: '关闭' }).click()
-      await expect.poll(() => mobilePage.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
-      expect(mobileTripwire.pageErrors).toEqual([])
-      expect(mobileTripwire.warnings).toEqual([])
+      await dialog.getByRole('button', { name: '关闭' }).focus()
+      await page.keyboard.press('Enter')
+      await expect.poll(() => page.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
+      expect(tripwire.pageErrors.slice(pageErrorStart)).toEqual([])
+      expect(tripwire.warnings.slice(warningStart)).toEqual([])
     } finally {
-      await mobilePage.close()
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 1680, height: 1000 })
     }
   }, 90_000)
 

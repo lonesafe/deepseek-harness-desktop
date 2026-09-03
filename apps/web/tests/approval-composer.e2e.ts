@@ -108,7 +108,7 @@ describe('web e2e: approval takeover keeps its actions reachable', () => {
             viewport: window.innerHeight,
           }
         })
-        expect(geometry.buttons).toBe(2)
+        expect(geometry.buttons).toBe(3)
         expect(geometry.scrolls).toBe(true)
         // The panel and composer share one cap; allow sub-pixel layout variance.
         expect(Math.abs(geometry.capped - composerCap)).toBeLessThan(1)

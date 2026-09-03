@@ -46,7 +46,7 @@ Chat 会为每个非空的初始或恢复请求、显式消息序列起点或真
 <a id="scroll-ownership"></a>
 ## 滚动归属
 
-Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点。读者跟随底部时，`ResizeObserver` 追随新的底部，并且无需读取行几何就选中最后一个已加载 Turn；读者离开底部后，高度变化会保持顶部位置，再由阅读线几何选择活跃 Turn。轮次导航预览位于 Markdown 代码块粘性头栏上方，而导航外框始终处于 composer 上方的 transcript 区域内（[已加载 Turn 导航](../../../.agents/notes/implemented/feature/2026-08-25-loaded-turn-chat-navigation.zh.md)）。
+Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点。接近历史起点会自动加载更早的 event page 并保留可见锚点；按钮仍作为显式后备入口。读者跟随底部时，`ResizeObserver` 追随新的底部，并且无需读取行几何就选中最后一个已加载 Turn。只有当待处理滚动交付的位置偏离组件的 observed-top ledger 时，该交付才会阻断跟随；被延后的跟随会在采样后重试，原生锚定朝增长后的已归属底部移动一部分时会完成剩余距离，而不会释放归属。受 guard 保护的绘制前步骤会覆盖尺寸变化回调后才完成的 renderer 布局。读者离开底部后，高度变化会保持顶部位置，再由阅读线几何选择活跃 Turn。轮次导航预览位于 Markdown 代码块粘性头栏上方，而导航外框始终处于 composer 上方的 transcript 区域内（[滚动归属](../../../.agents/notes/implemented/bug-fix/2026-08-06-reader-scroll-attribution-observed-top-ledger.zh.md)，[已加载 Turn 导航](../../../.agents/notes/implemented/feature/2026-08-25-loaded-turn-chat-navigation.zh.md)）。
 
 -----
 
@@ -63,7 +63,7 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点。读者�
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **transcript 只反映已加载的 Session 窗口**——只有 Session Controller 加载前一页 event 后，更早的 transcript node 才会出现。轮次导航比窗口更宽：轨道把已加载的 Turn 与宿主 `turnOutline` 投影合并，每个已开始的 Turn 都有固定间距刻度（相隔 10px；阶梯高于外框时在框内滚动并以渐变淡出标示可滚方向），激活未加载刻度会先把历史分页拉到该 Turn 的 `turn/start` seq 再落到它的行上。没有该投影时（未挂载 `dsh-session-turn-outline` 的装配），轨道回退到仅显示已加载 Turn。
+- **transcript 只反映已加载的 Session 窗口**——只有 Session Controller 加载前一页 event 后，更早的 transcript node 才会出现；该加载可由接近历史起点、后备按钮或轮次导航触发。轮次导航比窗口更宽：轨道把已加载的 Turn 与宿主 `turnOutline` 投影合并，每个已开始的 Turn 都有固定间距刻度（相隔 10px；阶梯高于外框时在框内滚动并以渐变淡出标示可滚方向），激活未加载刻度会先把历史分页拉到该 Turn 的 `turn/start` seq 再落到它的行上。没有该投影时（未挂载 `dsh-session-turn-outline` 的装配），轨道回退到仅显示已加载 Turn。
 - **导航预览按卡片尺寸截断**——提示词一行（50 字符）、回复至多三行（120 字符），已加载与未加载 Turn 一致；未加载 Turn 的回复要等该轮落定后才随大纲到达，进行中的轮次在此之前只预览提示词（或仅轮次号）。
 
 

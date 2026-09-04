@@ -40,7 +40,7 @@ Client Runtime 子集包括 `Runtime.evaluate`、`Runtime.getProperties`、`Runt
 
 JavaScript exception 是携带 `exceptionDetails` 的成功 Runtime response；transport failure 使用独立的 error 联合。Worker deadline 会向 Client 发送 request-scoped cancellation。response 分配的 handle 在 Worker 确认该 response 前保持 provisional，因此 cancellation 和 late response 不会留下无法访问的对象。有限的命令 deadline、对象数、属性数、source 字节数与帧字节数约束保留或返回的状态。
 
-Client Console observer 保持原始页面调用行为，并为每个已启用的 DevTools session 异步发出一份 event。每个 session 把 argument 序列化到自己的 `console` object group，因此断联、Runtime disable 或 `Runtime.discardConsoleEntries` 可以释放一条连接而不使其他连接失效。Context 与 Fiber argument 使用和求值结果相同的语义引用及 DOM 反向映射。
+Client Console observer 保持原始页面调用行为，并为每个已启用的 DevTools session 异步发出一份 event。Client 完成启用后返回精确的 `client-console/enabled` 帧；Worker 收到每个已连接 Client 的确认前，`Runtime.enable` 不会完成。因此，在 enable response 之后发生的 Console 调用不会越过浏览器侧 subscription。之后连接的 Client 会保持 execution-context creation 先于 DOM insertion，并异步完成 activation。每个 session 把 argument 序列化到自己的 `console` object group，因此断联、Runtime disable 或 `Runtime.discardConsoleEntries` 可以释放一条连接而不使其他连接失效。Context 与 Fiber argument 使用和求值结果相同的语义引用及 DOM 反向映射。
 
 Client 从组装后的 web boot graph 发现本包 `lib/client.js` 的 URL。`Debugger.enable` 通过类型化 source operation 读取 metadata，`Debugger.getScriptSource` 重组有界 base64 chunk；source map 保持在公布的 URL 上可用。Client script breakpoint、step 与 call-frame 操作明确不受支持，因为页面 JavaScript 无法暂停自身 realm 后继续处理控制消息。target-wide pause 与 resume 继续控制 Host debugger。
 
@@ -80,7 +80,7 @@ wrapper 把标准化 Request 交给原 fetch，通过独立采集任务读取 re
 - 畸形、超限、旧 generation 与 sequence gap 帧不会破坏其他 source 或 Worker。
 - Console 在 Host context 求值并接收 Host console event。
 - Console 列出 Host 与 Client context；Client 求值、属性、函数调用、Promise await 与释放操作维持 RemoteObject 身份，且不在 realm 或 DevTools 连接之间共享对象。
-- Host 与 Client Console event 使用相同 projector；Client argument 按 DevTools 连接隔离，Cordis argument 可以解析到 Elements node。
+- Host 与 Client Console event 使用相同 projector；Client activation 在 `Runtime.enable` 完成前得到确认，argument 按 DevTools 连接隔离，Cordis argument 可以解析到 Elements node。
 - Sources 接收 Host script 与构建后的 Client bundle；Client source 读取采用分块传输，active debugging 明确失败，而 Host 仍可被断点暂停、求值 call frame 并 resume。
 - Host paused scope 与 call-frame result 使用和 Runtime 求值相同的 connection-local RemoteObject table。
 - Network 回放 `Network.enable` 前的请求，并无遗漏、无重复地推送后续请求。

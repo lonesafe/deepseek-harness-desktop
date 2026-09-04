@@ -46,10 +46,12 @@ describe('highlightToHtml', () => {
     // First touch returns the plain fallback (undefined) and starts the import.
     for (const alias of LAZY_ALIASES) expect(highlightToHtml('x', alias)).toBeUndefined()
     // Once every grammar has registered, the same call highlights.
+    // This coverage case imports and synchronously compiles every optional
+    // grammar; completion is the registration state, not a short timing claim.
     await vi.waitFor(() => {
       for (const alias of LAZY_ALIASES) expect(highlightToHtml('x', alias)).toContain('shiki')
-    }, { timeout: 5_000 })
-  })
+    }, { timeout: 20_000 })
+  }, 30_000)
 })
 
 describe('CodeBlock', () => {

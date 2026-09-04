@@ -82,14 +82,24 @@ export interface RuntimeBackend {
   releaseObjectGroup(group: string): Promise<void>
 }
 
+/** One Console event subscription and its activation state. */
+export interface ConsoleBackendSubscription {
+  /** Resolves after the realm is observing events for this subscription. */
+  readonly ready: Promise<void>
+  /** Stop observation and release subscription-owned resources. */
+  dispose(): void
+}
+
 /** Realm Console event source. */
 export interface ConsoleBackend {
   /**
    * Subscribe to Console and uncaught-exception events.
    * @param listener - Connection-local event consumer.
-   * @returns A disposer for the subscription.
+   * @returns The activation signal and disposer for the subscription.
    */
-  subscribe(listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void): () => void
+  subscribe(
+    listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void,
+  ): ConsoleBackendSubscription
   /** Clear backend-owned Console history when supported. */
   clear(): Promise<void>
 }

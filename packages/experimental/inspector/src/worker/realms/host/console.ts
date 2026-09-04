@@ -36,10 +36,10 @@ export class HostConsoleBackend implements ConsoleBackend {
   /**
    * Subscribe to native Console and exception events.
    * @param listener - Connection-local event consumer.
-   * @returns A disposer removing the consumer.
+   * @returns An already-ready subscription and disposer.
    */
-  subscribe(listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void): () => void {
-    return this.events.subscribe(listener)
+  subscribe(listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void) {
+    return { ready: Promise.resolve(), dispose: this.events.subscribe(listener) }
   }
 
   async clear(): Promise<void> {

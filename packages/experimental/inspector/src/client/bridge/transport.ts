@@ -189,7 +189,16 @@ export class ClientInspectorSource extends InspectorSourceConnection {
             this.console.disable(closed.sessionId)
             this.runtime.closeSession(closed.sessionId)
           },
-          consoleEnabled: (enabled) => { this.console.enable(enabled.sessionId) },
+          consoleEnabled: (enabled) => {
+            this.console.enable(enabled.sessionId)
+            socket.send(JSON.stringify({
+              v: INSPECTOR_PROTOCOL_VERSION,
+              t: 'client-console/enabled',
+              sourceId: this.realmSource.sourceId,
+              generation,
+              sessionId: enabled.sessionId,
+            }))
+          },
           consoleDisabled: (disabled) => { this.console.disable(disabled.sessionId) },
           sources: (request) => {
             void this.executeSourceRequest(socket, generation, request).catch((error: unknown) => {

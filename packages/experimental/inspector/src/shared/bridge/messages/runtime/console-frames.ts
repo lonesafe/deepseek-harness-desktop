@@ -34,6 +34,15 @@ export interface ClientConsoleDisableFrame {
   readonly sessionId: ClientRuntimeSessionId
 }
 
+/** Client acknowledgement that Console observation is active for one session. */
+export interface ClientConsoleEnabledFrame {
+  readonly v: typeof INSPECTOR_PROTOCOL_VERSION
+  readonly t: 'client-console/enabled'
+  readonly sourceId: InspectorSourceId
+  readonly generation: InspectorSourceGeneration
+  readonly sessionId: ClientRuntimeSessionId
+}
+
 /** Client Console event carrying objects retained for one DevTools session. */
 export interface ClientConsoleEventFrame {
   readonly v: typeof INSPECTOR_PROTOCOL_VERSION
@@ -71,6 +80,25 @@ export function parseClientConsoleControlFrame(
   return {
     v: INSPECTOR_PROTOCOL_VERSION,
     t: value.t,
+    sourceId: wireId<'InspectorSourceId'>(value.sourceId, 'sourceId'),
+    generation: wireId<'InspectorSourceGeneration'>(value.generation, 'generation'),
+    sessionId: wireId<'ClientRuntimeSessionId'>(value.sessionId, 'sessionId'),
+  }
+}
+
+/**
+ * Parse a Client acknowledgement for Console activation.
+ * @param value - Untrusted source frame.
+ * @returns A validated Console activation acknowledgement.
+ */
+export function parseClientConsoleEnabledFrame(value: Record<string, unknown>): ClientConsoleEnabledFrame {
+  exactKeys(value, ['v', 't', 'sourceId', 'generation', 'sessionId'], 'Client Console activation acknowledgement')
+  if (value.v !== INSPECTOR_PROTOCOL_VERSION || value.t !== 'client-console/enabled') {
+    throw new Error('inspector protocol: invalid Client Console activation acknowledgement')
+  }
+  return {
+    v: INSPECTOR_PROTOCOL_VERSION,
+    t: 'client-console/enabled',
     sourceId: wireId<'InspectorSourceId'>(value.sourceId, 'sourceId'),
     generation: wireId<'InspectorSourceGeneration'>(value.generation, 'generation'),
     sessionId: wireId<'ClientRuntimeSessionId'>(value.sessionId, 'sessionId'),

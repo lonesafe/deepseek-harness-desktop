@@ -10,7 +10,11 @@ import {
   type SourceToWorkerFrame,
   type WorkerToSourceFrame,
 } from '../../shared/bridge/messages/observation.ts'
-import type { ClientConsoleEventFrame, ClientRuntimeResponseFrame } from '../../shared/bridge/messages/runtime/index.ts'
+import type {
+  ClientConsoleEnabledFrame,
+  ClientConsoleEventFrame,
+  ClientRuntimeResponseFrame,
+} from '../../shared/bridge/messages/runtime/index.ts'
 import type { ClientSourceResponseFrame } from '../../shared/bridge/messages/sources/index.ts'
 
 /** One validated record with its source-local sequence. */
@@ -50,6 +54,11 @@ export type InspectorSourceEvent =
     readonly type: 'client-runtime-response'
     readonly source: InspectorSourceDescriptor
     readonly frame: ClientRuntimeResponseFrame
+  }
+  | {
+    readonly type: 'client-console-enabled'
+    readonly source: InspectorSourceDescriptor
+    readonly frame: ClientConsoleEnabledFrame
   }
   | {
     readonly type: 'client-console-event'
@@ -207,12 +216,14 @@ export class InspectorSourceRegistry {
       this.emit({ type: 'client-runtime-response', source: state.source, frame })
       return
     }
-    if (frame.t === 'client-console/event') {
+    if (frame.t === 'client-console/enabled' || frame.t === 'client-console/event') {
       if (state.source.kind !== 'client'
         || !state.source.capabilities.some(capability => capability.type === 'client-console')) {
         throw new Error('inspector protocol: source did not declare Client Console')
       }
-      this.emit({ type: 'client-console-event', source: state.source, frame })
+      this.emit(frame.t === 'client-console/enabled'
+        ? { type: 'client-console-enabled', source: state.source, frame }
+        : { type: 'client-console-event', source: state.source, frame })
       return
     }
     if (frame.t === 'client-sources/response') {

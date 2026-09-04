@@ -167,6 +167,14 @@ describe('Inspector source protocol', () => {
       sessionId: 'session-1',
     })).toMatchObject({ t: 'client-console/enable', sessionId: 'session-1' })
 
+    expect(parseSourceFrame({
+      v: 0,
+      t: 'client-console/enabled',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+    }, 4)).toMatchObject({ t: 'client-console/enabled', sessionId: 'session-1' })
+
     const frame = parseSourceFrame({
       v: 0,
       t: 'client-console/event',

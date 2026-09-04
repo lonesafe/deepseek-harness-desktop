@@ -198,10 +198,8 @@ export class RuntimeDomainSession {
     this.enabled = true
     try {
       await Promise.all(this.realms.all().map(async (realm) => { await runtimeBackend(realm).enable() }))
-      for (const realm of this.realms.all()) {
-        this.attachConsole(realm)
-        this.announce(realm)
-      }
+      await Promise.all(this.realms.all().map(async (realm) => { await this.attachConsole(realm) }))
+      for (const realm of this.realms.all()) this.announce(realm)
       return {}
     } catch (error) {
       this.enabled = false
@@ -407,13 +405,12 @@ export class RuntimeDomainSession {
   private receiveRealm(event: InspectorRealmSessionEvent): void {
     if (event.type === 'opened') {
       if (this.enabled) {
-        void runtimeBackend(event.session).enable().then(
-          () => {
-            this.attachConsole(event.session)
-            this.announce(event.session)
-          },
-          () => { event.session.close() },
-        )
+        void (async () => {
+          await runtimeBackend(event.session).enable()
+          const ready = this.attachConsole(event.session)
+          this.announce(event.session)
+          await ready
+        })().catch(() => { event.session.close() })
       }
       return
     }
@@ -423,12 +420,14 @@ export class RuntimeDomainSession {
     this.destroy(event.session)
   }
 
-  private attachConsole(realm: InspectorRealmSession): void {
+  private async attachConsole(realm: InspectorRealmSession): Promise<void> {
     if (realm.console.state === 'unsupported' || this.consoleDisposers.has(realm.descriptor.realmId)) return
-    this.consoleDisposers.set(realm.descriptor.realmId, realm.console.backend.subscribe((event) => {
+    const subscription = realm.console.backend.subscribe((event) => {
       if (!this.enabled) return
       this.transport.send(this.objects.consoleEvent(realm, event))
-    }))
+    })
+    this.consoleDisposers.set(realm.descriptor.realmId, () => { subscription.dispose() })
+    await subscription.ready
   }
 
   private announce(realm: InspectorRealmSession): void {

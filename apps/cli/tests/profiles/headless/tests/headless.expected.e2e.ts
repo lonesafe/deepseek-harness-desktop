@@ -6,10 +6,12 @@ import { fileURLToPath } from 'node:url'
 import {
   normalizeSessionLog,
   normalizeSessionSnapshot,
+  normalizeSessionSnapshots,
   normalizeStdout,
   scrubRequestHeaders,
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
+import { prepareSessionEventNotificationsForComparison } from '@deepseek-ai/dsh-llm-replay'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import {
   decompressZstdFrame,
@@ -61,8 +63,37 @@ interface DeepSeekDefaultsServer {
   close(): Promise<void>
 }
 
+interface DeepSeekDefaultsServerOptions {
+  /** SSE comments written before the deterministic response. */
+  readonly keepAlives?: number
+  /** Delay before and between SSE writes. */
+  readonly keepAliveIntervalMs?: number
+}
+
+/** Compare one current Session with an older committed generation in memory. */
+async function expectSessionSnapshot(
+  actual: string,
+  context: NormalizeContext,
+  expectedPath: string,
+): Promise<void> {
+  const [normalizedActual] = normalizeSessionSnapshots([actual], context)
+  const expected = await readFile(expectedPath, 'utf8')
+  const [normalizedExpected] = normalizeSessionSnapshots([expected], context)
+  expect(parseJsonl(normalizedActual ?? '')).toEqual(parseJsonl(normalizedExpected ?? ''))
+}
+
+/** Compare current headless session-event wrappers with a committed v1 stream. */
+async function expectHeadlessStream(normalized: string, expectedPath: string): Promise<void> {
+  const expected = prepareSessionEventNotificationsForComparison(await readFile(expectedPath, 'utf8'))
+  expect(parseJsonl(normalized)).toEqual(parseJsonl(expected))
+}
+
 /** Serve one deterministic DeepSeek-compatible response while retaining its request body. */
-async function deepseekDefaultsServer(): Promise<DeepSeekDefaultsServer> {
+async function deepseekDefaultsServer(
+  options: DeepSeekDefaultsServerOptions = {},
+): Promise<DeepSeekDefaultsServer> {
+  const keepAliveCount = options.keepAlives ?? 3
+  const keepAliveIntervalMs = options.keepAliveIntervalMs ?? 60
   const requests: JsonObject[] = []
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     let body = ''
@@ -71,11 +102,11 @@ async function deepseekDefaultsServer(): Promise<DeepSeekDefaultsServer> {
     request.on('end', () => {
       requests.push(JSON.parse(body) as JsonObject)
       response.writeHead(200, { 'content-type': 'text/event-stream' })
-      let keepAlives = 3
+      let keepAlives = keepAliveCount
       const write = (): void => {
         if (keepAlives-- > 0) {
           response.write(': keep-alive\n\n')
-          setTimeout(write, 60)
+          setTimeout(write, keepAliveIntervalMs)
           return
         }
         response.end([
@@ -85,7 +116,7 @@ async function deepseekDefaultsServer(): Promise<DeepSeekDefaultsServer> {
           '',
         ].join('\n\n'))
       }
-      setTimeout(write, 60)
+      setTimeout(write, keepAliveIntervalMs)
     })
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -218,7 +249,7 @@ describe('headless stream-json snapshots', () => {
         const context = contextFromLogs([actual.content])
         const session = normalizeSessionSnapshot(actual.content, context)
         if (refreshing) await writeFile(headlessSessionExpected, session)
-        await expect(session).toMatchFileSnapshot(headlessSessionExpected)
+        await expectSessionSnapshot(session, context, headlessSessionExpected)
         expect(session).toContain(task)
         expect(session).toContain('CLI tool round trip complete: CLI_TOOL_ROUND_TRIP')
       },
@@ -303,7 +334,7 @@ describe('headless stream-json snapshots', () => {
     expect(result.stderr).toBe('')
     const normalized = normalizeHeadlessStream(result.stdout, runCwd)
     if (refreshing) await writeFile(streamExpected, normalized)
-    expect(normalized).toBe(await readFile(streamExpected, 'utf8'))
+    await expectHeadlessStream(normalized, streamExpected)
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('logs actionable missing-credential guidance through the one-shot app', async () => {
@@ -332,7 +363,7 @@ describe('headless stream-json snapshots', () => {
     expect(result.stderr).toBe('')
     const normalized = normalizeHeadlessStream(result.stdout, runCwd)
     if (refreshing) await writeFile(streamExpected, normalized)
-    expect(normalized).toBe(await readFile(streamExpected, 'utf8'))
+    await expectHeadlessStream(normalized, streamExpected)
     // The durable failure leads with the credential store — the path that
     // keeps the secret out of configuration files — then names the launching
     // environment, and stops there: configuration carries the reference, so
@@ -369,7 +400,7 @@ describe('headless stream-json snapshots', () => {
     expect(result.stderr).toBe('')
     const normalized = normalizeHeadlessStream(result.stdout, runCwd)
     if (refreshing) await writeFile(streamExpected, normalized)
-    expect(normalized).toBe(await readFile(streamExpected, 'utf8'))
+    await expectHeadlessStream(normalized, streamExpected)
     // The durable failure names the reference to correct and the writer that
     // usually owns it, and stays true in a composition that mounts no Models
     // page at all.
@@ -423,7 +454,8 @@ describe('headless stream-json snapshots', () => {
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('keeps provider comments alive and sends DeepSeek defaults through the one-shot app', async () => {
-    const server = await deepseekDefaultsServer()
+    // The response outlives the one-second idle budget while each heartbeat has 20× scheduling margin.
+    const server = await deepseekDefaultsServer({ keepAlives: 24, keepAliveIntervalMs: 50 })
     try {
       const result = await runLoaderSmoke({
         label: 'DeepSeek adapter defaults headless stream-json snapshot',
@@ -718,7 +750,7 @@ describe('headless stream-json snapshots', () => {
     expect(result.stderr).toBe('')
     const normalized = normalizeGoalStream(result.stdout, runCwd)
     if (refreshing) await writeFile(streamExpected, normalized)
-    expect(normalized).toBe(await readFile(streamExpected, 'utf8'))
+    await expectHeadlessStream(normalized, streamExpected)
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('delivers a continuable child result without parent polling', async () => {
@@ -775,7 +807,7 @@ describe('headless stream-json snapshots', () => {
         const context = contextFromLogs([parent.content, child.content])
         const normalizedChild = normalizeSessionSnapshot(child.content, context)
         if (refreshing) await writeFile(childExpected, normalizedChild)
-        await expect(normalizedChild).toMatchFileSnapshot(childExpected)
+        await expectSessionSnapshot(normalizedChild, context, childExpected)
         expect(normalizedChild).toContain('CHILD_RESULT')
         expect(normalizedChild).not.toContain('"name":"report"')
       },
@@ -789,6 +821,6 @@ describe('headless stream-json snapshots', () => {
     })
     const normalized = normalizeHeadlessStream(result.stdout, runCwd)
     if (refreshing) await writeFile(streamExpected, normalized)
-    expect(normalized).toBe(await readFile(streamExpected, 'utf8'))
+    await expectHeadlessStream(normalized, streamExpected)
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 })

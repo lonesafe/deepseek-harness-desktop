@@ -1,7 +1,4 @@
-/**
- * Browser wire client. The plugin selects fixture or HTTP transport, provides
- * the shared API client, and lets API Gateway own the connection loop.
- */
+/** Browser wire client: Remote transport and connection generations. */
 import type { Context } from '@deepseek-ai/cordis'
 import {
   ConnectionController,
@@ -122,9 +119,8 @@ function portalRpcFetch(global: ClientTransportGlobal): RpcFetch | undefined {
 }
 
 /**
- * The ctx.connection service API: the API client plus a one-shot controller
- * starter. API Gateway supplies generation readiness and reset callbacks;
- * Connection stays independent of downstream domain state.
+ * The ctx.connection service API. API Gateway supplies generation readiness
+ * and reset callbacks; Connection stays independent of downstream domain state.
  */
 export interface ConnectionHandle {
   /**
@@ -193,7 +189,7 @@ function watchBrowserNetwork(controller: ConnectionController): () => void {
 }
 
 /**
- * Client plugin body: pick the api by page mode and provide ctx.connection.
+ * Client plugin body: pick physical carriers by page mode and provide ctx.connection.
  * @param ctx - client cordis context.
  */
 export function apply(ctx: Context): void {

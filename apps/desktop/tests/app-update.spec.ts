@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   desktopClientURL, downloadDesktopUpdate, latestDesktopUpdate,
-  type DesktopUpdateAsset,
+  UPDATE_CHECK_INTERVAL_MS, type DesktopUpdateAsset,
 } from '../src/app-update.ts'
 
 const temporaryRoots: string[] = []
@@ -17,6 +17,10 @@ afterEach(async () => {
 })
 
 describe('desktop update metadata', () => {
+  it('uses the required ten-minute automatic check interval', () => {
+    expect(UPDATE_CHECK_INTERVAL_MS).toBe(600_000)
+  })
+
   it('adds desktop facts and the official portal origin to the local product URL', () => {
     const result = new URL(desktopClientURL('http://127.0.0.1:43210/?existing=kept', {
       version: '1.0.0-beta.6',

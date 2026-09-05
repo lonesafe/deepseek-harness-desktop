@@ -7,6 +7,7 @@ import { basename, extname, join } from 'node:path'
 
 export const DESKTOP_UPDATE_ACTION_URL = 'dsh-update://download'
 export const DESKTOP_UPDATE_CANCEL_URL = 'dsh-update://cancel'
+export const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000
 const MAX_UPDATE_SIZE = 3 * 1024 * 1024 * 1024
 
 export interface DesktopClientUpdateOptions {

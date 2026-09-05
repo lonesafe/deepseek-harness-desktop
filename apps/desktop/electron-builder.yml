@@ -4,8 +4,8 @@ electronVersion: 43.4.0
 artifactName: DeepSeek-Harness-${version}-${os}-${arch}.${ext}
 asar: false
 compression: normal
-# The staged closure already carries reviewed Node-API/prebuilt native modules;
-# rebuilding a pnpm deploy tree would mutate or replace that frozen closure.
+# package.mjs explicitly rebuilds and probes fs-ext because electron-builder's
+# dependency walker does not reach it inside pnpm's deployed virtual store.
 npmRebuild: false
 directories:
   buildResources: build

@@ -138,6 +138,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "4.2.0",
     "@types/node": "^22.20.0",
     "@types/ws": "^8.18.1",
     "electron": "43.4.0",

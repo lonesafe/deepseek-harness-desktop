@@ -29,13 +29,15 @@ import { isAppNavigation, isSafeExternalUrl } from './security.ts'
 import { offerStartupAccountAuthorization } from './startup-account-onboarding.ts'
 import {
   DESKTOP_UPDATE_ACTION_URL, DESKTOP_UPDATE_CANCEL_URL, desktopClientURL,
-  downloadDesktopUpdate, latestDesktopUpdate,
+  downloadDesktopUpdate, latestDesktopUpdate, UPDATE_CHECK_INTERVAL_MS,
+  type DesktopClientUpdateOptions, type DesktopUpdateAsset,
 } from './app-update.ts'
 import { APP_NAME, desktopWindowTitle } from './product.ts'
 
 const WINDOW_TITLE = desktopWindowTitle(app.getVersion())
 const DESKTOP_REMOTE_ACTION_URL = 'dsh-remote://manage'
 const DESKTOP_UPDATE_STATE_EVENT = 'dsh-desktop-update-state'
+const DESKTOP_UPDATE_SNAPSHOT_KEY = '__dshDesktopUpdateSnapshot'
 const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html lang="en">
 <head>
@@ -69,6 +71,9 @@ let reconfiguring = false
 let quitting = false
 let startupOnboardingComplete = false
 let updateAbort: AbortController | undefined
+let automaticUpdateAbort: AbortController | undefined
+let automaticUpdateTimer: ReturnType<typeof setInterval> | undefined
+let availableUpdate: DesktopUpdateAsset | undefined
 
 interface DesktopUpdateTransferState {
   status: 'downloading' | 'verifying' | 'cancelling'
@@ -80,6 +85,7 @@ interface DesktopUpdateTransferState {
 
 type DesktopUpdateUIState =
   | { status: 'idle' | 'checking' | 'cancelling' }
+  | { status: 'available'; version: string; fileName: string }
   | DesktopUpdateTransferState
 
 let desktopUpdateState: DesktopUpdateUIState = { status: 'idle' }
@@ -87,10 +93,21 @@ let desktopUpdateState: DesktopUpdateUIState = { status: 'idle' }
 /** Send only bounded, non-secret update progress into the existing product renderer. */
 function dispatchDesktopUpdateState(window: BrowserWindow, state: DesktopUpdateUIState): void {
   if (window.isDestroyed() || window.webContents.isDestroyed()) return
+  const configuration = desktopUpdateRendererConfiguration()
+  if (configuration === undefined) return
   const event = JSON.stringify(DESKTOP_UPDATE_STATE_EVENT)
-  const detail = JSON.stringify(state).replaceAll('<', '\\u003c')
+  const key = JSON.stringify(DESKTOP_UPDATE_SNAPSHOT_KEY)
+  const snapshot = JSON.stringify({
+    configuration: {
+      version: configuration.version,
+      platform: configuration.platform,
+      arch: configuration.arch,
+      portalOrigin: new URL(configuration.portalUrl).origin,
+    },
+    update: state,
+  }).replaceAll('<', '\\u003c')
   void window.webContents.executeJavaScript(
-    `window.dispatchEvent(new CustomEvent(${event}, { detail: ${detail} }))`,
+    `globalThis[${key}] = ${snapshot}; window.dispatchEvent(new CustomEvent(${event}, { detail: globalThis[${key}].update }))`,
     true,
   ).catch(() => {})
 }
@@ -99,6 +116,14 @@ function dispatchDesktopUpdateState(window: BrowserWindow, state: DesktopUpdateU
 function publishDesktopUpdateState(state: DesktopUpdateUIState): void {
   desktopUpdateState = state
   if (mainWindow !== undefined) dispatchDesktopUpdateState(mainWindow, state)
+}
+
+/** Publish the last automatic-check result without exposing installer integrity metadata. */
+function publishAvailableUpdateState(): void {
+  const update = availableUpdate
+  publishDesktopUpdateState(update === undefined
+    ? { status: 'idle' }
+    : { status: 'available', version: update.version, fileName: update.fileName })
 }
 
 /** Abort the active check/download; the download layer removes its incomplete .part file. */
@@ -114,16 +139,57 @@ function cancelDesktopUpdate(): void {
   controller.abort()
 }
 
-/** Local Web URL carrying only the desktop facts needed by the update badge. */
-function productPageURL(localUrl: string): string {
+/** Non-secret desktop facts shared with the local renderer. */
+function desktopUpdateRendererConfiguration(): DesktopClientUpdateOptions | undefined {
   const preference = remoteAccess
-  if (preference === undefined) throw new Error('Desktop remote access preference was not loaded.')
-  return desktopClientURL(localUrl, {
+  if (preference === undefined) return undefined
+  return {
     version: app.getVersion(),
     platform: process.platform,
     arch: process.arch,
     portalUrl: preference.portalUrl,
-  })
+  }
+}
+
+/** Local Web URL carrying only the desktop facts needed by the update badge. */
+function productPageURL(localUrl: string): string {
+  const configuration = desktopUpdateRendererConfiguration()
+  if (configuration === undefined) throw new Error('Desktop remote access preference was not loaded.')
+  return desktopClientURL(localUrl, configuration)
+}
+
+/** Check the portal in Electron so renderer CSP, CORS, and route changes cannot disable updates. */
+async function checkForDesktopUpdate(): Promise<void> {
+  const configuration = desktopUpdateRendererConfiguration()
+  if (configuration === undefined || updateAbort !== undefined || automaticUpdateAbort !== undefined) return
+  const controller = new AbortController()
+  automaticUpdateAbort = controller
+  try {
+    const update = await latestDesktopUpdate(configuration, controller.signal)
+    if (controller.signal.aborted || updateAbort !== undefined) return
+    availableUpdate = update
+    publishAvailableUpdateState()
+  } catch {
+    // Automatic checks are best-effort. Keep the last known update visible during transient outages.
+  } finally {
+    if (automaticUpdateAbort === controller) automaticUpdateAbort = undefined
+  }
+}
+
+/** Check immediately and every ten minutes for the lifetime of the desktop process. */
+function startAutomaticUpdateChecks(): void {
+  if (automaticUpdateTimer !== undefined) clearInterval(automaticUpdateTimer)
+  void checkForDesktopUpdate()
+  automaticUpdateTimer = setInterval(() => { void checkForDesktopUpdate() }, UPDATE_CHECK_INTERVAL_MS)
+  automaticUpdateTimer.unref()
+}
+
+/** Stop pending update discovery without touching a user-initiated installer download. */
+function stopAutomaticUpdateChecks(): void {
+  if (automaticUpdateTimer !== undefined) clearInterval(automaticUpdateTimer)
+  automaticUpdateTimer = undefined
+  automaticUpdateAbort?.abort()
+  automaticUpdateAbort = undefined
 }
 
 /** Open an HTTPS target outside the privileged app window. */
@@ -528,6 +594,7 @@ function updateSizeText(bytes: number): string {
 async function showUpdateDialog(): Promise<void> {
   const preference = remoteAccess
   if (preference === undefined || updateAbort !== undefined) return
+  automaticUpdateAbort?.abort()
   const controller = new AbortController()
   updateAbort = controller
   publishDesktopUpdateState({ status: 'checking' })
@@ -539,6 +606,7 @@ async function showUpdateDialog(): Promise<void> {
       arch: process.arch,
       portalUrl: preference.portalUrl,
     }, controller.signal)
+    availableUpdate = update
     if (update === undefined) {
       publishDesktopUpdateState({ status: 'idle' })
       await showMessageBox({
@@ -548,7 +616,7 @@ async function showUpdateDialog(): Promise<void> {
       })
       return
     }
-    publishDesktopUpdateState({ status: 'idle' })
+    publishAvailableUpdateState()
     const { response } = await showMessageBox({
       type: 'info',
       title: '发现新版本',
@@ -606,7 +674,7 @@ async function showUpdateDialog(): Promise<void> {
   } finally {
     if (updateAbort === controller) {
       updateAbort = undefined
-      publishDesktopUpdateState({ status: 'idle' })
+      publishAvailableUpdateState()
     }
     installApplicationMenu()
   }
@@ -669,6 +737,7 @@ async function start(): Promise<void> {
     const window = createWindow()
     mainWindow = window
     await launchBackend(window)
+    startAutomaticUpdateChecks()
   } catch (error) {
     await failAndQuit(error)
   }
@@ -694,6 +763,7 @@ if (!singleInstance) {
     if (process.platform !== 'darwin') app.quit()
   })
   app.on('before-quit', (event) => {
+    stopAutomaticUpdateChecks()
     const inactive = backend === undefined && remoteTunnel === undefined
       && authorizationAbort === undefined && updateAbort === undefined
     if (quitting || inactive) return

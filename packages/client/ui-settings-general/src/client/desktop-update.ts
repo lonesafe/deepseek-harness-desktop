@@ -1,9 +1,10 @@
-/** Desktop update polling and strict portal response validation. */
-
-export const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000
+/** Desktop update state projected by the trusted Electron main process. */
 
 /** Renderer event carrying desktop-owned update download progress. */
 export const DESKTOP_UPDATE_STATE_EVENT = 'dsh-desktop-update-state'
+
+/** Window snapshot key populated before the React settings surface mounts. */
+export const DESKTOP_UPDATE_SNAPSHOT_KEY = '__dshDesktopUpdateSnapshot'
 
 /** Trusted navigation action used to cancel the active desktop update. */
 export const DESKTOP_UPDATE_CANCEL_URL = 'dsh-update://cancel'
@@ -11,6 +12,7 @@ export const DESKTOP_UPDATE_CANCEL_URL = 'dsh-update://cancel'
 /** Desktop-owned download state delivered without exposing Electron APIs to the renderer. */
 export type DesktopUpdateDownloadState =
   | { status: 'idle' | 'checking' | 'cancelling' }
+  | { status: 'available'; version: string; fileName: string }
   | {
     status: 'downloading' | 'verifying' | 'cancelling'
     version: string
@@ -27,11 +29,10 @@ export interface DesktopUpdateConfiguration {
   portalOrigin: string
 }
 
-/** Validated update metadata returned by the official portal. */
-export interface DesktopUpdate {
-  version: string
-  fileName: string
-  downloadURL: string
+/** Bounded desktop facts and update state retained across renderer mounts. */
+export interface DesktopUpdateSnapshot {
+  configuration: DesktopUpdateConfiguration
+  update: DesktopUpdateDownloadState
 }
 
 function isLoopback(hostname: string): boolean {
@@ -68,6 +69,19 @@ export function desktopUpdateConfiguration(search: string): DesktopUpdateConfigu
   return { version, platform, arch, portalOrigin }
 }
 
+function validConfiguration(value: unknown): DesktopUpdateConfiguration | undefined {
+  const configuration = record(value)
+  if (typeof configuration?.version !== 'string' || typeof configuration.platform !== 'string'
+    || typeof configuration.arch !== 'string' || typeof configuration.portalOrigin !== 'string') return undefined
+  const params = new URLSearchParams({
+    dsh_desktop_version: configuration.version,
+    dsh_desktop_platform: configuration.platform,
+    dsh_desktop_arch: configuration.arch,
+    dsh_update_origin: configuration.portalOrigin,
+  })
+  return desktopUpdateConfiguration(`?${params.toString()}`)
+}
+
 /**
  * Report whether trusted Electron desktop facts are present in this renderer URL.
  *
@@ -90,6 +104,10 @@ function record(value: unknown): Record<string, unknown> | undefined {
 export function desktopUpdateDownloadState(value: unknown): DesktopUpdateDownloadState | undefined {
   const state = record(value)
   if (state?.status === 'idle' || state?.status === 'checking') return { status: state.status }
+  if (state?.status === 'available') {
+    if (typeof state.version !== 'string' || typeof state.fileName !== 'string') return undefined
+    return { status: 'available', version: state.version, fileName: state.fileName }
+  }
   if (state?.status === 'cancelling' && state.version === undefined) return { status: 'cancelling' }
   if (state?.status !== 'downloading' && state?.status !== 'verifying' && state?.status !== 'cancelling') return undefined
   if (typeof state.version !== 'string' || typeof state.fileName !== 'string'
@@ -105,37 +123,11 @@ export function desktopUpdateDownloadState(value: unknown): DesktopUpdateDownloa
   }
 }
 
-/**
- * Query the official portal and accept only a same-origin package download.
- *
- * @param configuration Trusted desktop and portal facts.
- * @param signal Optional cancellation signal for the network request.
- * @returns A validated update when available, otherwise undefined.
- */
-export async function fetchDesktopUpdate(
-  configuration: DesktopUpdateConfiguration,
-  signal?: AbortSignal,
-): Promise<DesktopUpdate | undefined> {
-  const endpoint = new URL('/api/releases/latest', `${configuration.portalOrigin}/`)
-  endpoint.searchParams.set('platform', configuration.platform)
-  endpoint.searchParams.set('arch', configuration.arch)
-  endpoint.searchParams.set('current_version', configuration.version)
-  const response = await fetch(endpoint, {
-    cache: 'no-store',
-    credentials: 'omit',
-    ...(signal === undefined ? {} : { signal }),
-  })
-  if (!response.ok) throw new Error(`update check failed: HTTP ${response.status}`)
-  const body = record(await response.json())
-  if (body?.update_available !== true) return undefined
-  const release = record(body.release)
-  const asset = record(release?.asset)
-  if (typeof release?.version !== 'string' || typeof asset?.file_name !== 'string' || typeof asset.download_url !== 'string') {
-    throw new Error('update check returned an invalid release')
-  }
-  const download = new URL(asset.download_url)
-  if (download.origin !== configuration.portalOrigin || !download.pathname.startsWith('/downloads/')) {
-    throw new Error('update download must use the configured portal')
-  }
-  return { version: release.version, fileName: asset.file_name, downloadURL: download.toString() }
+/** Validate the main-process snapshot stored on the renderer window. */
+export function desktopUpdateSnapshot(value: unknown): DesktopUpdateSnapshot | undefined {
+  const snapshot = record(value)
+  const configuration = validConfiguration(snapshot?.configuration)
+  const update = desktopUpdateDownloadState(snapshot?.update)
+  if (configuration === undefined || update === undefined) return undefined
+  return { configuration, update }
 }

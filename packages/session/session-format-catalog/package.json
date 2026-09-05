@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-format-catalog",
   "description": "Build-static first-party Session format codec and migration catalog",
-  "version": "1.0.0-beta.13",
+  "version": "1.0.0-beta.14",
   "publishConfig": {
     "access": "public"
   },

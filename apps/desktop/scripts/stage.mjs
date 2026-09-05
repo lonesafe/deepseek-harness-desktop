@@ -13,7 +13,6 @@ const deployArgs = [
   'deploy',
   '--prod',
   '--legacy',
-  '--offline',
   stage,
 ]
 const packageManagerScript = process.env.npm_execpath

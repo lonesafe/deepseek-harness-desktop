@@ -1,8 +1,10 @@
 /** Experimental-package publication and dependency constraints. */
 
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   checkDshFamilyVersion,
+  checkWorkspaceManifest,
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
   expectedDshPackageFiles,
@@ -119,5 +121,21 @@ describe('package payload constraints', () => {
       'cordis.patch.yml',
       'lib/types/**/*.d.ts',
     ])
+  })
+})
+
+describe('desktop distribution publication', () => {
+  const desktopManifest = JSON.parse(readFileSync(
+    new URL('../apps/desktop/package.json', import.meta.url), 'utf8',
+  )) as WorkspaceManifest['manifest']
+  it('keeps the fork shell publishable with its explicit runtime files', () => {
+    const workspace = { dir: 'apps/desktop', manifest: desktopManifest }
+    expect(checkWorkspaceManifest(workspace)).toEqual([])
+    expect(checkWorkspaceManifest({
+      ...workspace, manifest: { ...desktopManifest, private: true },
+    })).toContain('apps/desktop/package.json: @deepseek-ai/dsh-desktop: release member must not set "private": true')
+    expect(checkWorkspaceManifest({
+      ...workspace, manifest: { ...desktopManifest, files: ['lib/main.js'] },
+    }).some(error => error.includes('package.json files must be'))).toBe(true)
   })
 })

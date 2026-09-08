@@ -7,7 +7,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatViewSlotProps } from '../contract/slots.ts'
+import type { ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { PendingSteeringBubble, PendingSubmissionBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
@@ -32,6 +32,11 @@ function scrollDelivery(scrollport: HTMLElement, observedTop: number) {
     floor,
     movedByReader: Math.abs(scrollport.scrollTop - Math.min(observedTop, floor)) > 0.5,
   }
+}
+
+/** Browser shrink clamps and recorded writes do not transfer scroll ownership. */
+function readerMovedScroll(top: number, floor: number, observedTop: number): boolean {
+  return Math.abs(top - Math.min(observedTop, floor)) > 0.5
 }
 
 interface PagingAnchor {
@@ -132,11 +137,6 @@ function scrollPosition(list: HTMLElement, scrollport: HTMLElement): ChatScrollP
 function openFailureMessage(error: unknown, fallback: string): string {
   const message = error instanceof Error ? error.message : String(error)
   return message === '' ? fallback : message
-}
-
-/** ProducedFiles opens the session workspace as `.`. */
-function isFolderOpenPath(path: string): boolean {
-  return path === '.'
 }
 
 /**
@@ -251,7 +251,6 @@ export function ChatView({
   const openError = useSession(s => s.openError)
   const hasMore = useSession(s => s.hasMore)
   const loadingOlder = useSession(s => s.loadingOlder)
-  const selectedCallId = useStore(s => s.selection?.callId)
   const compactTranscript = useTranscriptView(mode => mode === 'compact')
   const inspectCall = useCallback((callId: string) => {
     openView('trajectory', callId)
@@ -262,10 +261,10 @@ export function ChatView({
   // gesture; otherwise a cancelled in-flight refusal reopens the dialog.
   const fileOpenRequest = useRef(0)
 
-  const requestOpenFile = useCallback((path: string) => {
+  const requestOpenFile = useCallback((path: string, options?: OpenFileOptions) => {
     const id = ++fileOpenRequest.current
     setFileOpenBusy(true)
-    void openFile(path).then(
+    void (options === undefined ? openFile(path) : openFile(path, options)).then(
       () => {
         if (id !== fileOpenRequest.current) return
         setFileOpenError(null)
@@ -277,7 +276,7 @@ export function ChatView({
           path,
           message: openFailureMessage(
             error,
-            t(isFolderOpenPath(path) ? 'fileOpen.folderUnknown' : 'fileOpen.unknown'),
+            t('fileOpen.unknown'),
           ),
         })
         setFileOpenBusy(false)
@@ -615,8 +614,9 @@ export function ChatView({
     scheduleActiveTurn()
   }
 
-  // Raw scroll events only schedule work. Geometry is sampled at most once
-  // per interval, with scrollend providing the final sample for a short burst.
+  // Non-reader pinned deliveries must settle before layout growth invalidates
+  // their floor. Reader movement stays pending even inside the follow threshold,
+  // so growth cannot erase small gestures before they accumulate off the floor.
   useEffect(() => {
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: effect runs after the list node commits. */
@@ -637,6 +637,13 @@ export function ChatView({
     }
     const onScroll = (): void => {
       scrollSamplePendingRef.current = true
+      if (atBottomRef.current) {
+        const floor = Math.max(0, el.scrollHeight - el.clientHeight)
+        if (!readerMovedScroll(el.scrollTop, floor, observedTopRef.current)) {
+          sample()
+          return
+        }
+      }
       sampleTimer ??= window.setTimeout(sample, SCROLL_SAMPLE_INTERVAL_MS)
     }
     el.addEventListener('scroll', onScroll, { passive: true })
@@ -836,7 +843,6 @@ export function ChatView({
             compactTranscript={compactTranscript}
             useStore={useStore}
             actions={actions}
-            selectedCallId={selectedCallId}
             cwd={cwd}
             openFile={requestOpenFile}
             inspectCall={inspectCall}
@@ -889,7 +895,6 @@ export function ChatView({
       </div>
       {fileOpenError !== null && (
         <FileOpenErrorDialog
-          path={fileOpenError.path}
           message={fileOpenError.message}
           busy={fileOpenBusy}
           onClose={closeFileOpenError}
@@ -903,9 +908,8 @@ export function ChatView({
 
 /** In-page Host open-path refusal: the wire reason plus a retry of the same path. */
 function FileOpenErrorDialog({
-  path, message, busy, onClose, onRetry, t,
+  message, busy, onClose, onRetry, t,
 }: {
-  path: string
   message: string
   busy: boolean
   onClose: () => void
@@ -917,7 +921,7 @@ function FileOpenErrorDialog({
       open
       onClose={onClose}
       closeLabel={t('close')}
-      title={t(isFolderOpenPath(path) ? 'fileOpen.folderTitle' : 'fileOpen.title')}
+      title={t('fileOpen.title')}
       description={message}
       footer={(
         <>

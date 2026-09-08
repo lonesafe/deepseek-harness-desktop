@@ -96,14 +96,14 @@ export class HostConnectionService extends Service implements HostConnectionHand
   /** Apply the configured Host/Origin fence, then browser authentication. */
   requestRejection(request: ConnectionTrustRequest): ConnectionRequestRejection {
     if (!isTrustedApiRequest(request, this.trustedHosts)) return 403
-    return this.browserAuth.isAuthenticated(request) || this.ctx.webServer.isLanAuthenticated(request.headers)
+    return this.browserAuth.isAuthenticated(request) || this.ctx.get('webServer')?.isLanAuthenticated(request.headers) === true
       ? undefined
       : 401
   }
 
   /** Authenticate an index request through the process-token exchange or cookie. */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
-    if (this.ctx.webServer.isLanAuthenticated(request.headers)) return true
+    if (this.ctx.get('webServer')?.isLanAuthenticated(request.headers) === true) return true
     return this.browserAuth.authorizeIndex(request, response)
   }
 

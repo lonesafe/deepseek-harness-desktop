@@ -1,777 +1,397 @@
-/** Electron application shell for the existing DeepSeek Harness Web surface. */
+/** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
-import { hostname } from 'node:os'
-import { app, BrowserWindow, clipboard, dialog, Menu, shell } from 'electron'
-import { LAN_ACCESS_USERNAME } from '@deepseek-ai/dsh-host-webserver'
+import { readFile, writeFile } from 'node:fs/promises'
+import { extname, join, normalize, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
-  harnessHome,
-  startHarnessProcess,
-  type HarnessProcess,
-  type HarnessReady,
-} from './backend.ts'
-import {
-  loadLanAccessPreference,
-  saveLanAccessPreference,
-  type LanAccessPreference,
-} from './lan-access.ts'
-import {
-  loadRemoteAccessPreference,
-  saveRemoteAccessPreference,
-  type RemoteAccessPreference,
-} from './remote-access.ts'
-import { pollDeviceAuthorization, startDeviceAuthorization } from './remote-authorization.ts'
-import {
-  startRemoteTunnel,
-  type RemoteTunnel,
-  type RemoteTunnelState,
-} from './remote-tunnel.ts'
-import { isAppNavigation, isSafeExternalUrl } from './security.ts'
-import { offerStartupAccountAuthorization } from './startup-account-onboarding.ts'
-import {
-  DESKTOP_UPDATE_ACTION_URL, DESKTOP_UPDATE_CANCEL_URL, desktopClientURL,
-  downloadDesktopUpdate, latestDesktopUpdate, UPDATE_CHECK_INTERVAL_MS,
-  type DesktopClientUpdateOptions, type DesktopUpdateAsset,
-} from './app-update.ts'
-import { APP_NAME, desktopWindowTitle } from './product.ts'
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  protocol,
+  type IpcMainInvokeEvent,
+} from 'electron'
+import { resolveDesktopPaths } from './paths.ts'
+import { DesktopProjectManager, type DesktopProjectHooks } from './project-manager.ts'
+import { DesktopHostProcess } from './host-process.ts'
+import { DESKTOP_IPC, type DesktopUpdateState } from './ipc.ts'
+import { formatDesktopMessage, resolveDesktopLocale } from './locale.ts'
+import { claimDesktopSingleInstance } from './single-instance.ts'
+import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 
-const WINDOW_TITLE = desktopWindowTitle(app.getVersion())
-const DESKTOP_REMOTE_ACTION_URL = 'dsh-remote://manage'
-const DESKTOP_UPDATE_STATE_EVENT = 'dsh-desktop-update-state'
-const DESKTOP_UPDATE_SNAPSHOT_KEY = '__dshDesktopUpdateSnapshot'
-const STARTING_PAGE = `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${WINDOW_TITLE}</title>
-  <style>
-    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { align-items: center; background: #111827; color: #f9fafb; display: flex; height: 100vh; justify-content: center; margin: 0; }
-    main { text-align: center; }
-    .mark { animation: pulse 1.4s ease-in-out infinite; background: #fff; border-radius: 50%; height: 44px; margin: 0 auto 24px; width: 44px; }
-    h1 { font-size: 22px; font-weight: 600; margin: 0 0 8px; }
-    p { color: #9ca3af; font-size: 14px; margin: 0; }
-    @keyframes pulse { 50% { opacity: .35; transform: scale(.86); } }
-  </style>
-</head>
-<body><main><div class="mark"></div><h1>${APP_NAME}</h1><p>Starting the local runtime…</p></main></body>
-</html>`)}`
+const SCHEME = 'dsh-app'
+let focusPrimaryWindow = (): void => {}
 
-let mainWindow: BrowserWindow | undefined
-let backend: HarnessProcess | undefined
-let appOrigin: string | undefined
-let harnessReady: HarnessReady | undefined
-let lanAccess: LanAccessPreference | undefined
-let remoteAccess: RemoteAccessPreference | undefined
-let remoteTunnel: RemoteTunnel | undefined
-let remoteTunnelState: RemoteTunnelState = 'stopped'
-let authorizationAbort: AbortController | undefined
-let reconfiguring = false
-let quitting = false
-let startupOnboardingComplete = false
-let updateAbort: AbortController | undefined
-let automaticUpdateAbort: AbortController | undefined
-let automaticUpdateTimer: ReturnType<typeof setInterval> | undefined
-let availableUpdate: DesktopUpdateAsset | undefined
-
-interface DesktopUpdateTransferState {
-  status: 'downloading' | 'verifying' | 'cancelling'
-  version: string
-  fileName: string
-  received: number
-  total: number
+function errorOf(reason: unknown, fallback: string): Error {
+  return reason instanceof Error ? reason : new Error(fallback)
 }
 
-type DesktopUpdateUIState =
-  | { status: 'idle' | 'checking' | 'cancelling' }
-  | { status: 'available'; version: string; fileName: string }
-  | DesktopUpdateTransferState
+protocol.registerSchemesAsPrivileged([{
+  scheme: SCHEME,
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: false,
+    stream: true,
+    codeCache: true,
+  },
+}])
 
-let desktopUpdateState: DesktopUpdateUIState = { status: 'idle' }
-
-/** Send only bounded, non-secret update progress into the existing product renderer. */
-function dispatchDesktopUpdateState(window: BrowserWindow, state: DesktopUpdateUIState): void {
-  if (window.isDestroyed() || window.webContents.isDestroyed()) return
-  const configuration = desktopUpdateRendererConfiguration()
-  if (configuration === undefined) return
-  const event = JSON.stringify(DESKTOP_UPDATE_STATE_EVENT)
-  const key = JSON.stringify(DESKTOP_UPDATE_SNAPSHOT_KEY)
-  const snapshot = JSON.stringify({
-    configuration: {
-      version: configuration.version,
-      platform: configuration.platform,
-      arch: configuration.arch,
-      portalOrigin: new URL(configuration.portalUrl).origin,
-    },
-    update: state,
-  }).replaceAll('<', '\\u003c')
-  void window.webContents.executeJavaScript(
-    `globalThis[${key}] = ${snapshot}; window.dispatchEvent(new CustomEvent(${event}, { detail: globalThis[${key}].update }))`,
-    true,
-  ).catch(() => {})
+const MIME: Readonly<Record<string, string>> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.svg': 'image/svg+xml',
 }
 
-/** Save the current download state and make it visible in the bottom-right progress card. */
-function publishDesktopUpdateState(state: DesktopUpdateUIState): void {
-  desktopUpdateState = state
-  if (mainWindow !== undefined) dispatchDesktopUpdateState(mainWindow, state)
+interface RuntimeResources {
+  readonly node: string
+  readonly pnpm: string
+  readonly seed: string
 }
 
-/** Publish the last automatic-check result without exposing installer integrity metadata. */
-function publishAvailableUpdateState(): void {
-  const update = availableUpdate
-  publishDesktopUpdateState(update === undefined
-    ? { status: 'idle' }
-    : { status: 'available', version: update.version, fileName: update.fileName })
+function runtimeResources(): RuntimeResources {
+  const development = !app.isPackaged
+  const node = (development ? process.env.DSH_DESKTOP_NODE_BINARY : undefined)
+    ?? join(process.resourcesPath, 'runtime', 'node', process.platform === 'win32' ? 'node.exe' : 'node')
+  const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
+    ?? join(process.resourcesPath, 'runtime', 'pnpm', 'bin', 'pnpm.mjs')
+  const seed = (development ? process.env.DSH_DESKTOP_SEED_DIR : undefined) ?? join(process.resourcesPath, 'seed')
+  return { node, pnpm, seed }
 }
 
-/** Abort the active check/download; the download layer removes its incomplete .part file. */
-function cancelDesktopUpdate(): void {
-  const controller = updateAbort
-  if (controller === undefined) return
-  const current = desktopUpdateState
-  if ('version' in current) {
-    publishDesktopUpdateState({ ...current, status: 'cancelling' })
-  } else {
-    publishDesktopUpdateState({ status: 'cancelling' })
+function developmentProject(): string | undefined {
+  const configured = process.env.DSH_DESKTOP_DEV_PROJECT_DIR
+  if (configured === undefined || configured === '') return undefined
+  if (app.isPackaged) throw new Error('dsh desktop: development project override is unavailable in packaged applications')
+  return resolve(configured)
+}
+
+function developmentHostInspectPort(enabled: boolean): number | undefined {
+  const configured = process.env.DSH_DESKTOP_HOST_INSPECT_PORT
+  if (!enabled || configured === undefined || configured === '') return undefined
+  const port = Number(configured)
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+    throw new Error('dsh desktop: DSH_DESKTOP_HOST_INSPECT_PORT must be an integer from 1 through 65535')
   }
-  controller.abort()
+  return port
 }
 
-/** Non-secret desktop facts shared with the local renderer. */
-function desktopUpdateRendererConfiguration(): DesktopClientUpdateOptions | undefined {
-  const preference = remoteAccess
-  if (preference === undefined) return undefined
-  return {
-    version: app.getVersion(),
-    platform: process.platform,
-    arch: process.arch,
-    portalUrl: preference.portalUrl,
-  }
-}
-
-/** Local Web URL carrying only the desktop facts needed by the update badge. */
-function productPageURL(localUrl: string): string {
-  const configuration = desktopUpdateRendererConfiguration()
-  if (configuration === undefined) throw new Error('Desktop remote access preference was not loaded.')
-  return desktopClientURL(localUrl, configuration)
-}
-
-/** Check the portal in Electron so renderer CSP, CORS, and route changes cannot disable updates. */
-async function checkForDesktopUpdate(): Promise<void> {
-  const configuration = desktopUpdateRendererConfiguration()
-  if (configuration === undefined || updateAbort !== undefined || automaticUpdateAbort !== undefined) return
-  const controller = new AbortController()
-  automaticUpdateAbort = controller
-  try {
-    const update = await latestDesktopUpdate(configuration, controller.signal)
-    if (controller.signal.aborted || updateAbort !== undefined) return
-    availableUpdate = update
-    publishAvailableUpdateState()
-  } catch {
-    // Automatic checks are best-effort. Keep the last known update visible during transient outages.
-  } finally {
-    if (automaticUpdateAbort === controller) automaticUpdateAbort = undefined
-  }
-}
-
-/** Check immediately and every ten minutes for the lifetime of the desktop process. */
-function startAutomaticUpdateChecks(): void {
-  if (automaticUpdateTimer !== undefined) clearInterval(automaticUpdateTimer)
-  void checkForDesktopUpdate()
-  automaticUpdateTimer = setInterval(() => { void checkForDesktopUpdate() }, UPDATE_CHECK_INTERVAL_MS)
-  automaticUpdateTimer.unref()
-}
-
-/** Stop pending update discovery without touching a user-initiated installer download. */
-function stopAutomaticUpdateChecks(): void {
-  if (automaticUpdateTimer !== undefined) clearInterval(automaticUpdateTimer)
-  automaticUpdateTimer = undefined
-  automaticUpdateAbort?.abort()
-  automaticUpdateAbort = undefined
-}
-
-/** Open an HTTPS target outside the privileged app window. */
-function openExternal(target: string): void {
-  if (target === DESKTOP_UPDATE_ACTION_URL) {
-    void showUpdateDialog()
-    return
-  }
-  if (target === DESKTOP_UPDATE_CANCEL_URL) {
-    cancelDesktopUpdate()
-    return
-  }
-  if (target === DESKTOP_REMOTE_ACTION_URL) {
-    void showRemoteAccessDialog()
-    return
-  }
-  if (!isSafeExternalUrl(target)) return
-  void shell.openExternal(target)
-}
-
-/** Apply navigation, popup, permission, and renderer-process restrictions. */
-function secureWindow(window: BrowserWindow): void {
-  const guardNavigation = (event: Electron.Event, target: string): void => {
-    if (isAppNavigation(target, appOrigin)) return
-    event.preventDefault()
-    openExternal(target)
-  }
-  window.webContents.on('will-navigate', guardNavigation)
-  window.webContents.on('will-redirect', guardNavigation)
-  window.webContents.on('will-attach-webview', (event) => { event.preventDefault() })
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    openExternal(url)
-    return { action: 'deny' }
-  })
-  window.webContents.session.setPermissionCheckHandler(() => false)
-  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => {
-    callback(false)
-  })
-}
-
-/** Create the one product window, initially showing local startup state. */
-function createWindow(): BrowserWindow {
+function createWindow(preload: string): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1440,
-    height: 920,
-    minWidth: 960,
-    minHeight: 640,
+    width: 1280,
+    height: 840,
+    minWidth: 880,
+    minHeight: 600,
     show: false,
-    backgroundColor: '#111827',
-    title: WINDOW_TITLE,
     webPreferences: {
-      contextIsolation: true,
+      preload,
       nodeIntegration: false,
+      contextIsolation: true,
       sandbox: true,
       webSecurity: true,
-      allowRunningInsecureContent: false,
-      webviewTag: false,
-      navigateOnDragDrop: false,
-      backgroundThrottling: false,
-      devTools: !app.isPackaged,
     },
   })
-  window.on('page-title-updated', (event) => {
-    event.preventDefault()
-    window.setTitle(WINDOW_TITLE)
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  window.webContents.on('will-navigate', (event, url) => {
+    if (new URL(url).protocol !== `${SCHEME}:`) event.preventDefault()
   })
-  secureWindow(window)
-  window.webContents.on('did-finish-load', () => {
-    dispatchDesktopUpdateState(window, desktopUpdateState)
-  })
-  window.once('ready-to-show', () => { window.show() })
-  window.on('closed', () => {
-    if (mainWindow === window) mainWindow = undefined
-  })
-  void window.loadURL(harnessReady === undefined ? STARTING_PAGE : productPageURL(harnessReady.localUrl))
   return window
 }
 
-/** Show a bounded startup/runtime failure and end the desktop process. */
-async function failAndQuit(error: unknown): Promise<void> {
-  const message = error instanceof Error ? error.message : String(error)
-  const diagnostics = backend?.diagnostics()
-  await dialog.showMessageBox({
-    type: 'error',
-    title: `${APP_NAME} could not start`,
-    message,
-    detail: diagnostics === undefined || diagnostics === '' ? undefined : diagnostics,
-  })
-  app.quit()
+function assertDesktopSender(event: IpcMainInvokeEvent, hostnames: readonly string[]): void {
+  const senderFrame = event.senderFrame
+  if (senderFrame === null) throw new Error('dsh desktop: rejected IPC without a sender frame')
+  const url = new URL(senderFrame.url)
+  if (url.protocol !== `${SCHEME}:` || !hostnames.includes(url.hostname)) {
+    throw new Error('dsh desktop: rejected IPC from an unowned renderer')
+  }
 }
 
-/** Start one managed backend generation and load it into the product window. */
-async function launchBackend(window: BrowserWindow): Promise<void> {
-  const preference = lanAccess
-  if (preference === undefined) throw new Error('Desktop LAN access preference was not loaded.')
-  backend = startHarnessProcess({
-    executable: process.execPath,
-    cwd: app.getPath('home'),
-    home: harnessHome(app.getPath('userData')),
-    lanAccess: preference,
-    onUnexpectedExit: (message) => {
-      if (quitting) return
-      void failAndQuit(new Error(message))
-    },
-  })
-  harnessReady = await backend.ready
-  appOrigin = new URL(harnessReady.localUrl).origin
-  if (!window.isDestroyed()) await window.loadURL(productPageURL(harnessReady.localUrl))
-  startRemoteAccessTunnel()
-}
-
-/** Stop the current backend generation and clear addresses derived from it. */
-async function stopBackend(): Promise<void> {
-  await stopRemoteAccessTunnel()
-  const current = backend
-  backend = undefined
-  harnessReady = undefined
-  appOrigin = undefined
-  await current?.stop()
-}
-
-/** Start the reconnecting outbound tunnel when the user has explicitly enabled it. */
-function startRemoteAccessTunnel(): void {
-  const preference = remoteAccess
-  const localUrl = harnessReady?.localUrl
-  if (preference?.enabled !== true || preference.authorization === undefined || localUrl === undefined) return
-  if (remoteTunnel !== undefined) return
-  remoteTunnel = startRemoteTunnel({
-    localUrl,
-    authorization: preference.authorization,
-    onStateChange: (state) => {
-      remoteTunnelState = state
-      if (state === 'stopped') remoteTunnel = undefined
-      if (!quitting) installApplicationMenu()
-    },
-  })
-}
-
-/** Stop the current outbound tunnel and await all local proxy work. */
-async function stopRemoteAccessTunnel(): Promise<void> {
-  const current = remoteTunnel
-  remoteTunnel = undefined
-  remoteTunnelState = 'stopped'
-  await current?.stop()
-}
-
-/** Show one desktop-owned message box, parented when the product window exists. */
-function showMessageBox(options: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
-  if (mainWindow === undefined || mainWindow.isDestroyed()) return dialog.showMessageBox(options)
-  return dialog.showMessageBox(mainWindow, options)
-}
-
-/** Text copied for a LAN browser operator. */
-function lanConnectionText(): string {
-  const preference = lanAccess
-  if (preference === undefined) throw new Error('Desktop LAN access preference was not loaded.')
-  const address = harnessReady?.lanUrl ?? '未检测到可用的局域网 IPv4 地址'
-  return [
-    `访问地址：${address}`,
-    `用户名：${LAN_ACCESS_USERNAME}`,
-    `访问密钥：${preference.accessToken}`,
-  ].join('\n')
-}
-
-/** Replace the managed server, rolling back the preference if the new bind fails. */
-async function applyLanAccess(next: LanAccessPreference): Promise<boolean> {
-  const previous = lanAccess
-  const window = mainWindow
-  if (previous === undefined || window === undefined || window.isDestroyed() || reconfiguring) return false
-  reconfiguring = true
-  installApplicationMenu()
+async function serveShellAsset(request: Request): Promise<Response> {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405 })
+  const root = resolve(app.getAppPath(), 'renderer')
+  const url = new URL(request.url)
+  let pathname: string
   try {
-    saveLanAccessPreference(app.getPath('userData'), next)
-    lanAccess = next
-    await window.loadURL(STARTING_PAGE)
-    await stopBackend()
-    await launchBackend(window)
-    return true
-  } catch (error) {
-    const failedDiagnostics = backend?.diagnostics()
-    await stopBackend()
-    saveLanAccessPreference(app.getPath('userData'), previous)
-    lanAccess = previous
-    try {
-      await launchBackend(window)
-    } catch (recoveryError) {
-      await failAndQuit(new AggregateError([error, recoveryError], 'LAN access change failed and the local server could not be restored.'))
-      return false
-    }
-    const message = error instanceof Error ? error.message : String(error)
-    await showMessageBox({
-      type: 'error',
-      title: '局域网访问设置失败',
-      message: '未能应用局域网访问设置，已恢复原设置。',
-      detail: failedDiagnostics === undefined || failedDiagnostics === ''
-        ? message
-        : `${message}\n\n${failedDiagnostics}`,
-    })
-    return false
-  } finally {
-    reconfiguring = false
-    installApplicationMenu()
-  }
-}
-
-/** Enable, inspect, copy, or disable authenticated LAN access. */
-async function showLanAccessDialog(): Promise<void> {
-  const preference = lanAccess
-  if (preference === undefined || reconfiguring) return
-  if (!preference.enabled) {
-    const { response } = await showMessageBox({
-      type: 'warning',
-      title: '启用局域网访问',
-      message: '允许同一局域网中的浏览器访问 DeepSeek Harness？',
-      detail: '启用后程序会监听所有网络接口。局域网设备仍需输入独立访问密钥；连接使用普通 HTTP，请只在可信网络中使用。',
-      buttons: ['启用并重启服务', '取消'],
-      defaultId: 0,
-      cancelId: 1,
-    })
-    if (response !== 0) return
-    if (await applyLanAccess({ ...preference, enabled: true })) await showLanAccessDialog()
-    return
-  }
-
-  const { response } = await showMessageBox({
-    type: 'info',
-    title: '局域网访问',
-    message: '局域网访问已启用',
-    detail: `${lanConnectionText()}\n\n在浏览器登录页中输入上面的用户名和访问密钥。`,
-    buttons: ['复制连接信息', '停用并重启服务', '关闭'],
-    defaultId: 0,
-    cancelId: 2,
-  })
-  if (response === 0) {
-    clipboard.writeText(lanConnectionText())
-    return
-  }
-  if (response === 1) await applyLanAccess({ ...preference, enabled: false })
-}
-
-/** Build one safe official-portal page URL. */
-function portalPage(pathname: string): string {
-  const preference = remoteAccess
-  if (preference === undefined) throw new Error('Desktop remote access preference was not loaded.')
-  return new URL(pathname, `${preference.portalUrl}/`).toString()
-}
-
-/** Open the system browser only after the shared HTTPS policy accepts the portal page. */
-async function openPortalPage(pathname: string): Promise<void> {
-  const target = portalPage(pathname)
-  if (!isAllowedPortalTarget(target)) throw new Error('The configured portal is not a safe URL.')
-  await shell.openExternal(target)
-}
-
-/** Accept HTTPS, plus exact-origin loopback HTTP already validated for development. */
-function isAllowedPortalTarget(target: string): boolean {
-  if (isSafeExternalUrl(target)) return true
-  const preference = remoteAccess
-  if (preference === undefined) return false
-  try {
-    const portal = new URL(preference.portalUrl)
-    const candidate = new URL(target)
-    return portal.protocol === 'http:' && candidate.origin === portal.origin
-      && candidate.username === '' && candidate.password === ''
+    pathname = decodeURIComponent(url.pathname)
   } catch {
-    return false
+    return new Response(null, { status: 400 })
   }
-}
-
-/** Save a remote preference and synchronize the outbound tunnel without restarting Harness. */
-async function applyRemoteAccess(next: RemoteAccessPreference): Promise<void> {
-  saveRemoteAccessPreference(app.getPath('userData'), next)
-  remoteAccess = next
-  await stopRemoteAccessTunnel()
-  startRemoteAccessTunnel()
-  installApplicationMenu()
-}
-
-/** Complete portal login in the system browser and persist the returned device credential. */
-async function authorizeRemoteDevice(): Promise<void> {
-  const preference = remoteAccess
-  if (preference === undefined || authorizationAbort !== undefined) return
-  const controller = new AbortController()
-  authorizationAbort = controller
-  installApplicationMenu()
+  const target = resolve(normalize(join(root, pathname)))
+  if (target !== root && !target.startsWith(root + sep)) return new Response(null, { status: 403 })
   try {
-    const pending = await startDeviceAuthorization(preference.portalUrl, {
-      name: hostname(),
-      platform: process.platform,
-      appVersion: app.getVersion(),
-    }, controller.signal)
-    if (!isAllowedPortalTarget(pending.verificationUrl)) {
-      throw new Error('The portal returned an unsafe authorization URL.')
-    }
-    await shell.openExternal(pending.verificationUrl)
-    const authorization = await pollDeviceAuthorization(preference.portalUrl, pending, controller.signal)
-    const next: RemoteAccessPreference = { ...preference, authorization }
-    await applyRemoteAccess(next)
-    const { response } = await showMessageBox({
-      type: 'info',
-      title: '设备授权成功',
-      message: `已登录账号：${authorization.accountName}`,
-      detail: `设备授权码 ${pending.userCode} 已确认。登录后，你可以在手机或其他设备上通过设备中心远程使用这台电脑。远程控制仍然关闭，只有明确开启后服务器才能连接。`,
-      buttons: ['开启远程控制', '稍后'],
-      defaultId: 0,
-      cancelId: 1,
-    })
-    if (response === 0) await applyRemoteAccess({ ...next, enabled: true })
-  } catch (error) {
-    if (!controller.signal.aborted) {
-      await showMessageBox({
-        type: 'error',
-        title: '远程访问授权失败',
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
-  } finally {
-    if (authorizationAbort === controller) authorizationAbort = undefined
-    installApplicationMenu()
+    const body = request.method === 'HEAD' ? null : await readFile(target)
+    return new Response(body, { headers: { 'content-type': MIME[extname(target)] ?? 'application/octet-stream' } })
+  } catch {
+    return new Response(null, { status: 404 })
   }
 }
 
-/** Explain account benefits and offer browser login without blocking local-only use. */
-async function showStartupLoginOffer(): Promise<void> {
-  await offerStartupAccountAuthorization({
-    hasAuthorization: () => remoteAccess?.authorization !== undefined,
-    prompt: async () => {
-      const { response } = await showMessageBox({
-        type: 'info',
-        title: '登录 DeepSeek Harness Desktop',
-        message: '登录后，可以从其他设备远程使用这台电脑',
-        detail: '登录和注册将在系统浏览器中完成，桌面客户端不会读取或保存你的密码。你也可以暂不登录，继续在本机使用；开启远程控制时必须先完成登录和设备授权。',
-        buttons: ['登录或注册', '暂不登录，继续使用'],
-        defaultId: 0,
-        cancelId: 1,
-        noLink: true,
-      })
-      return response === 0 ? 'authorize' : 'skip'
+async function main(): Promise<void> {
+  const resources = runtimeResources()
+  const paths = resolveDesktopPaths()
+  const development = developmentProject()
+  const activeProject = development ?? paths.profile
+  const hostInspectPort = developmentHostInspectPort(development !== undefined)
+  const manager = new DesktopProjectManager(paths, resources)
+  if (development === undefined) manager.recover()
+  let host: DesktopHostProcess | undefined
+  let mainWindow: BrowserWindow | undefined
+  let pluginWindow: BrowserWindow | undefined
+  let shellInstallerOwnsQuit = false
+  let updateState: DesktopUpdateState = { phase: 'idle' }
+  const locale = resolveDesktopLocale(app.getLocale())
+  const messages = locale.messages
+  const appPreload = fileURLToPath(new URL('./preload-app.cjs', import.meta.url))
+  const managementPreload = fileURLToPath(new URL('./preload.cjs', import.meta.url))
+
+  const publishUpdate = (state: DesktopUpdateState): DesktopUpdateState => {
+    updateState = state
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(DESKTOP_IPC.updatesState, state)
+    }
+    return state
+  }
+
+  const startHost = async (projectDir = activeProject): Promise<DesktopHostProcess> => {
+    const next = new DesktopHostProcess(resources.node, projectDir, hostInspectPort)
+    await next.start()
+    return next
+  }
+  const hooks: DesktopProjectHooks = {
+    healthCheck: async (projectDir) => {
+      const active = host
+      host = undefined
+      await active?.stop()
+      let healthFailure: unknown
+      let probe: DesktopHostProcess | undefined
+      try {
+        probe = await startHost(projectDir)
+        await probe.stop()
+      } catch (error) {
+        healthFailure = error
+        await probe?.stop().catch(() => undefined)
+      }
+      let restartFailure: unknown
+      if (active !== undefined) {
+        try {
+          host = await startHost()
+        } catch (error) {
+          restartFailure = error
+        }
+      }
+      if (healthFailure !== undefined && restartFailure !== undefined) {
+        throw new AggregateError([
+          errorOf(healthFailure, 'desktop project: staged health check failed'),
+          errorOf(restartFailure, 'desktop project: active backend restart failed'),
+        ], 'desktop project: staged health check and active backend restart failed')
+      }
+      if (healthFailure !== undefined) throw errorOf(healthFailure, 'desktop project: staged health check failed')
+      if (restartFailure !== undefined) throw errorOf(restartFailure, 'desktop project: active backend restart failed')
     },
-    authorize: authorizeRemoteDevice,
-  })
-}
-
-/** Human-readable outbound tunnel state for the remote settings dialog. */
-function remoteStateText(): string {
-  if (remoteAccess?.enabled !== true) return '已关闭'
-  switch (remoteTunnelState) {
-    case 'connecting': return '正在连接中转服务器'
-    case 'online': return '在线，可从设备中心连接'
-    case 'offline': return '连接中断，正在自动重试'
-    case 'stopped': return '等待本地服务启动'
+    beforeActivate: async () => {
+      const active = host
+      host = undefined
+      await active?.stop()
+    },
+    afterActivate: async () => {
+      host = await startHost()
+    },
   }
-}
 
-/** Authorize, enable, inspect, or disable account-based remote control. */
-async function showRemoteAccessDialog(): Promise<void> {
-  const preference = remoteAccess
-  if (preference === undefined || authorizationAbort !== undefined) return
-  if (preference.authorization === undefined) {
-    const { response } = await showMessageBox({
-      type: 'info',
-      title: '远程访问',
-      message: '登录官网并授权这台电脑',
-      detail: '登录将在系统浏览器中完成，DeepSeek Harness Desktop 不会读取或保存你的官网密码。授权完成后，远程控制仍需单独开启。',
-      buttons: ['登录并授权', '打开官网', '取消'],
-      defaultId: 0,
-      cancelId: 2,
+  if (development === undefined) {
+    await manager.applyRelease(resources.seed, app.getVersion(), {
+      ...hooks,
+      beforeActivate: async () => {},
+      afterActivate: async () => {},
     })
-    if (response === 0) await authorizeRemoteDevice()
-    if (response === 1) await openPortalPage('/')
-    return
   }
+  host = await startHost()
 
-  const enabled = preference.enabled
-  const { response } = await showMessageBox({
-    type: enabled ? 'info' : 'warning',
-    title: '远程访问',
-    message: enabled ? '远程控制已开启' : '远程控制已关闭',
-    detail: [
-      `登录账号：${preference.authorization.accountName}`,
-      `连接状态：${remoteStateText()}`,
-      '',
-      enabled
-        ? '电脑正在主动连接中转服务器。只有该账号登录后的浏览器可以申请一次性连接。'
-        : '服务器当前不能通过这台电脑访问 DeepSeek Harness。',
-    ].join('\n'),
-    buttons: [enabled ? '关闭远程控制' : '开启远程控制', '打开设备中心', '重新登录授权', '取消'],
-    defaultId: 0,
-    cancelId: 3,
+  const updates = new DesktopUpdateCoordinator(
+    publishUpdate,
+    async () => {
+      shellInstallerOwnsQuit = true
+      const active = host
+      host = undefined
+      await active?.stop()
+    },
+  )
+
+  protocol.handle(SCHEME, (request) => {
+    const url = new URL(request.url)
+    if (url.hostname === 'shell') return serveShellAsset(request)
+    if (url.hostname !== 'app') return Promise.resolve(new Response(null, { status: 404 }))
+    const active = host
+    if (active === undefined) return Promise.resolve(new Response('backend unavailable', { status: 503 }))
+    return active.fetch(request)
   })
-  if (response === 0) await applyRemoteAccess({ ...preference, enabled: !enabled })
-  if (response === 1) await openPortalPage('/devices')
-  if (response === 2) await authorizeRemoteDevice()
-}
 
-/** Human-readable installer size used by the desktop confirmation dialog. */
-function updateSizeText(bytes: number): string {
-  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`
-}
-
-/** Recheck, download, verify, and open the latest installer from the official portal. */
-async function showUpdateDialog(): Promise<void> {
-  const preference = remoteAccess
-  if (preference === undefined || updateAbort !== undefined) return
-  automaticUpdateAbort?.abort()
-  const controller = new AbortController()
-  updateAbort = controller
-  publishDesktopUpdateState({ status: 'checking' })
-  installApplicationMenu()
-  try {
-    const update = await latestDesktopUpdate({
-      version: app.getVersion(),
-      platform: process.platform,
-      arch: process.arch,
-      portalUrl: preference.portalUrl,
-    }, controller.signal)
-    availableUpdate = update
-    if (update === undefined) {
-      publishDesktopUpdateState({ status: 'idle' })
-      await showMessageBox({
-        type: 'info',
-        title: '检查更新',
-        message: `当前已是最新版本（${app.getVersion()}）`,
-      })
-      return
+  const mutate = async (event: IpcMainInvokeEvent, mutation: Parameters<DesktopProjectManager['mutate']>[0]): Promise<void> => {
+    assertDesktopSender(event, ['shell'])
+    if (development !== undefined) {
+      throw new Error('dsh desktop: plugin package changes require a packaged application')
     }
-    publishAvailableUpdateState()
-    const { response } = await showMessageBox({
-      type: 'info',
-      title: '发现新版本',
-      message: `DeepSeek Harness ${update.version} 可以下载`,
-      detail: `${update.fileName}\n${updateSizeText(update.size)}\n\n安装包将从 ${new URL(preference.portalUrl).host} 下载，并在打开前校验 SHA-256。`,
-      buttons: ['下载并打开安装包', '取消'],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true,
-    })
-    if (response !== 0) return
-    mainWindow?.setProgressBar(0)
-    publishDesktopUpdateState({
-      status: 'downloading',
-      version: update.version,
-      fileName: update.fileName,
-      received: 0,
-      total: update.size,
-    })
-    let lastProgressUpdate = 0
-    const installerPath = await downloadDesktopUpdate(update, {
-      temporary: app.getPath('temp'),
-      downloads: app.getPath('downloads'),
-    }, (received, total) => {
-      mainWindow?.setProgressBar(Math.max(0, Math.min(1, received / total)))
-      const now = Date.now()
-      const complete = received >= total
-      if (complete || now - lastProgressUpdate >= 100) {
-        lastProgressUpdate = now
-        publishDesktopUpdateState({
-          status: complete ? 'verifying' : 'downloading',
-          version: update.version,
-          fileName: update.fileName,
-          received,
-          total,
+    await manager.mutate(mutation, hooks)
+    if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.webContents.reload()
+  }
+  ipcMain.handle(DESKTOP_IPC.localeGet, (event) => {
+    assertDesktopSender(event, ['shell'])
+    return locale
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsList, (event) => {
+    assertDesktopSender(event, ['shell'])
+    if (development !== undefined) return []
+    return manager.listPlugins()
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsAdd, (event, spec: unknown) => {
+    if (typeof spec !== 'string') throw new Error('dsh desktop: plugin spec must be a string')
+    return mutate(event, { type: 'plugin-add', spec })
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsRemove, (event, name: unknown) => {
+    if (typeof name !== 'string') throw new Error('dsh desktop: plugin name must be a string')
+    return mutate(event, { type: 'plugin-remove', name })
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsUpdate, (event, name: unknown, version: unknown) => {
+    if (typeof name !== 'string' || typeof version !== 'string') {
+      throw new Error('dsh desktop: plugin name and version must be strings')
+    }
+    return mutate(event, { type: 'plugin-update', name, version })
+  })
+  ipcMain.handle(DESKTOP_IPC.updatesCheck, async (event) => {
+    assertDesktopSender(event, ['shell'])
+    return updates.check()
+  })
+  ipcMain.handle(DESKTOP_IPC.updatesInstall, async (event) => {
+    assertDesktopSender(event, ['shell'])
+    await updates.install()
+  })
+
+  const checkAndPrompt = async (manual: boolean): Promise<void> => {
+    const state = await updates.check()
+    if (state.phase === 'error') {
+      if (manual) {
+        await dialog.showMessageBox({
+          type: 'error',
+          title: messages.updateCheckFailedTitle,
+          message: state.message ?? messages.unknownError,
         })
       }
-    }, controller.signal)
-    mainWindow?.setProgressBar(-1)
-    controller.signal.throwIfAborted()
-    const openError = await shell.openPath(installerPath)
-    if (openError !== '') {
-      throw new Error(`安装包已保存到 ${installerPath}，但系统无法打开：${openError}`)
+      return
     }
-  } catch (error) {
-    mainWindow?.setProgressBar(-1)
-    if (!controller.signal.aborted) {
-      await showMessageBox({
+    if (state.phase !== 'available') {
+      if (manual) {
+        await dialog.showMessageBox({
+          type: 'info',
+          title: messages.updateCheckTitle,
+          message: state.message ?? messages.updateCurrent,
+        })
+      }
+      return
+    }
+    const result = await dialog.showMessageBox({
+      type: 'info',
+      title: messages.updateTitle,
+      message: messages.updateAvailable,
+      detail: formatDesktopMessage(messages.updateDetail, { version: state.version ?? '' }),
+      buttons: [messages.installAndRestart, messages.later],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (result.response !== 0) return
+    const installed = await updates.install()
+    if (installed.phase === 'error') {
+      await dialog.showMessageBox({
         type: 'error',
-        title: '更新失败',
-        message: error instanceof Error ? error.message : String(error),
-        detail: '未校验通过的安装包不会被打开。你也可以前往官网的“客户端下载”页面手动下载。',
+        title: messages.updateFailedTitle,
+        message: installed.message ?? messages.unknownError,
       })
     }
-  } finally {
-    if (updateAbort === controller) {
-      updateAbort = undefined
-      publishAvailableUpdateState()
+  }
+
+  const openPluginWindow = (): void => {
+    if (pluginWindow !== undefined && !pluginWindow.isDestroyed()) {
+      pluginWindow.focus()
+      return
     }
-    installApplicationMenu()
+    pluginWindow = createWindow(managementPreload)
+    pluginWindow.setSize(900, 620)
+    pluginWindow.setTitle(messages.pluginWindowTitle)
+    pluginWindow.once('ready-to-show', () => { pluginWindow?.show() })
+    pluginWindow.once('closed', () => { pluginWindow = undefined })
+    void pluginWindow.loadURL(`${SCHEME}://shell/plugin-manager.html`)
   }
-}
 
-/** Install the cross-platform application menu containing network access controls. */
-function installApplicationMenu(): void {
-  const lanItem: Electron.MenuItemConstructorOptions = {
-    label: '局域网访问…',
-    enabled: lanAccess !== undefined && !reconfiguring,
-    click: () => { void showLanAccessDialog() },
-  }
-  const remoteItem: Electron.MenuItemConstructorOptions = {
-    label: authorizationAbort === undefined ? '远程访问…' : '远程访问（等待网页授权）…',
-    enabled: remoteAccess !== undefined && authorizationAbort === undefined && !reconfiguring,
-    click: () => { void showRemoteAccessDialog() },
-  }
-  const updateItem: Electron.MenuItemConstructorOptions = {
-    label: updateAbort === undefined ? '检查更新…' : '正在检查或下载更新…',
-    enabled: remoteAccess !== undefined && updateAbort === undefined && !reconfiguring,
-    click: () => { void showUpdateDialog() },
-  }
-  const template: Electron.MenuItemConstructorOptions[] = process.platform === 'darwin'
-    ? [
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{
+    label: process.platform === 'darwin' ? app.name : messages.application,
+    submenu: [
       {
-        label: APP_NAME,
-        submenu: [
-          { role: 'about' },
-          { type: 'separator' },
-          lanItem,
-          remoteItem,
-          updateItem,
-          { type: 'separator' },
-          { role: 'quit' },
-        ],
+        label: development === undefined ? messages.pluginsMenu : messages.pluginsMenuPackagedOnly,
+        accelerator: 'CmdOrCtrl+,',
+        enabled: development === undefined,
+        click: openPluginWindow,
       },
-      { role: 'editMenu' },
-      { role: 'viewMenu' },
-      { role: 'windowMenu' },
-    ]
-    : [
-      {
-        label: '应用',
-        submenu: [lanItem, remoteItem, updateItem, { type: 'separator' }, { role: 'quit' }],
-      },
-      { role: 'editMenu' },
-      { role: 'viewMenu' },
-    ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
-}
+      { label: messages.checkUpdatesMenu, click: () => { void checkAndPrompt(true) } },
+      { type: 'separator' },
+      { role: 'quit' },
+    ],
+  }]))
 
-/** Start preferences and optional account onboarding, then launch the product window and backend. */
-async function start(): Promise<void> {
-  try {
-    lanAccess = loadLanAccessPreference(app.getPath('userData'))
-    remoteAccess = loadRemoteAccessPreference(app.getPath('userData'))
-    installApplicationMenu()
-    await showStartupLoginOffer()
-    startupOnboardingComplete = true
-    const window = createWindow()
+  const createMainWindow = (): BrowserWindow => {
+    const window = createWindow(appPreload)
     mainWindow = window
-    await launchBackend(window)
-    startAutomaticUpdateChecks()
-  } catch (error) {
-    await failAndQuit(error)
+    window.once('ready-to-show', () => { if (!window.isDestroyed()) window.show() })
+    window.on('closed', () => { if (mainWindow === window) mainWindow = undefined })
+    return window
   }
-}
+  focusPrimaryWindow = () => {
+    const window = mainWindow
+    if (window === undefined || window.isDestroyed()) {
+      const replacement = createMainWindow()
+      void replacement.loadURL(`${SCHEME}://app/index.html`)
+      return
+    }
+    if (window.isMinimized()) window.restore()
+    window.show()
+    window.focus()
+  }
 
-app.setName(APP_NAME)
-const singleInstance = app.requestSingleInstanceLock()
-if (!singleInstance) {
-  app.quit()
-} else {
-  app.on('second-instance', () => {
-    if (!startupOnboardingComplete) return
-    if (mainWindow === undefined) mainWindow = createWindow()
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
-  })
+  mainWindow = createMainWindow()
+  await mainWindow.loadURL(`${SCHEME}://app/index.html`)
+  if (development !== undefined && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  }
+  publishUpdate(updateState)
+  setTimeout(() => { void checkAndPrompt(false) }, 10_000)
+
   app.on('activate', () => {
-    if (!startupOnboardingComplete) return
-    if (mainWindow === undefined) mainWindow = createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) focusPrimaryWindow()
   })
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()
   })
   app.on('before-quit', (event) => {
-    stopAutomaticUpdateChecks()
-    const inactive = backend === undefined && remoteTunnel === undefined
-      && authorizationAbort === undefined && updateAbort === undefined
-    if (quitting || inactive) return
+    if (shellInstallerOwnsQuit) return
+    if (host === undefined) return
     event.preventDefault()
-    quitting = true
-    authorizationAbort?.abort()
-    cancelDesktopUpdate()
-    void stopBackend().finally(() => { app.quit() })
+    const active = host
+    host = undefined
+    void active.stop().finally(() => { app.quit() })
   })
-  void app.whenReady().then(start)
 }
+
+const ownsDesktopInstance = claimDesktopSingleInstance(app, () => { focusPrimaryWindow() })
+
+if (ownsDesktopInstance) void app.whenReady().then(main).catch(async (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(error)
+  const diagnosticFile = process.env.DSH_DESKTOP_DIAGNOSTIC_FILE
+  if (diagnosticFile !== undefined) {
+    await writeFile(diagnosticFile, `${error instanceof Error ? error.stack ?? message : message}\n`).catch(() => undefined)
+  }
+  dialog.showErrorBox(resolveDesktopLocale(app.getLocale()).messages.startupFailed, message)
+  app.exit(1)
+})

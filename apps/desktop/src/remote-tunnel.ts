@@ -204,7 +204,7 @@ async function handleFrame(
 ): Promise<void> {
   if (frame.id === undefined || !/^[a-f0-9]{32}$/u.test(frame.id)) throw new Error('Invalid tunnel request ID.')
   if (frame.type === 'http_request') {
-    await handleHttp(tunnel, localSession, frame, signal)
+    await handleHttp(tunnel, localSession, frame, frame.id, signal)
     return
   }
   if (frame.type === 'ws_open') {
@@ -226,13 +226,15 @@ async function handleFrame(
   throw new Error('Unsupported tunnel frame.')
 }
 
-async function handleHttp(tunnel: WebSocket, localSession: LocalSession, frame: TunnelFrame, signal: AbortSignal): Promise<void> {
+async function handleHttp(
+  tunnel: WebSocket, localSession: LocalSession, frame: TunnelFrame, id: string, signal: AbortSignal,
+): Promise<void> {
   if (typeof frame.method !== 'string' || typeof frame.path !== 'string') throw new Error('Invalid HTTP tunnel request.')
   if (!isApiPath(frame.path)) throw new Error('Remote tunnel only accepts Harness API requests.')
   const target = localTarget(localSession.origin, frame.path)
   if (isPrivilegedRequest(target, frame.method)) {
     safeSend(tunnel, {
-      type: 'http_response', id: frame.id, status: 403,
+      type: 'http_response', id, status: 403,
       headers: { 'Content-Type': ['text/plain; charset=utf-8'], 'Cache-Control': ['no-store'] },
       body: Buffer.from('This operation is available only in the local desktop window.').toString('base64'),
     })
@@ -244,7 +246,7 @@ async function handleHttp(tunnel: WebSocket, localSession: LocalSession, frame: 
   const response = await fetch(target, {
     method: frame.method,
     headers: requestHeaders(frame.headers, localSession.cookie),
-    body: body.byteLength === 0 || frame.method === 'GET' || frame.method === 'HEAD' ? undefined : requestBody,
+    body: body.byteLength === 0 || frame.method === 'GET' || frame.method === 'HEAD' ? null : requestBody,
     redirect: 'manual',
     signal,
   })
@@ -257,22 +259,22 @@ async function handleHttp(tunnel: WebSocket, localSession: LocalSession, frame: 
   const headers = responseHeaders(response.headers, localSession.origin)
   if (responseBody.byteLength <= MAX_LEGACY_RESPONSE_BODY_BYTES) {
     safeSend(tunnel, {
-      type: 'http_response', id: frame.id, status: response.status,
+      type: 'http_response', id, status: response.status,
       headers,
       body: responseBody.toString('base64'),
     })
     return
   }
   await sendFrame(tunnel, {
-    type: 'http_response_start', id: frame.id, status: response.status, headers,
+    type: 'http_response_start', id, status: response.status, headers,
   })
   for (let offset = 0; offset < responseBody.byteLength; offset += TUNNEL_RESPONSE_CHUNK_BYTES) {
     await sendFrame(tunnel, {
-      type: 'http_response_chunk', id: frame.id,
+      type: 'http_response_chunk', id,
       body: responseBody.subarray(offset, offset + TUNNEL_RESPONSE_CHUNK_BYTES).toString('base64'),
     })
   }
-  await sendFrame(tunnel, { type: 'http_response_end', id: frame.id })
+  await sendFrame(tunnel, { type: 'http_response_end', id })
 }
 
 function openLocalWebSocket(
@@ -282,6 +284,7 @@ function openLocalWebSocket(
   frame: TunnelFrame,
 ): void {
   if (typeof frame.path !== 'string' || frame.id === undefined) throw new Error('Invalid WebSocket tunnel request.')
+  const id = frame.id
   if (!isApiPath(frame.path)) throw new Error('Remote tunnel only accepts Harness API WebSockets.')
   const target = localTarget(localSession.origin, frame.path)
   target.protocol = 'ws:'
@@ -290,21 +293,21 @@ function openLocalWebSocket(
   const local = new WebSocket(target, requestedProtocols, {
     headers: localSession.cookie === undefined ? undefined : { Cookie: localSession.cookie },
   })
-  localSockets.set(frame.id, local)
+  localSockets.set(id, local)
   let opened = false
   local.once('open', () => {
     opened = true
-    safeSend(tunnel, { type: 'ws_opened', id: frame.id })
+    safeSend(tunnel, { type: 'ws_opened', id })
   })
   local.on('message', (body, binary) => {
-    safeSend(tunnel, { type: 'ws_data', id: frame.id, body: rawToBuffer(body).toString('base64'), binary })
+    safeSend(tunnel, { type: 'ws_data', id, body: rawToBuffer(body).toString('base64'), binary })
   })
   local.once('error', (error) => {
-    if (!opened) safeSend(tunnel, { type: 'error', id: frame.id, message: error.message })
+    if (!opened) safeSend(tunnel, { type: 'error', id, message: error.message })
   })
   local.once('close', () => {
-    localSockets.delete(frame.id as string)
-    if (opened) safeSend(tunnel, { type: 'ws_close', id: frame.id })
+    localSockets.delete(id)
+    if (opened) safeSend(tunnel, { type: 'ws_close', id })
   })
 }
 
@@ -317,7 +320,8 @@ function localTarget(localUrl: string, path: string): URL {
 }
 
 function isApiPath(path: string): boolean {
-  const pathname = path.split('?', 1)[0]
+  const query = path.indexOf('?')
+  const pathname = query < 0 ? path : path.slice(0, query)
   return pathname === '/api' || pathname.startsWith('/api/')
 }
 

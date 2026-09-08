@@ -84,7 +84,8 @@ export type QueueDockProps = PropsRuntime<'conversation.input.dock'> & QueueDock
 
 /**
  * Queue strip: one item renders directly; multiple items default to a
- * collapsible count header; an empty queue renders nothing.
+ * collapsible count header; an empty queue renders nothing. Local submissions
+ * show sending status and disabled actions until their Host queue rows arrive.
  */
 export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: QueueDockProps) {
   const inbox = useSession(s => s.queue)
@@ -98,7 +99,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
   }, [pendingSubmissions, queue])
   const rowCount = queue.length + pendingQueue.length
   const running = useSession(s => s.running)
-  const queueMutable = useSession(s => s.subagent === null)
+  const queueMutable = useSession(s => s.subagent === null || s.subagent.address.mode === 'continuable')
   const [editing, setEditing] = useState<{ id: QueueItemId; text: string } | null>(null)
   const [busy, setBusy] = useState<QueueItemId | null>(null)
   const [collapsed, setCollapsed] = useState(true)
@@ -155,6 +156,9 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
           >
             <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>
             <span className={css.count}>{t('queue.count', { n: rowCount })}</span>
+            {!listVisible && pendingQueue.length > 0 && (
+              <span className={css.status} role="status">{t('queue.sending')}</span>
+            )}
             <span className={css.chevron} aria-hidden>
               {expanded ? <IconChevronDownOutline14 /> : <IconChevronUpOutline14 />}
             </span>
@@ -216,7 +220,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                   {editing?.id === row.id
                     ? (
                       <>
-                        <Tooltip label={t('queue.save')} side="bottom" delayMs={500}>
+                        <Tooltip label={t('queue.save')} side="bottom" delayMs={500} disabled={busy !== null || editing.text.trim() === ''}>
                           <button
                             type="button"
                             className={css.action}
@@ -227,7 +231,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                             <IconCheckOutline16 size={14} />
                           </button>
                         </Tooltip>
-                        <Tooltip label={t('queue.cancelEdit')} side="bottom" delayMs={500}>
+                        <Tooltip label={t('queue.cancelEdit')} side="bottom" delayMs={500} disabled={busy !== null}>
                           <button
                             type="button"
                             className={css.action}
@@ -242,7 +246,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                     )
                     : (
                       <>
-                        <Tooltip label={t('queue.edit')} side="bottom" delayMs={500} disabled={row.text === null}>
+                        <Tooltip label={t('queue.edit')} side="bottom" delayMs={500} disabled={busy !== null || row.text === null}>
                           <button
                             type="button"
                             className={css.action}
@@ -258,7 +262,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                             <IconEditOutline16 size={14} />
                           </button>
                         </Tooltip>
-                        <Tooltip label={t('queue.remove')} side="bottom" delayMs={500}>
+                        <Tooltip label={t('queue.remove')} side="bottom" delayMs={500} disabled={busy !== null}>
                           <button
                             type="button"
                             className={css.action}
@@ -275,7 +279,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                             <IconTrashOutline16 size={14} />
                           </button>
                         </Tooltip>
-                        <Tooltip label={t('queue.steer')} side="bottom" delayMs={500} disabled={!running}>
+                        <Tooltip label={t('queue.steer')} side="bottom" delayMs={500} disabled={busy !== null || !running}>
                           <button
                             type="button"
                             className={css.action}
@@ -301,7 +305,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
           })}
           {listVisible && pendingQueue.map((submission) => {
             return (
-              <li key={submission.requestId} className={css.row} data-submission-echo="">
+              <li key={submission.requestId} className={`${css.row} ${css.pendingRow}`} data-submission-echo="">
                 {rowCount === 1 && <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>}
                 {submission.attachments.length > 0 && (
                   <span className={css.attachments}>
@@ -324,6 +328,36 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                   </span>
                 )}
                 <span className={css.preview}>{projectUserText(submission.text, [])}</span>
+                <span className={css.status} role="status">{t('queue.sending')}</span>
+                {queueMutable && <div className={css.actions}>
+                  <button
+                    type="button"
+                    className={css.action}
+                    aria-label={t('queue.edit')}
+                    title={t('queue.sending')}
+                    disabled
+                  >
+                    <IconEditOutline16 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={css.action}
+                    aria-label={t('queue.remove')}
+                    title={t('queue.sending')}
+                    disabled
+                  >
+                    <IconTrashOutline16 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={css.action}
+                    aria-label={t('queue.steer')}
+                    title={t('queue.sending')}
+                    disabled
+                  >
+                    <IconSendOutline14 />
+                  </button>
+                </div>}
               </li>
             )
           })}

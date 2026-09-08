@@ -52,7 +52,7 @@ export async function startDeviceAuthorization(
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ device_name: device.name, platform: device.platform, app_version: device.appVersion }),
-    signal,
+    signal: signal ?? null,
   })
   if (!response.ok) throw new Error(await errorMessage(response))
   const body = await response.json() as Partial<DeviceAuthorizationStart>
@@ -89,7 +89,7 @@ export async function pollDeviceAuthorization(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ device_code: pending.deviceCode }),
-      signal,
+      signal: signal ?? null,
     })
     if (response.status === 202) continue
     if (!response.ok) throw new Error(await errorMessage(response))

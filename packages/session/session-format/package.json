@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-session-format",
-  "description": "Pure adjacent whole-artifact Session format migration machinery",
+  "description": "Streaming adjacent Session format migration machinery",
   "version": "1.0.0-beta.15",
   "publishConfig": {
     "access": "public"

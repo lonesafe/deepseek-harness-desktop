@@ -92,6 +92,7 @@ describe('web e2e: queued image submission', () => {
     await input.fill(ACTIVE_PROMPT)
     await input.press('Enter')
     await expect.poll(() => existsSync(readyFile), { timeout: 15_000 }).toBe(true)
+    await page.locator('[data-streaming="true"]').getByText('partial', { exact: true }).waitFor({ timeout: 30_000 })
 
     // A just-submitted composer is read-only for the prompt round-trip.
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
@@ -105,7 +106,7 @@ describe('web e2e: queued image submission', () => {
     await dockThumb.waitFor({ timeout: 15_000 })
     await expect.poll(() => dockThumb.getAttribute('src')).toMatch(/^blob:/)
     await page.getByText(QUEUED_TEXT, { exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Remove queued message' }).waitFor({ timeout: 15_000 })
+    await page.getByRole('button', { name: 'Remove queued message', disabled: false }).waitFor({ timeout: 15_000 })
     const queuedSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(QUEUED_EXPECTED, queuedSnapshot, MODE)
 

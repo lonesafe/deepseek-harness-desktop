@@ -285,6 +285,7 @@ export class Session implements SessionFace {
         parentSessionId: this.address.parentSessionId,
         childSessionId: this.address.childSessionId,
         mode: 'continuable',
+        delivery: mode,
         content: routedContent,
         clientTimeZone: resolvedClientTimeZone(),
       }, signal)

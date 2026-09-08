@@ -138,7 +138,8 @@ export const InputBar = memo(function InputBar({
   const workspaceTrigger = inert && !removed && onRequestWorkspace !== undefined
   const editorDisabled = removed || (locked && !workspaceTrigger)
   const editable = live && !locked && !machineBusy
-  const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && subagent === null
+  const steeringAvailable = subagent === null || subagent.address.mode === 'continuable'
+  const canSteerQueue = !locked && !machineBusy && !commandMenuOpen && empty && running && steeringAvailable
     && input.queue.some(row => row.placement === 'queued')
 
   useEffect(() => {
@@ -262,11 +263,11 @@ export const InputBar = memo(function InputBar({
   // The keymap handlers read live bar state through this ref so the editor
   // registration survives re-renders without re-arming per keystroke.
   const gate = useRef({
-    locked, machineBusy, canSteerQueue, running, subagent, resolveSubmitMode,
+    locked, machineBusy, canSteerQueue, running, steeringAvailable, resolveSubmitMode,
     intakeFiles, uploadsPending, showToast, t,
   })
   gate.current = {
-    locked, machineBusy, canSteerQueue, running, subagent, resolveSubmitMode,
+    locked, machineBusy, canSteerQueue, running, steeringAvailable, resolveSubmitMode,
     intakeFiles, uploadsPending, showToast, t,
   }
 
@@ -296,7 +297,7 @@ export const InputBar = memo(function InputBar({
         keyboard.submit(g.resolveSubmitMode(
           g.running,
           accelerated ? 'accelerated' : 'enter',
-          g.subagent === null,
+          g.steeringAvailable,
         ))
       },
       intakeFiles: (files) => { gate.current.intakeFiles(files) },
@@ -336,6 +337,7 @@ export const InputBar = memo(function InputBar({
   const primaryStops = running && subagent === null && (empty || blocked !== undefined)
   const interruptible = running && continuable
   const primaryLabel = primaryStops ? t('input.stop') : t('input.send')
+  const primaryDisabled = primaryStops ? stop === undefined : empty || disabled || machineBusy || uploadsPending
   const onPrimary = (): void => {
     if (primaryStops) {
       stop?.()
@@ -525,12 +527,12 @@ export const InputBar = memo(function InputBar({
                 </button>
               </Tooltip>
             )}
-            <Tooltip label={primaryLabel} side="top" delayMs={500}>
+            <Tooltip label={primaryLabel} side="top" delayMs={500} disabled={primaryDisabled}>
               <button
                 type="button"
                 className={css.primary}
                 aria-label={primaryLabel}
-                disabled={primaryStops ? stop === undefined : empty || disabled || machineBusy || uploadsPending}
+                disabled={primaryDisabled}
                 onMouseDown={keepFocus}
                 onClick={onPrimary}
               >

@@ -16,31 +16,31 @@ import type { Win32DialogBindings, Win32FolderDialog } from './win32-dialog-logi
 
 interface KoffiFunction { (...args: unknown[]): unknown }
 interface KoffiLibrary { func(convention: string, name: string, result: string, args: string[]): KoffiFunction }
-interface KoffiDecode {
-  (value: unknown, offsetOrType: unknown, type?: unknown): unknown
-  string16(value: unknown): string | null
-}
 interface Koffi {
   load(path: string): KoffiLibrary
   proto(declaration: string): unknown
   pointer(type: unknown): unknown
   call(pointer: unknown, proto: unknown, ...args: unknown[]): unknown
-  decode: KoffiDecode
+  decode(value: unknown, offsetOrType: unknown, type?: unknown): unknown
   register(fn: (...args: unknown[]) => unknown, type: unknown): unknown
   unregister(callback: unknown): void
   sizeof(type: string): number
 }
 
 /**
- * Read a NUL-terminated UTF-16 string at a native address. Use Koffi's
- * dedicated pointer decoder so it stops at the terminator. Copying a fixed
- * 32 KiB view from COM-owned memory can cross an unreadable page and terminate
- * the worker process before it can report the selected directory.
+ * Read a valid NUL-terminated UTF-16 allocation without an external buffer.
+ * Generic `koffi.decode(..., 'str16')` expects a pointer variable, so the
+ * buffer holds the string address rather than the string bytes.
+ * @param koffi - the loaded koffi binding.
+ * @param address - the string address surfaced by the `_Out_ void **` param.
+ * @param pointerSize - the process's pointer width (`koffi.sizeof('void *')`).
+ * @returns the decoded UTF-16 path.
  */
-function readUtf16(koffi: Koffi, address: unknown): string {
-  const decoded = koffi.decode.string16(address)
-  if (decoded === null) throw new Error('GetDisplayName returned a null filesystem path')
-  return decoded
+function readUtf16(koffi: Koffi, address: unknown, pointerSize: number): string {
+  const pointer = Buffer.alloc(8)
+  // koffi 3 surfaces `_Out_ void **` values as BigInt native addresses.
+  pointer.writeBigUInt64LE(BigInt(address as bigint | number))
+  return koffi.decode(pointer.subarray(0, pointerSize), 'str16') as string
 }
 
 const COINIT_APARTMENTTHREADED = 0x2
@@ -158,7 +158,7 @@ export async function loadWin32DialogBindings(): Promise<Win32DialogBindings> {
             const nameOut: unknown[] = [null]
             const gotName = method(item, SLOT_GET_DISPLAY_NAME, protoGetDisplayName)(SIGDN_FILESYSPATH, nameOut)
             if (gotName < 0) return { hr: gotName }
-            const path = readUtf16(koffi, nameOut[0])
+            const path = readUtf16(koffi, nameOut[0], pointerSize)
             coTaskMemFree(nameOut[0])
             return { hr: gotName, path }
           } finally {

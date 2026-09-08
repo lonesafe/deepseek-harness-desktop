@@ -55,7 +55,7 @@ const experimentalPackageDirectory = /^packages\/experimental\/[^/]+$/
 /** npm namespace reserved for private experimental packages. */
 const experimentalPackageNamePrefix = '@deepseek-ai/dsh-experimental-'
 /** Directories whose packages this repository publishes: one release member each. */
-const releaseMemberDirectory = /^(?:packages\/(?!experimental\/)[^/]+\/[^/]+|apps\/[^/]+|vendor\/[^/]+)$/
+const releaseMemberDirectory = /^(?:packages\/(?!experimental\/)[^/]+\/[^/]+|apps\/(?!desktop-host$)[^/]+|vendor\/[^/]+)$/
 const localArtifactDirs = new Set(['node_modules'])
 const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh': ['lib/*.js'],
@@ -64,6 +64,12 @@ const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
     'build/icon.svg',
     'build/entitlements.mac.plist',
     'electron-builder.yml',
+    'lib/*.cjs',
+    'renderer/**',
+  ],
+  '@deepseek-ai/dsh-desktop-host': [
+    'lib/index.js',
+    'config/desktop.cordis.patch.yml',
   ],
   // Sourcemaps stay out by payload policy; the worker-preview surface
   // (dist/preview.html and dist/preview/) backs private experimental
@@ -155,6 +161,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // The glob covers whichever sheets a package emits; sourcemaps stay
   // unpublished, as everywhere else in the repository.
   '@deepseek-ai/dsh-client-ui-primitives': ['lib/**/*.css'],
+  '@deepseek-ai/dsh-client-ui-dockkit': ['lib/**/*.css'],
   '@deepseek-ai/dsh-client-web': ['lib/**/*.css'],
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
   // The CPython side ships as source .py files, published as-is rather than built.
@@ -164,16 +171,25 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // The Web Host mounts the default-off settings owner independently of each
   // Agent-scoped delegation-tool instance.
   '@deepseek-ai/dsh-tool-subagent': ['lib/model-selection-settings.js'],
+  // The JSONL backend resolves its private verification Worker relative to
+  // import.meta.url; it is shipped without a public package subpath.
+  '@deepseek-ai/dsh-session-persistence-jsonl': ['lib/worker.cjs'],
   // The argv-prefix runner entry ships beside the lib as its own bundle;
   // sandbox-local resolves it through the package's ./runner export. tsdown
   // also shares its generated FFI code through a hashed runtime chunk.
   '@deepseek-ai/dsh-sandbox-windows-acl': ['lib/runner.js', 'lib/types-*.js'],
   '@deepseek-ai/dsh-skill-badge': ['assets'],
+  // Ordinary native containment ships a path-loaded runner and its shared
+  // runner chunk beside the existing node-pty permission repair.
+  '@deepseek-ai/dsh-subprocess-local': [
+    'lib/runner.js',
+    'lib/runner-*.js',
+    'scripts/ensure-spawn-helper.mjs',
+  ],
   // tsdown shares the repository/pack code between the lib entry and the bin
   // through a hashed chunk. The committed bin.js is the link target pnpm can
   // resolve at install time, before the build produces lib/bin.js.
   '@deepseek-ai/dsh-experimental-webworker-packer': ['bin.js', 'lib/repository-*.js'],
-  '@deepseek-ai/dsh-subprocess-local': ['scripts/ensure-spawn-helper.mjs'],
 }
 
 function sameStringList(actual: readonly string[] | undefined, expected: readonly string[]): boolean {
@@ -327,10 +343,9 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     //
     // Access is per release sequence, not per scope: the vendored framework and
     // the Landlock packages publish publicly because outside consumers install
-    // them, while the dsh family stays restricted until its own sequence goes
-    // public. A mixed scope is why no publish path passes `--access` — one flag
-    // cannot serve both, so each packed manifest decides
-    // ([rationale](../.agents/notes/implemented/process/2026-08-13-public-vendor-and-native-sequences.md)).
+    // them, and the dsh family published publicly with its own sequence on
+    // 2026-08-13. No publish path passes `--access`; each packed manifest declares
+    // it, and this gate requires every release member to be public.
     if (manifest.private === true) {
       errors.push(`${label}: release member must not set "private": true`)
     }

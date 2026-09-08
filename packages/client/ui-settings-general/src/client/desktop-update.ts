@@ -123,7 +123,11 @@ export function desktopUpdateDownloadState(value: unknown): DesktopUpdateDownloa
   }
 }
 
-/** Validate the main-process snapshot stored on the renderer window. */
+/**
+ * Validate the main-process snapshot stored on the renderer window.
+ * @param value - Untrusted desktop configuration and download state.
+ * @returns Validated snapshot, or undefined when either component is invalid.
+ */
 export function desktopUpdateSnapshot(value: unknown): DesktopUpdateSnapshot | undefined {
   const snapshot = record(value)
   const configuration = validConfiguration(snapshot?.configuration)

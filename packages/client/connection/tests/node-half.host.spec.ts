@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest'
 import type { AddressInfo } from 'node:net'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
-import type { WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
-import { API_PATH, RpcId, apply, inject, type ClientRequest, type HostConnectionHandle } from '../src/index.ts'
+import type { IndexInjection, WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
+import { API_PATH, RpcId, apply, inject, type ClientRequest, type ConnectionConfig, type HostConnectionHandle } from '../src/index.ts'
 import { DEFAULT_MAX_REQUEST_BODY_BYTES } from '../src/http-bridge.ts'
 import { provideBrowserCredentials } from './browser-credentials.ts'
 
@@ -83,7 +83,8 @@ function fakeResponse(): {
   return { response, state }
 }
 
-async function mounted(config?: { trustedHosts?: string[]; lanAuthenticated?: boolean }): Promise<{
+async function mounted(config?: ConnectionConfig & { lanAuthenticated?: boolean }): Promise<{
+  ctx: Context
   routes: WebRoute[]
   upgrades: WebUpgradeRoute[]
   connection: HostConnectionHandle
@@ -93,13 +94,15 @@ async function mounted(config?: { trustedHosts?: string[]; lanAuthenticated?: bo
   const routes: WebRoute[] = []
   const upgrades: WebUpgradeRoute[] = []
   provideBrowserCredentials(ctx)
-  ctx.provide('webServer', fakeHttpServer(routes, upgrades, config?.lanAuthenticated) as WebServer)
+  const { lanAuthenticated, ...connectionConfig } = config ?? {}
+  ctx.provide('webServer', fakeHttpServer(routes, upgrades, lanAuthenticated) as WebServer)
   const fiber = ctx.plugin(
     { inject: [...inject], apply },
-    config?.trustedHosts === undefined ? {} : { trustedHosts: config.trustedHosts },
+    connectionConfig,
   )
   await fiber.await()
   return {
+    ctx,
     routes,
     upgrades,
     connection: ctx.get('connection') as HostConnectionHandle,
@@ -121,6 +124,50 @@ function browserCookie(connection: HostConnectionHandle, authority: string): str
 }
 
 describe('connection node half', () => {
+  it('provides the carrier-neutral service without a Web server', async () => {
+    const ctx = new Context()
+    provideBrowserCredentials(ctx)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    const connection = ctx.get('connection') as HostConnectionHandle
+    try {
+      expect(connection.requestRejection(fakeRequest({ host: 'localhost' }))).toBe(401)
+      const cookie = browserCookie(connection, 'localhost')
+      expect(connection.requestRejection(fakeRequest({ host: 'localhost', cookie }))).toBeUndefined()
+    } finally {
+      await fiber.dispose()
+    }
+  })
+
+  it('injects validated browser recovery timing and withdraws it on disposal', async () => {
+    const { ctx, dispose } = await mounted({ recovery: { generationReadyTimeoutMs: 25_000 } })
+    try {
+      const rows: IndexInjection[] = []
+      ctx.emit('webserver/index-inject', rows)
+      expect(rows).toEqual([{
+        kind: 'global', name: '__DSH_CONNECTION_RECOVERY__', value: {
+          backoffBaseMs: 500, backoffFactor: 2, backoffMaxMs: 10_000,
+          generationReadyWarnMs: 3_000, generationReadyTimeoutMs: 25_000,
+        },
+      }])
+      await dispose()
+      const after: IndexInjection[] = []
+      ctx.emit('webserver/index-inject', after)
+      expect(after).toEqual([])
+    } finally {
+      await dispose()
+    }
+  })
+
+  it.each([
+    { recovery: { backoffBaseMs: 0 }, error: /backoffBaseMs/ },
+    { recovery: { backoffFactor: NaN }, error: /backoffFactor.*finite/ },
+  ])('rejects invalid recovery timing before acquiring Host resources: $recovery', async ({ recovery, error }) => {
+    const ctx = new Context()
+    await expect(apply(ctx, { recovery })).rejects.toThrow(error)
+    expect(ctx.get('connection')).toBeUndefined()
+  })
+
   it('reserves enough default carrier capacity for the 200 MiB image batch', () => {
     expect(DEFAULT_MAX_REQUEST_BODY_BYTES).toBe(300 * 1024 * 1024)
     expect(DEFAULT_MAX_REQUEST_BODY_BYTES).toBeGreaterThan(Math.ceil(200 * 1024 * 1024 * 4 / 3) + 1024 * 1024)

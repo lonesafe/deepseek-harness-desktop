@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-win32-process",
-  "description": "Low-level Win32 process, stdio, and Job Object primitives for the DeepSeek Harness Windows sandbox",
+  "description": "Shared low-level Win32 process, stdio, and Job Object primitives",
   "version": "1.0.0-beta.15",
   "publishConfig": {
     "access": "public"

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useEffect, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -7,6 +8,9 @@ import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
 import { en } from '../src/client/locales.ts'
 import type { BalanceState } from '../src/client/balance-store.ts'
+
+// Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
+const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
 
 afterEach(() => {
   cleanup()
@@ -76,6 +80,7 @@ function mount({
   const props: SettingsRootComponentProps = {
     useSessions,
     useSessionPendingInteraction,
+    useResource,
     useWorkspaces: unusedHook,
     wide,
     reconnect,
@@ -157,8 +162,8 @@ describe('SettingsRoot trigger', () => {
     expect(mounted.reconnect).toHaveBeenCalledOnce()
 
     mounted.setConnectionState('connecting')
-    expect(screen.getByRole('button', { name: 'Connecting, restart now' }).textContent)
-      .toContain('Connecting...')
+    expect(screen.getByRole('button', { name: 'Reconnecting automatically, reconnect now' }).textContent)
+      .toContain('Reconnecting...')
 
     mounted.setConnectionState('connected')
     expect(screen.getByRole('status', { name: 'Connected' })).toBeTruthy()
@@ -175,6 +180,15 @@ describe('SettingsRoot trigger', () => {
 })
 
 describe('SettingsPanel chrome seats', () => {
+  it('keeps the dialog visible when the sidebar host is hidden', () => {
+    const { view } = mount()
+    openPanel()
+    view.container.hidden = true
+    expect(screen.getByRole('dialog', { name: 'Settings Title' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('names the dialog via aria-labelledby pointing at the header seat node', () => {
     mount()
     openPanel()

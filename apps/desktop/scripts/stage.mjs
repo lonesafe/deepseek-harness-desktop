@@ -58,11 +58,12 @@ if (import.meta.main) {
   const rootManifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   const stageManifestPath = join(stage, 'package.json')
   const stageManifest = JSON.parse(readFileSync(stageManifestPath, 'utf8'))
+  stageManifest.main = 'lib/web-main.js'
   stageManifest.version = rootManifest.version
   writeFileSync(stageManifestPath, `${JSON.stringify(stageManifest, null, 2)}\n`)
 
   for (const required of [
-    'lib/main.js',
+    'lib/web-main.js',
     'electron-builder.yml',
     'build/icon.svg',
     'build/entitlements.mac.plist',

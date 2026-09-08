@@ -79,6 +79,18 @@ jobs:
           packages/client/ui-settings-general/tests/desktop-update.client.spec.tsx
           apps/desktop/tests/product.spec.ts
 
+      - name: Install the Linux native compiler
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+
+      - name: Verify desktop staging and native dependency checks
+        run: >-
+          pnpm exec vitest run --config vitest.config.ts
+          apps/desktop/tests/stage.spec.ts
+          apps/desktop/tests/native-runtime.spec.ts
+
       - name: Build and stage the desktop runtime
         run: pnpm run desktop:prepare
 

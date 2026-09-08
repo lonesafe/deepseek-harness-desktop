@@ -4,8 +4,8 @@ electronVersion: 43.4.0
 artifactName: DeepSeek-Harness-${version}-${os}-${arch}.${ext}
 asar: false
 compression: normal
-# package.mjs explicitly rebuilds and probes fs-ext because electron-builder's
-# dependency walker does not reach it inside pnpm's deployed virtual store.
+# Native dependencies use stable Node-API; package.mjs verifies their actual
+# operations in the staged and packaged Electron runtimes before signing.
 npmRebuild: false
 directories:
   buildResources: build

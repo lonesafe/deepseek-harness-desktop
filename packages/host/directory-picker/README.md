@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The web GUI host lets an operator choose a workspace directory through one contract: a single service whose one method reports which interaction the composed backend provides. Backends differ in interaction shape, not just mechanism — the native backend can expose an adaptive capability that opens an OS chooser for the local desktop while also serving listing and creation primitives to remote browsers; the browse backend serves only the in-app browser. Consumers switch on the reported capability kind. This seam is GUI-host only and never reaches the agent loop; the backends and the wire mapping live beside it.
+The GUI lets an operator choose a workspace directory with an OS chooser or an in-app browser. Use the native backend for the host display; its adaptive capability also supports directory listing and creation from remote browsers. Use the browse backend when all selection must stay in the app. Consumers receive the interaction kind and present the matching workflow. Directory picking never affects the agent loop, and the browser workflow exposes one directory tree at a time; multiple roots are unsupported.
 
 ## Table of Contents
 

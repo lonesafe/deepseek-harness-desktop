@@ -6,6 +6,8 @@
 
 独立桌面应用是包裹 dsh Web UI 的 Electron 壳。它不打开监听端口：内置的上游 Node.js 子进程启动已安装的 dsh 项目，带版本的分帧字节管道在没有外层 Base64 信封的情况下承载 Fetch 请求与流式响应，Node IPC 承载生命周期控制，`dsh-app://` 则提供与后端版本匹配的客户端资源。
 
+分支仓库的打包器在签名前，分别使用暂存目录和最终应用中的 Electron 可执行文件验证原生依赖。它在 macOS 和 Linux 上调用 POSIX 文件锁绑定，在 Windows 上调用 Koffi 系统绑定；仅导入延迟加载的文件锁入口无法验证原生文件。Linux 暂存流程会构建完整的 `native/system` 文件集，包括可执行的 Landlock 启动器，因此构建宿主需要安装 `musl-tools` 提供的 `musl-gcc`。安装后的应用自带这些依赖，无需编译器或系统 Node.js。
+
 ## 关键技术决策
 
 | 决策 | 原因 | 直接结果 |

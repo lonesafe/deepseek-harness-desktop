@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/webworker-runtime/README.md
-README.md: 7afb5f44f7fd53fca52506383b10f75594bf7a10
-README.zh.md: af6716c3a78fa03ad1ae33ba1dd8092d3ee26e66
+README.md: cfe3aa42a3e1dc016a74ac6f487fec75867532a0
+README.zh.md: f78af329a8fc1dda09b31108c98b8f8f7f706e86

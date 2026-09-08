@@ -18,11 +18,15 @@ BrowserWindow 开启 context isolation 与 renderer sandbox，关闭 Node integr
 
 electron-builder 运行前，pnpm 会先部署桌面包。因为自动 peer 安装已关闭，其 manifest 显式提供可达生产图中的全部必需 workspace peer；`verify-runtime-closure.ts --manifest apps/desktop/package.json` 保证这个仅依赖闭包保持完整。暂存包装器会在 `deploy --prod` 写入独立生产依赖树期间保留源码检出的 pnpm workspace-state 缓存，使后续仓库命令继续使用已安装的开发依赖集合。打包不使用 asar，使内嵌 Node 进程可以直接执行 ESM CLI 并加载其运行时资源；它也不会重新构建已暂存的 pnpm 依赖树。
 
+POSIX 会话锁使用[预构建系统原语决策](2026-09-07-prebuilt-system-primitives.zh.md)定义的稳定 Node-API v8 addon。同一份平台 addon 字节在构建用 Node.js 与 Electron 下运行；打包不会编译 Electron 专用绑定。Linux 桌面暂存会在部署前构建完整的 `native/system` 产物，使本地打包与安装器车道使用相同的准备流程。构建宿主需要 `musl-gcc`，CI 通过 `musl-tools` 提供它。根目录 `build:native-system` 命令仅构建宿主 flock addon，因此无法提供 Linux 安装器所需的 Landlock 可执行文件。
+
 `desktop:dist` 打包当前平台。原生 GitHub Actions 矩阵分别在 macOS arm64、macOS x64、Linux x64 和 Windows x64 上安装和打包，依次生成 DMG/ZIP、AppImage/DEB 与 NSIS/ZIP 产物。macOS 发布 job 支持两种明确模式。Actions Secrets 中具备完整的 Base64 编码 Developer ID Application P12、其密码与 App Store Connect API Key 时，electron-builder 会导入该身份，使用 Hardened Runtime 和 Electron JIT entitlements 完成签名，提交 Apple 公证并装订票据。job 随后使用 `codesign --verify --deep --strict`、Gatekeeper 的 `spctl --assess` 与 `stapler validate` 验证应用。没有任何 Apple 凭据时，job 会明确关闭身份自动发现并发布未签名安装包；只配置部分凭据则作为配置错误失败。根 README 记录了未签名安装包首次启动时需要使用的 Control 点击以及「隐私与安全性」路径。没有凭据的本地打包采用相同的未签名行为。
 
 ## 验证
 
 单元测试固定本机与局域网就绪信息解析、持久化局域网与远程偏好校验、浏览器设备授权、固定回环中转、特权方法拒绝、有界子进程关闭、精确 origin 导航和外链策略。运行时闭包门禁遍历 workspace 依赖与必需 peer。暂存运行时冒烟测试从部署后的生产目录启动 `dsh web` 并抓取生成的应用页面；随后平台打包测试通过已打包可执行文件运行内嵌运行时。在两个 macOS 架构上，发布车道会区分配置完整的签名模式与明确的未签名模式；签名模式还会把代码签名有效、Gatekeeper 接受与已装订公证票据作为发布门禁。
+
+[原生运行时探针](../../../../apps/desktop/scripts/native-runtime.mjs)在打包前与 `afterPack` 中设置 `ELECTRON_RUN_AS_NODE=1`，通过 Electron 运行。它解析已部署应用 → dsh → Session 持久化的依赖链，并拒绝应用目录外的包入口路径。POSIX 验证会锁定探针自己拥有的临时文件；仅导入延迟加载的 flock 包装器不会加载 addon。Windows 验证调用 Koffi 的 `GetCurrentProcessId`，Linux 还要求应用拥有可执行的 Landlock launcher。这样同时检查暂存的 pnpm 依赖图与 electron-builder 复制后的依赖图。[探针测试](../../../../apps/desktop/tests/native-runtime.spec.ts)覆盖原生操作失败、外部依赖解析与 Linux launcher 缺失。
 
 ## 考虑过的替代方案
 
@@ -31,6 +35,8 @@ electron-builder 运行前，pnpm 会先部署桌面包。因为自动 peer 安�
 **要求用户另行安装 Node.js 运行时。** 这样下载体积更小，但启动会依赖用户的 PATH 与运行时版本。复用 Electron 内嵌 Node 运行时可以让桌面产物自包含。
 
 **在一台主机上交叉编译全部平台。** 生产依赖图包含平台相关的原生模块和可选模块。原生 runner 会安装正确的依赖变体，避免把打包主机的二进制文件装进另一目标。
+
+**为 Electron 重新构建 fs-ext。** Session 写入器使用共享 Node-API addon，而不是具有 Electron 专用 ABI 的 NAN 依赖。重新构建未使用的包无法验证已部署写入器；执行其实际原生操作才可以。
 
 **为 renderer 开启 Node integration。** 直接访问进程能力会简化启动，但 renderer 一旦被攻破就会直接变成本地代码执行。进程所有权留在隔离的 Electron 主进程中。
 

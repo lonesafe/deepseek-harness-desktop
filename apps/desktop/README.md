@@ -6,6 +6,8 @@ This package contains two Electron distributions of the shared dsh Web UI. The f
 
 The isolated desktop application is an Electron shell around the dsh Web UI. It opens no listening port: a bundled upstream Node.js child boots the installed dsh project, versioned framed byte pipes carry Fetch requests and streaming responses without an outer Base64 envelope, Node IPC carries lifecycle control, and `dsh-app://` serves the matching client assets.
 
+The fork packager verifies native dependencies with both staged and packaged Electron executables before signing. It calls the POSIX file-lock binding on macOS and Linux and the Koffi system binding on Windows; merely importing the lazy file-lock entry cannot verify its native payload. Linux staging builds the complete `native/system` payload, including the executable Landlock launcher, and requires `musl-gcc` from `musl-tools` on the build host. The installed application carries these dependencies and requires no compiler or system Node.js.
+
 ## Key technical decisions
 
 | Decision | Why | Direct consequence |

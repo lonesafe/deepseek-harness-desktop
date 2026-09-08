@@ -59,8 +59,6 @@ const LONG_CELL_MARKER = 'MWT_LONGCELL_F1'
 const MARKERS = [FILL_MARKER, WIDE_MARKER, LONG_CELL_MARKER]
 /** Golden-facing names, in {@link MARKERS} order. */
 const TABLE_NAMES = ['fill', 'wide', 'long-cell']
-/** AppFrame's fixed rail width after the test closes the sidebar. */
-const COLLAPSED_SIDEBAR_WIDTH = 56
 
 /**
  * Viewport sweep. The wide stops leave the transcript far wider than the
@@ -199,36 +197,24 @@ interface TableStop {
 }
 
 /**
- * Wait for the right column to sit at its rail. Expanded, it would pin the
- * transcript to exactly the message column and every breakout relation would
- * go vacuous; the frame's collapse marker is the settled signal.
+ * Wait for collapsed columns, completed grid transitions, and the
+ * ConversationRoot ResizeObserver's width publication before measuring tables.
  * @param target - the page whose frame to read.
  */
-async function awaitRightRail(target: Page): Promise<void> {
-  await target.waitForSelector('[data-rightbar-collapsed]', { timeout: 5_000 })
-}
-
-/**
- * Wait until the frame track transition and ConversationRoot's dependent
- * ResizeObserver publication both reflect a collapsed desktop-width layout.
- * @param target - page containing the frame.
- * @param viewportWidth - viewport width assigned to the page.
- */
-async function waitForCollapsedLayout(target: Page, viewportWidth: number): Promise<void> {
-  await expect.poll(async () => {
-    return target.evaluate(({ expectedFrameWidth, sidebarWidth }) => {
-      const frame = document.querySelector<HTMLElement>('[class*="frame"]')
-      const center = document.querySelector<HTMLElement>('[class*="centerCol"]')
-      const conversation = document.querySelector<HTMLElement>('[data-phase]')
-      if (frame === null || center === null || conversation === null) return false
-      const published = Number.parseFloat(
-        conversation.style.getPropertyValue('--dsh-conversation-column-width'),
-      )
-      return Math.abs(frame.getBoundingClientRect().width - expectedFrameWidth) < 0.5
-        && Math.abs(center.getBoundingClientRect().width - (expectedFrameWidth - sidebarWidth)) < 0.5
-        && Math.abs(published - conversation.offsetWidth) < 0.5
-    }, { expectedFrameWidth: viewportWidth, sidebarWidth: COLLAPSED_SIDEBAR_WIDTH })
-  }, { timeout: 10_000 }).toBe(true)
+async function awaitTableLayout(target: Page): Promise<void> {
+  await target.evaluate(async () => { await document.fonts.ready })
+  await target.waitForFunction(() => {
+    const element = document.querySelector('[data-sidebar-collapsed][data-rightbar-collapsed]')
+    if (element === null) return false
+    const tracks = getComputedStyle(element).gridTemplateColumns.split(' ').map(Number.parseFloat)
+    const root = element.querySelector<HTMLElement>('div[data-phase]')
+    // Mirrored from ui-layout's SIDEBAR_COLLAPSED; these tests use the Host compiler face.
+    return tracks[0] === 56 && tracks.at(-1) === 0
+      && element.getAnimations().every(animation =>
+        animation.playState === 'finished' || animation.playState === 'idle')
+      && root !== null
+      && root.style.getPropertyValue('--dsh-conversation-column-width') === `${String(root.offsetWidth)}px`
+  }, undefined, { timeout: 10_000 })
 }
 
 /**
@@ -293,7 +279,7 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     // viewport identically on every platform, which is what keeps one
     // committed golden true for all lanes.
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
-    await awaitRightRail(page)
+    await awaitTableLayout(page)
   }, 180_000)
 
   afterAll(async () => {
@@ -310,11 +296,7 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
    */
   const settleAt = async (width: number): Promise<TableReading[]> => {
     await page.setViewportSize({ width, height: 900 })
-    // Wait for both responsive layers: AppFrame eases the collapsed 56px
-    // rail track, then ConversationRoot publishes that settled center width
-    // through ResizeObserver for the adaptive content axis. Consecutive table
-    // readings alone can agree before either deferred update begins.
-    await waitForCollapsedLayout(page, width)
+    await awaitTableLayout(page)
     return readTables(page)
   }
 
@@ -446,17 +428,8 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
       await sessionRow.click()
       await hidpiPage.getByText(TAIL_MARKER, { exact: true }).waitFor({ timeout: 15_000 })
       await hidpiPage.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
-      await awaitRightRail(hidpiPage)
-      // The pane collapses ease over the layout transition: compare only a
-      // settled reading (two consecutive equal wide-wrapper widths).
-      let readings: TableReading[] = []
-      let previousWide = -1
-      await expect.poll(async () => {
-        readings = await readTables(hidpiPage)
-        const settled = readings[1]!.clientWidth === previousWide
-        previousWide = readings[1]!.clientWidth
-        return settled
-      }, { timeout: 10_000 }).toBe(true)
+      await awaitTableLayout(hidpiPage)
+      const readings = await readTables(hidpiPage)
       const baseline = (await sweep()).find(stop => stop.width === 1100)!
       const relations = (tables: TableReading[]) => tables.map(table => ({
         marker: table.marker,

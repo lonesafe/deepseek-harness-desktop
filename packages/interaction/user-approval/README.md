@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-user-approval` lets a sensitive tool action pause for an allow/reject decision: `ctx.approval.request(req)` asks the composed answerers whether one specific action may proceed and returns `allowed-once`, `allowed-always`, `rejected`, `cancelled`, or `unavailable`. A requester may provide a stable rule key; then an `allowed-always` answer remembers that rule for matching requests in the same session. Missing, non-owning, or throwing answerers fail closed to `unavailable`. A per-session policy — `ask` (the default) or `never` — decides what happens before any answerer runs: `ask` delegates to the composed answerers, while `never` rejects every request deterministically and takes precedence over remembered grants. Each request is recorded in the requesting session's audit log, and the model sees only the asking consumer's tool outcome plus the current policy in the runtime-context snapshot. UI channels provide human answerers; the ACP automation bridge answers for its own agents.
+Use this package to pause sensitive tool actions for approval. The default `ask` policy consults human or machine answerers unless a matching rule was allowed for the session; `never` rejects before either path. Missing or failed answerers return `unavailable`, so actions fail closed. Approval permits one action or remembers an optional stable rule for matching requests in the same session. Every request and outcome enters the session audit log; the model sees the tool outcome and current policy, but not the permission UI or audit events.
 
 ## Table of Contents
 

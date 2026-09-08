@@ -30,7 +30,7 @@
   - img
   - text: Standard mode
   - img
-- textbox "Describe what you want to build... / commands, @ files or sessions"
+- textbox "Describe what you want to build, / commands, @ files or sessions"
 - button "Commands":
   - img
 - button "Add attachment":

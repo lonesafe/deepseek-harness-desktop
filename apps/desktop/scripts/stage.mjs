@@ -16,11 +16,23 @@ const deployArgs = [
   stage,
 ]
 const packageManagerScript = process.env.npm_execpath
-const command = packageManagerScript === undefined
-  ? (process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm')
-  : process.execPath
-const args = packageManagerScript === undefined ? deployArgs : [packageManagerScript, ...deployArgs]
 const workspaceState = join(root, 'node_modules', '.pnpm-workspace-state-v1.json')
+
+function runPnpm(args) {
+  if (packageManagerScript === undefined || packageManagerScript === '') {
+    throw new Error('desktop stage: invoke this script through a pnpm package command')
+  }
+  const javascript = /\.[cm]?js$/iu.test(packageManagerScript)
+  const result = spawnSync(javascript ? process.execPath : packageManagerScript,
+    javascript ? [packageManagerScript, ...args] : args, {
+      cwd: root,
+      stdio: 'inherit',
+    })
+  if (result.error !== undefined) throw result.error
+  if (result.signal !== null || result.status !== 0) {
+    throw new Error(`desktop stage: pnpm ${args.join(' ')} failed (exit ${String(result.status)}, signal ${String(result.signal)})`)
+  }
+}
 
 /**
  * Run a desktop deployment without publishing its filtered install settings as source-workspace state.
@@ -46,14 +58,10 @@ export function withPreservedWorkspaceState(path, deploy) {
 }
 
 if (import.meta.main) {
+  // The root build includes only the host flock addon; Linux also ships the Landlock executable.
+  if (process.platform === 'linux') runPnpm(['--dir', 'native/system', 'run', 'build:native'])
   rmSync(stage, { recursive: true, force: true })
-  const deployed = withPreservedWorkspaceState(workspaceState, () => spawnSync(command, args, {
-    cwd: root,
-    stdio: 'inherit',
-    shell: packageManagerScript === undefined && process.platform === 'win32',
-  }))
-  if (deployed.error !== undefined) throw deployed.error
-  if (deployed.status !== 0) process.exit(deployed.status ?? 1)
+  withPreservedWorkspaceState(workspaceState, () => runPnpm(deployArgs))
 
   const rootManifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   const stageManifestPath = join(stage, 'package.json')

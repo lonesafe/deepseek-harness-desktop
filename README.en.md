@@ -101,6 +101,18 @@ pnpm run build
 
 Harness data lives in the `runtime` child of Electron's standard per-user application-data directory. Uninstalling the application does not automatically delete this data. Back it up before moving between beta versions if the stored sessions matter to you.
 
+## Citation
+
+```bibtex
+@misc{deepseek-harness2026,
+  title={DeepSeek Harness: Everything is a Plugin},
+  author={DeepSeek-AI},
+  year={2026},
+  publisher={GitHub},
+  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
+}
+```
+
 ## Upstream and license
 
 The agent runtime, Web UI, and plugin system come from [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness), and desktop-specific code lives in `apps/desktop`. The project is distributed under the [MIT License](LICENSE).

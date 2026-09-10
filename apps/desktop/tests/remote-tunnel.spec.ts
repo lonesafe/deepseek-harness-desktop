@@ -91,6 +91,7 @@ function collectChunkedResponse(socket: WebSocket, id: string): Promise<{
 describe('desktop remote tunnel', () => {
   it('proxies only the fixed loopback origin and exposes configuration as read-only', async () => {
     const localCookie = 'dsh_browser_auth=local-session-cookie'
+    const localNativeOpens: string[] = []
     const local = createServer((request, response) => {
       if (request.url === '/?token=process-launch-token') {
         response.writeHead(303, { location: '/', 'set-cookie': `${localCookie}; Path=/; HttpOnly` })
@@ -103,6 +104,14 @@ describe('desktop remote tunnel', () => {
         return
       }
       response.writeHead(200, { 'content-type': 'application/json' })
+      const url = new URL(request.url ?? '/', 'http://localhost')
+      if (url.pathname === '/api/present.host') {
+        response.end(JSON.stringify(url.searchParams.has('malformed')
+          ? { name: 'desktop', fileManager: 'finder' }
+          : { name: 'desktop', available: true, fileManager: 'finder' }))
+        return
+      }
+      if (decodeURIComponent(url.pathname) === '/api/present.open') localNativeOpens.push(request.url ?? '/')
       if (request.url === '/api/settings/describe') {
         response.end(JSON.stringify({
           rpcId: 'settings-rpc',
@@ -236,7 +245,7 @@ describe('desktop remote tunnel', () => {
     expect(chunked.start).toMatchObject({ type: 'http_response_start', id: '8'.repeat(32), status: 200 })
     expect(chunked.chunks.length).toBeGreaterThan(1)
     expect(chunked.chunks.every(chunk => chunk.byteLength <= 512 << 10)).toBe(true)
-    expect(Buffer.concat(chunked.chunks)).toEqual(Buffer.alloc((1 << 20) + 17, 0x61))
+    expect(Buffer.concat(chunked.chunks).equals(Buffer.alloc((1 << 20) + 17, 0x61))).toBe(true)
 
     const staticDeniedFrame = nextFrameForId(socket, '3'.repeat(32))
     socket.send(JSON.stringify({
@@ -276,6 +285,36 @@ describe('desktop remote tunnel', () => {
           },
         },
       })
+
+    const hostResponse = nextFrameForId(socket, 'a'.repeat(32))
+    socket.send(JSON.stringify({
+      type: 'http_request', id: 'a'.repeat(32), method: 'get', path: '/api/present.host?view=card',
+    }))
+    const host = await hostResponse
+    expect(host).toMatchObject({ type: 'http_response', status: 200 })
+    expect(JSON.parse(Buffer.from(host.body as string, 'base64').toString())).toEqual({
+      name: 'desktop', available: false, fileManager: 'finder',
+    })
+
+    for (const path of [
+      '/api/present.open',
+      '/api/present.open?sessionId=owner&seq=7&index=0',
+      '/api/present.open?sessionId=owner&seq=7&index=0&action=reveal',
+      '/api/present%2Eopen?sessionId=owner&seq=7&index=0',
+    ]) {
+      const denied = nextFrameForId(socket, 'b'.repeat(32))
+      socket.send(JSON.stringify({ type: 'http_request', id: 'b'.repeat(32), method: 'post', path }))
+      await expect(denied).resolves.toMatchObject({ type: 'http_response', status: 403 })
+    }
+    expect(localNativeOpens).toEqual([])
+
+    const malformedHost = nextFrameForId(socket, 'c'.repeat(32))
+    socket.send(JSON.stringify({
+      type: 'http_request', id: 'c'.repeat(32), method: 'GET', path: '/api/present.host?malformed=true',
+    }))
+    await expect(malformedHost).resolves.toMatchObject({
+      type: 'error', message: 'Local present.host response had invalid desktop metadata.',
+    })
 
     socket.send(JSON.stringify({
       type: 'http_request', id: '5'.repeat(32), method: 'post', path: '/api/settings/mutate', body: '',

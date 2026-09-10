@@ -688,6 +688,7 @@ export class Session implements SessionFace {
     this.notifier.markDirty()
   }
 
+  /** Apply Assistant publications; transient chunks leave the lifecycle snapshot unchanged. */
   private publishAssistantEntry(result: ClientAssistantStreamResult): void {
     if (result?.type === 'rebaseline') {
       const events = this.events
@@ -711,7 +712,6 @@ export class Session implements SessionFace {
       this.notifier.markDirty()
     } else if (result?.type === 'transient') {
       this.eventSource.append(result.entry)
-      this.notifier.markDirty()
     }
   }
 

@@ -142,6 +142,9 @@ interface WebPluginRecord {
   baseline: ClientArtifactBaseline
   /** Optional authored source map snapshot; generated-file identity mapping is the fallback. */
   sourceMap?: { body: Buffer; parsed: Record<string, unknown> }
+  /** Derived bytes are valid until this record's artifact changes. */
+  prepared?: PreparedComboSource
+  artifact?: ComboArtifact
 }
 
 /** Fields shared by every generated combo response. */
@@ -283,6 +286,13 @@ interface ComboSource {
   fallbackSource: string
 }
 
+/** Reusable encoded source and relocated map for one immutable artifact snapshot. */
+interface PreparedComboSource {
+  source: Buffer
+  sourceMap: string
+  lines: number
+}
+
 /** Remove bundle-local debug directives and retain their stable generated-file name. */
 function comboSource(record: WebPluginRecord): ComboSource {
   let source = record.bundle.toString('utf8')
@@ -296,8 +306,8 @@ function comboSource(record: WebPluginRecord): ComboSource {
 }
 
 /** Stamp a combo script's absolute indexed-map URL onto its executable bytes. */
-function comboScript(input: string, sourceMapUrl?: string): Buffer {
-  return Buffer.from(sourceMapUrl === undefined ? input : `${input}//# sourceMappingURL=${sourceMapUrl}\n`)
+function comboScript(input: Buffer, sourceMapUrl: string): Buffer {
+  return Buffer.concat([input, Buffer.from(`//# sourceMappingURL=${sourceMapUrl}\n`)])
 }
 
 /** Parse an optional source-map artifact; missing maps do not prevent plugin execution. */
@@ -367,26 +377,32 @@ function identitySectionMap(source: string, sourceUrl: string): Record<string, u
 
 /** Concatenate one or more factory registrations and compose their maps as indexed sections. */
 function buildCombo(records: readonly WebPluginRecord[], revision?: string): ComboArtifact {
-  let source = ''
-  const sections: { offset: { line: number; column: 0 }; map: Record<string, unknown> }[] = []
+  const sources: Buffer[] = []
+  const sections: string[] = []
   let line = 0
   for (const record of records) {
-    const prepared = comboSource(record)
-    const section = record.sourceMap === undefined
-      ? identitySectionMap(prepared.source, prepared.fallbackSource)
-      : comboSectionMap(record)
-    sections.push({ offset: { line, column: 0 }, map: section })
-    const bundle = `${prepared.source};\n`
-    source += bundle
-    line += newlineCount(bundle)
+    const prepared = record.prepared ??= prepareComboSource(record)
+    sections.push(`{"offset":${JSON.stringify({ line, column: 0 })},"map":${prepared.sourceMap}}`)
+    sources.push(prepared.source)
+    line += prepared.lines
   }
-  const sourceMap = Buffer.from(`${JSON.stringify({ version: 3, file: 'client.js', sections })}\n`)
-  const sourceBytes = Buffer.from(source)
+  const sourceMap = Buffer.from(`{"version":3,"file":"client.js","sections":[${sections.join(',')}]}\n`)
+  const sourceBytes = Buffer.concat(sources)
   const rev = revision ?? framedHash('combo', [sourceBytes, sourceMap])
   const entries = records.map(record => record.entry.id)
   const url = comboUrl(entries, rev)
   const sourceMapUrl = comboUrl(entries, rev, true)
-  return { url, rev, entries, script: comboScript(source, sourceMapUrl), sourceMap, sourceMapUrl }
+  return { url, rev, entries, script: comboScript(sourceBytes, sourceMapUrl), sourceMap, sourceMapUrl }
+}
+
+/** Prepare one record once; graph membership changes preserve these artifact bytes. */
+function prepareComboSource(record: WebPluginRecord): PreparedComboSource {
+  const prepared = comboSource(record)
+  const section = record.sourceMap === undefined
+    ? identitySectionMap(prepared.source, prepared.fallbackSource)
+    : comboSectionMap(record)
+  const source = `${prepared.source};\n`
+  return { source: Buffer.from(source), sourceMap: JSON.stringify(section), lines: newlineCount(source) }
 }
 
 /** Add initial-load scheduling metadata to a combo artifact. */
@@ -645,6 +661,8 @@ export class ClientModuleRegistry extends Service {
     record.bundle = bundle
     if (sourceMap === undefined) delete record.sourceMap
     else record.sourceMap = sourceMap
+    delete record.prepared
+    delete record.artifact
     this.composed = this.compose()
     for (const notify of this.rebuildListeners) {
       // Containment: rebuilt() runs inside the HMR watch callback — a
@@ -711,7 +729,7 @@ export class ClientModuleRegistry extends Service {
     }
     const responses = new Map(batchResponses)
     for (const record of this.table.values()) {
-      const artifact = buildCombo([record], record.entry.rev)
+      const artifact = record.artifact ??= buildCombo([record], record.entry.rev)
       responses.set(artifact.url, {
         body: artifact.script,
         contentType: 'text/javascript; charset=utf-8',

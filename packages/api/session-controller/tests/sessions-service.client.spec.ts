@@ -7,7 +7,7 @@
  * projection, create.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { LlmAttemptId } from '@deepseek-ai/dsh-llm'
@@ -15,6 +15,7 @@ import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
 import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { ClientSessions, SessionCreateError } from '../src/client/sessions/service.ts'
 import { scopeOf } from '../src/client/scope.ts'
+import type { SessionEventWindow } from '../src/client/contract/events.ts'
 import type { SessionFollowFrame } from '../src/types.ts'
 import {
   FakeApiClient,
@@ -135,6 +136,91 @@ describe('search', () => {
 })
 
 describe('scope tree', () => {
+  it('keeps lifecycle snapshots stable while publishing every transient chunk', async () => {
+    const b = bench()
+    onTestFinished(async () => { await b.ctx.fiber.dispose() })
+    await feedList(b, [{ id: 's1' }])
+    b.svc.open(sid('s1'))
+    const binding = b.svc.binding(sid('s1'))
+    if (binding === undefined) throw new Error('expected Session binding')
+    await vi.waitFor(() => {
+      expect(binding.session.getSnapshot().openState).toBe('open')
+    })
+
+    const before = binding.session.getSnapshot()
+    const initialRevision = binding.eventSource.getSnapshot().revision
+    const publications: SessionEventWindow[] = []
+    let notifyCount = 0
+    onTestFinished(binding.session.subscribe(() => { notifyCount += 1 }))
+    onTestFinished(binding.eventSource.subscribe(() => {
+      publications.push(binding.eventSource.getSnapshot())
+    }))
+    const attemptId = LlmAttemptId('stable-lifecycle-attempt')
+    await b.api.pushFollow(sid('s1'), {
+      type: 'assistant-stream',
+      frame: {
+        type: 'start', attemptId, revision: 1, startedAfterSeq: -1,
+        turn: 1, step: 1,
+      },
+    })
+    const chunks = ['first ', '第二', ' third'].map(text => ({
+      type: 'text-delta' as const, index: 0, text,
+    }))
+    for (const [index, chunk] of chunks.entries()) {
+      await b.api.pushFollow(sid('s1'), {
+        type: 'assistant-stream',
+        frame: {
+          type: 'chunk', attemptId, revision: index + 2, index,
+          time: index + 1, chunk,
+        },
+      })
+    }
+
+    expect(publications.map(window => window.revision)).toEqual([
+      initialRevision + 1, initialRevision + 2, initialRevision + 3,
+    ])
+    const entries = binding.eventSource.getSnapshot().entries
+    expect(entries.map(entry => ({
+      type: entry.type,
+      event: { type: entry.event.type, time: entry.event.time, data: entry.event.data },
+    }))).toEqual(chunks.map((chunk, index) => ({
+      type: 'transient',
+      event: {
+        type: 'assistant/live-chunk', time: index + 1,
+        data: { attemptId, turn: 1, step: 1, chunk },
+      },
+    })))
+    for (const [index, publication] of publications.entries()) {
+      expect(publication.entries).toEqual(entries.slice(0, index + 1))
+      expect(publication.change).toEqual({ kind: 'append', entries: [entries[index]] })
+      if (index > 0) expect(entries[index]!.event.seq).toBeGreaterThan(entries[index - 1]!.event.seq)
+    }
+    expect(binding.session.getSnapshot()).toBe(before)
+    expect(notifyCount).toBe(0)
+
+    b.svc.handleSessionStatus(sid('s1'), true)
+    await Promise.resolve()
+    expect(binding.session.getSnapshot()).not.toBe(before)
+    expect(binding.session.getSnapshot().running).toBe(true)
+    expect(notifyCount).toBe(1)
+    expect(publications).toHaveLength(3)
+
+    await b.ctx.fiber.dispose()
+    expect(b.api.activeFollows(sid('s1'))).toBe(0)
+    const disposedSnapshot = binding.session.getSnapshot()
+    const disposedNotifyCount = notifyCount
+    await b.api.pushFollow(sid('s1'), {
+      type: 'assistant-stream',
+      frame: {
+        type: 'chunk', attemptId, revision: 5, index: 3,
+        time: 4, chunk: { type: 'text-delta', index: 0, text: 'late' },
+      },
+    })
+    expect(binding.session.getSnapshot()).toBe(disposedSnapshot)
+    expect(notifyCount).toBe(disposedNotifyCount)
+    expect(publications).toHaveLength(3)
+  })
+
   it('publishes transient Assistant chunks and the named durable v2 settlement through one event source', async () => {
     const b = bench()
     await feedList(b, [{ id: 's1' }])

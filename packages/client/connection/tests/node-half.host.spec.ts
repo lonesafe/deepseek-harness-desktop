@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import { createServer, request as httpRequest } from 'node:http'
 import { Readable } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { AddressInfo } from 'node:net'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
@@ -438,6 +438,9 @@ describe('connection node half', () => {
   })
 
   it('applies the configured trust fence and JSON envelope checks to generic channels', async () => {
+    // Cookie issuance and verification share one time throughout this route matrix.
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 0, 1))
+    onTestFinished(() => { now.mockRestore() })
     const ctx = new Context()
     const routes: WebRoute[] = []
     provideBrowserCredentials(ctx)

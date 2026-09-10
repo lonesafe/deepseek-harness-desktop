@@ -138,6 +138,8 @@ It does not contain:
 
 Whether a field derives from an event, control frame, or local command does not automatically determine its owner; consumption semantics determine ownership. `composerPhase` depends on both Session lifecycle and Conversation target activity, so `ui-conversation` composes it instead of placing it in `SessionSnapshot`.
 
+Transient Assistant chunks change only `SessionEventSource`, preserving the lifecycle snapshot's identity and leaving its subscribers silent. Notifying broad `useSession` consumers for those chunks would trigger React work independently of Conversation's accumulated publication. Every chunk still advances the event-source revision synchronously and reaches the assembler in order.
+
 ### Three read faces
 
 The Session Controller exposes three distinct read faces:
@@ -435,6 +437,8 @@ A request does not register Slots, declare child Slots, mutate the Session snaps
 ## Verification
 
 Tests owned by each layer pin Controller bindings and event sources, UI scopes and pending precedence, incremental Conversation assembly and View fallback, target projections, waterfall results, and renderer scope/Store lifetimes. Application-composition tests cover both the complete roster and startup without a concrete target; component tests do not replace object-layer, replay, and lifecycle tests.
+
+Controller regressions preserve snapshot identity and zero lifecycle notifications across transient chunks, complete ordered event deltas and revisions, notification for a real running-state change, and silence after binding disposal.
 
 ## Alternatives considered
 

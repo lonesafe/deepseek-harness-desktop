@@ -109,7 +109,7 @@ async function routeRequest(route: WebRoute, url: string, method = 'GET'): Promi
 }> {
   let status = 0
   let headers: Record<string, string> | undefined
-  let body = Buffer.alloc(0)
+  let body: Buffer = Buffer.alloc(0)
   const response = {
     writeHead(nextStatus: number, nextHeaders?: Record<string, string>) {
       status = nextStatus
@@ -117,7 +117,7 @@ async function routeRequest(route: WebRoute, url: string, method = 'GET'): Promi
       return response
     },
     end(chunk?: Uint8Array) {
-      body = chunk === undefined ? Buffer.alloc(0) : Buffer.from(chunk)
+      body = chunk === undefined ? Buffer.alloc(0) : Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
       return response
     },
   } as unknown as ServerResponse
@@ -536,6 +536,74 @@ describe('client bundle activation', () => {
     expect((await routeRequest(route, first)).status).toBe(404)
     expect((await routeRequest(route, second)).status).toBe(200)
     expect((await routeRequest(route, third)).status).toBe(200)
+  })
+
+  it('prepares artifact bytes once across graph changes and invalidates them on rebuild or remount', async () => {
+    const packageName = '@fixture/cached-artifact'
+    const sibling = '@fixture/cache-sibling'
+    const clientPath = writePackage(packageName)
+    mkdirSync(dirname(clientPath), { recursive: true })
+    const source = Buffer.from('module.exports = { cachedArtifact: 1 }\n')
+    const replacement = Buffer.from('module.exports = { cachedArtifact: 2 }\n')
+    writeFileSync(clientPath, source)
+    writeBuiltPackage(sibling, {})
+    let sourceReads = 0
+    let replacementReads = 0
+    // The built artifact's UTF-8 decoding is the work shared by every combo.
+    // oxlint-disable-next-line typescript/unbound-method -- invoked with the original Buffer receiver below.
+    const decode = source.toString
+    const bufferPrototype: { toString: Buffer['toString'] } = Reflect.getPrototypeOf(source)!
+    const decoding = vi.spyOn(bufferPrototype, 'toString').mockImplementation(function (
+      this: Buffer, encoding?: BufferEncoding, start?: number, end?: number,
+    ) {
+      if (this.equals(source)) sourceReads += 1
+      if (this.equals(replacement)) replacementReads += 1
+      return decode.call(this, encoding, start, end)
+    })
+    try {
+      const entries = [packageName, sibling]
+      const { context, service, route } = constructWithRoute(entries)
+      const row = (): WebBootEntry => service.graph().entries.find(entry => entry.id === packageName)!
+      const first = await routeRequest(route, row().url)
+      expect(sourceReads).toBe(1)
+
+      entries.pop()
+      emitLoaderEntryChange(context, sibling)
+      await Promise.resolve()
+      expect(sourceReads).toBe(1)
+      expect((await routeRequest(route, row().url)).body).toBe(first.body)
+
+      service.rebuilt(packageName)
+      const hashed = await routeRequest(route, row().url)
+      expect(sourceReads).toBe(2)
+      service.rebuilt(packageName)
+      expect(sourceReads).toBe(2)
+      expect((await routeRequest(route, row().url)).body).toBe(hashed.body)
+
+      writeFileSync(`${clientPath}.map`, JSON.stringify({
+        version: 3, names: [], mappings: 'AAAA', sources: ['/repaired.ts'], sourcesContent: ['export {}\n'],
+      }))
+      service.rebuilt(packageName)
+      expect(sourceReads).toBe(3)
+      const map = await routeRequest(route, mapUrl(row().url))
+      expect(JSON.parse(map.body.toString('utf8'))).toMatchObject({
+        sections: [{ map: { sources: ['/repaired.ts'] } }],
+      })
+
+      writeFileSync(clientPath, replacement)
+      service.rebuilt(packageName)
+      expect(replacementReads).toBe(1)
+      expect((await routeRequest(route, row().url)).body.toString('utf8')).toContain('cachedArtifact: 2')
+      entries.pop()
+      emitLoaderEntryChange(context, packageName)
+      await Promise.resolve()
+      entries.push(packageName)
+      emitLoaderEntryChange(context, packageName)
+      await Promise.resolve()
+      expect(replacementReads).toBe(2)
+    } finally {
+      decoding.mockRestore()
+    }
   })
 
   it('assigns opaque startup revisions instead of deriving them from artifact content', () => {

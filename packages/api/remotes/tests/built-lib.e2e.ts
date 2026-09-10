@@ -70,6 +70,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
           return () => { routes.splice(routes.indexOf(route), 1) }
         },
         tapIndex() { return () => {} },
+        isLanAuthenticated() { return false },
         port: 0,
       })
       host.provide('credentials', {

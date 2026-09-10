@@ -4,6 +4,8 @@
 
 此包包含共享 dsh Web UI 的两种 Electron 发行版。分支仓库的发布工作流使用 `desktop:dist` 和 `lib/web-main.js`，为 macOS、Windows 和 Linux 提供内置 Electron 运行环境、认证局域网访问、远程控制与官网更新。`package:desktop` 命令使用 `lib/main.js` 和下文说明的独立运行环境；其种子资源与更新服务属于该发行版。每个打包流程都显式选择匹配的入口。
 
+分支仓库的账号远程控制将原生文件打开与文件管理器操作保留在本机桌面窗口。远程文件卡片将这些操作标记为不可用，隧道会在转发前拒绝两条原生打开路由。[远程中转决策](../../.agents/notes/implemented/feature/2026-08-15-account-device-remote-relay.zh.md)定义了其他远程访问限制。
+
 独立桌面应用是包裹 dsh Web UI 的 Electron 壳。它不打开监听端口：内置的上游 Node.js 子进程启动已安装的 dsh 项目，带版本的分帧字节管道在没有外层 Base64 信封的情况下承载 Fetch 请求与流式响应，Node IPC 承载生命周期控制，`dsh-app://` 则提供与后端版本匹配的客户端资源。
 
 分支仓库的打包器在签名前，分别使用暂存目录和最终应用中的 Electron 可执行文件验证原生依赖。它在 macOS 和 Linux 上调用 POSIX 文件锁绑定，在 Windows 上调用 Koffi 系统绑定；仅导入延迟加载的文件锁入口无法验证原生文件。Linux 暂存流程会构建完整的 `native/system` 文件集，包括可执行的 Landlock 启动器，因此构建宿主需要安装 `musl-tools` 提供的 `musl-gcc`。安装后的应用自带这些依赖，无需编译器或系统 Node.js。

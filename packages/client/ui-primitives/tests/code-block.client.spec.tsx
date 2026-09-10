@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { CodeBlock as LocalizedCodeBlock } from '../src/markdown/CodeBlock.tsx'
-import { highlightToHtml, subscribeGrammarLoaded } from '../src/markdown/highlight.ts'
+import { highlightToHtml } from '../src/markdown/highlight.ts'
 import { markdownLabels } from './labels.client.ts'
 
 function CodeBlock(props: Omit<ComponentProps<typeof LocalizedCodeBlock>, 'copyLabel' | 'copiedLabel'>) {
@@ -33,25 +33,22 @@ describe('highlightToHtml', () => {
     expect(highlightToHtml('x', undefined)).toBeUndefined()
   })
 
-  // Every read-tool language hint whose grammar loads lazily (the boot set —
-  // ts/js/shell/sh/json — is covered above). Touching each one drives its own
-  // dynamic import thunk, so the whole LAZY_GRAMMARS table is exercised.
   const LAZY_ALIASES = [
     'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'cs', 'kotlin', 'swift', 'php',
     'yaml', 'toml', 'ini', 'md', 'mdx', 'html', 'css', 'scss', 'less', 'sql',
     'xml', 'lua',
   ]
 
-  it('lazily loads every read-card grammar: plain first, highlighted after load', async () => {
+  it.each(LAZY_ALIASES)('lazily loads %s: plain first, highlighted after load', async (alias) => {
+    // PHP and HTML register embedded grammars, so each case needs a fresh singleton.
+    vi.resetModules()
+    const highlighter = await import('../src/markdown/highlight.ts')
     const registered = Promise.withResolvers<undefined>()
-    // Registration notifications, not a private polling deadline, establish readiness.
-    const stop = subscribeGrammarLoaded(() => {
-      if (LAZY_ALIASES.every(alias => highlightToHtml('x', alias) !== undefined)) registered.resolve(undefined)
-    })
+    const stop = highlighter.subscribeGrammarLoaded(() => { registered.resolve(undefined) })
     try {
-      for (const alias of LAZY_ALIASES) expect(highlightToHtml('x', alias), alias).toBeUndefined()
+      expect(highlighter.highlightToHtml('x', alias)).toBeUndefined()
       await registered.promise
-      for (const alias of LAZY_ALIASES) expect(highlightToHtml('x', alias), alias).toContain('shiki')
+      expect(highlighter.highlightToHtml('x', alias)).toContain('shiki')
     } finally {
       stop()
     }
@@ -65,6 +62,49 @@ describe('CodeBlock', () => {
     expect(pre).not.toBeNull()
     expect(pre!.textContent).toBe('const a = 1')
     expect(pre!.querySelectorAll('span[style]').length).toBeGreaterThan(1)
+    expect(view.container.querySelector('[data-line-numbers]')).toBeNull()
+  })
+
+  it.each(['ts', 'unregistered'])('numbers %s source lines without copying the gutter', async (lang) => {
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.useFakeTimers()
+    try {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+      const code = 'const first = 1\n\nconst last = 3'
+      const view = render(<CodeBlock code={`${code}\n`} lang={lang} lineNumbers />)
+      expect(view.container.querySelector('[data-line-numbers]')).not.toBeNull()
+      expect([...view.container.querySelectorAll('code > .line')].map(line => line.textContent))
+        .toEqual(['const first = 1', '', 'const last = 3'])
+      expect(view.container.querySelector('pre')!.textContent).toBe(code)
+      await act(async () => { fireEvent.click(view.getByRole('button', { name: '复制' })) })
+      expect(writeText).toHaveBeenCalledWith(code)
+      await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+      if (clipboard === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+      else Object.defineProperty(navigator, 'clipboard', clipboard)
+    }
+  })
+
+  it('keeps an empty numbered line and widens the gutter as streaming content grows', () => {
+    const view = render(<CodeBlock code="" lineNumbers />)
+    expect(view.container.querySelectorAll('code > .line')).toHaveLength(1)
+    expect(view.container.querySelector('pre')!.textContent).toBe('')
+    const gutter = () => view.container.querySelector<HTMLElement>('[data-line-numbers]')!
+      .style.getPropertyValue('--dsl-code-block-line-number-width')
+    expect(gutter()).toBe('2ch')
+    view.rerender(<CodeBlock code="const first = 1" lang="ts" streaming lineNumbers />)
+    const code = ['const first = 1', ...Array.from({ length: 99 }, (_, index) => `const line${index} = 0`)].join('\n')
+    view.rerender(<CodeBlock code={code} lang="ts" streaming lineNumbers />)
+    expect(view.container.querySelectorAll('code > .line')).toHaveLength(100)
+    const firstLine = view.container.querySelector('code > .line')
+    expect(view.container.querySelector('pre')!.textContent).toBe(code)
+    expect(gutter()).toBe('3ch')
+    view.rerender(<CodeBlock code={code} lang="ts" lineNumbers />)
+    expect(view.container.querySelector('code > .line')).toBe(firstLine)
+    expect(gutter()).toBe('3ch')
   })
 
   it('renders the plain arm for an unknown language with the text verbatim', () => {

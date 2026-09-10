@@ -19,6 +19,7 @@ const PRIVILEGED_REMOTE_METHODS = new Set([
   'agentPresets/deletePreset',
   'directoryPicker/pick',
   'session/openWorkspacePath',
+  'present.open',
   'settings/openSettingsDocument',
   'settings/openAgentPresetDirectory',
   'settings/update',
@@ -332,6 +333,14 @@ function isPrivilegedRequest(target: URL, method: string): boolean {
 }
 
 function projectReadOnlyResponse(target: URL, method: string, body: Buffer): Buffer {
+  if (method.toUpperCase() === 'GET' && rpcMethodFrom(target) === 'present.host') {
+    const host: unknown = JSON.parse(body.toString('utf8'))
+    if (!isRecord(host) || typeof host.available !== 'boolean') {
+      throw new Error('Local present.host response had invalid desktop metadata.')
+    }
+    host.available = false
+    return Buffer.from(JSON.stringify(host))
+  }
   if (method.toUpperCase() !== 'POST') return body
   const rpcMethod = rpcMethodFrom(target)
   if (rpcMethod === undefined || !READ_ONLY_REMOTE_METHODS.has(rpcMethod)) return body

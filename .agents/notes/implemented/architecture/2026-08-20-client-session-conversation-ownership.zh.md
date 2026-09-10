@@ -138,6 +138,8 @@ Approval 与 Question 从 Host waterfall 经 `ctx.remote.$on` 到达各自 UI ow
 
 字段由 event、control frame 或本地命令推导，并不自动决定其 owner；消费语义决定 owner。`composerPhase` 同时依赖 Session lifecycle 与 Conversation target activity，因此由 `ui-conversation` 合成，不进入 `SessionSnapshot`。
 
+瞬态 Assistant 分片只改变 `SessionEventSource`，保留生命周期快照的对象标识，且不通知其订阅者。逐分片通知读取整个 Session 的 `useSession` 消费者，会在 Conversation 的累计发布之外触发 React 工作。每个分片仍同步推进 event-source revision，并按顺序交给 assembler。
+
 ### 三个读取面
 
 Session Controller 对外提供三个互不替代的读取面：
@@ -435,6 +437,8 @@ Target 不得读取另一个 target 的 snapshot 作为自己的数据源。可�
 ## 验证
 
 各 owner 的测试分别固定 Controller binding 与 event source、UI scope 与 pending precedence、Conversation 增量组装与 View fallback、target projection、waterfall 结果以及 renderer 的 scope/store 生命周期。应用组装测试同时覆盖完整 roster 和缺少具体 target 的启动；组件测试不替代对象层、重放和生命周期测试。
+
+Controller 回归测试固定瞬态分片期间快照对象标识不变、生命周期通知次数为零、事件增量与 revision 完整有序、真实运行状态变化正常通知，以及 binding 销毁后不再发布。
 
 ## 备选方案
 

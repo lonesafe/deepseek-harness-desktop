@@ -77,6 +77,9 @@ describe('web e2e: Workspace files and previews', () => {
   it('uses a non-overflowing single-column file and preview flow on mobile', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-workspace-files-mobile'))
     await page.setViewportSize({ width: 390, height: 844 })
+    const composer = page.locator('[data-composer-input][contenteditable="true"]:visible')
+    // The frame's ResizeObserver and grid transition settle after the CSS breakpoint.
+    await expect.poll(async () => (await composer.boundingBox())?.x).toBeCloseTo(8, 1)
     const view = page.locator('[data-workspace-files-view]')
     await view.getByRole('button', { name: 'Back to file list' }).waitFor({ timeout: 10_000 })
     const previewGeometry = await view.evaluate((element) => {
@@ -97,10 +100,10 @@ describe('web e2e: Workspace files and previews', () => {
 
     await view.getByRole('button', { name: 'Back to file list' }).click()
     await view.getByRole('button', { name: /README\.md/ }).waitFor({ timeout: 10_000 })
-    const composer = page.locator('[data-composer-input][contenteditable="true"]').first()
     const composerBox = await composer.boundingBox()
     expect(composerBox).not.toBeNull()
-    expect(composerBox!.x).toBeGreaterThanOrEqual(12)
+    expect(composerBox!.x).toBeCloseTo(8, 1)
+    expect(await composer.evaluate(element => getComputedStyle(element).paddingLeft)).toBe('12px')
     expect(composerBox!.x + composerBox!.width).toBeLessThanOrEqual(378)
     expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(844)
     expect(tripwire.pageErrors).toEqual([])

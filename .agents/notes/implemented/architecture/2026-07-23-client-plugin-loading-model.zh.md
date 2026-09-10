@@ -46,6 +46,8 @@ Host 会快照每个已构建插件产物，并把每个调度阶段的有序 ro
 
 图为 HMR 保留每个 row 带 revision 的单资源 combo URL，并为每个启动 combo 请求增加按内容寻址的描述；多条描述可以使用同一调度阶段。初始 row revision 是进程级不透明 nonce，而不是内容哈希；它无需在启动时哈希每个插件，也能保证已快照的单资源响应不可变。watcher 观察到某个产物变化后，`rebuilt(id)` 只哈希该 bundle 与 map，并发布所得 revision。启动 combo revision 覆盖合并脚本输入与 indexed map。版本化脚本与 map 使用 immutable 缓存。Host 只提供精确生成的 URL；陈旧 revision 与未发布资源列表返回 404，不会别名到其他字节。外部脚本的 `error` 事件不给响应状态与正文，因此失败诊断只报告 URL；同源 Host 与构建期写入的 registration id 是身份边界，`load` 后的 factory 存在性检查负责拒绝未登记预期 id 的产物。
 
+大型客户端产物会让逐 entry 回滚变得昂贵：每次图变化都可能再次解码、计数并序列化全部仍存活的 bundle。因此，准备好的源码字节、行数、序列化 map section 和单资源响应归每个已加载产物记录所有，并跨仅成员变化的重组复用。`rebuilt()` 的 revision 变化会一起使它们失效；移除记录会释放它们。启动批次仍按有序输入拼接并计算哈希，现有上一代响应保留范围不变。归属测试统计产物解码次数，并验证响应复用、source/map 替换及重新挂载时的失效；built CLI 的 patch-overlay 失败用例以原有超时验证完整启动回滚。
+
 ### 装载流程，端到端
 
 从 `dsh web` 启动到 UI 出现之间发生了什么？三个阶段：host 组合 graph 并由 parser 预载 bootstrap factory，HTML facade 创建模块系统且外壳执行预取，然后 Cordis 编排。
@@ -96,7 +98,7 @@ Host 会快照每个已构建插件产物，并把每个调度阶段的有序 ro
 
 Wire 两侧运行同一份治理实现；浏览器特有层只包含一套模块系统和一个重载插件。动态包只有一种产物形态，因此纯度检查覆盖全部动态包。Cordis 依赖、模块请求与启动档位都与其所有者——manifest——同住，负责组合的 app 只握名册。Host graph 校验与递归请求到达使同步 factory 依赖保持显式。浏览器原生 script 装载保留插件网络资源、生成 bundle 与 TypeScript/TSX 源码之间的标准映射，模块系统也只保留一个可替换的 `loadBundle` 钩子。
 
-接受的代价：vendored Loader 在浏览器里背着闲置机件（EntryTree 持久化是 no-op，分组／隔离未用）；开发期每次修改插件都要付一次 bundle 重建加 fiber 重挂；graph `inject` row 指导 factory 到达，但服务可用性仍是激活权威，因此不匹配会在 settled 扫描时浮出；静态 UI 库保留直接实体导出；每个 bundle 多出一份 sourcemap 产物，外部 script 失败也只能给出粗粒度 URL 诊断，不能像显式 fetch 那样报告 HTTP 状态。Host 会保留逐插件 bundle/map 快照、生成的单资源响应、当前启动 combo 响应及上一代启动响应，因此内存会随组合出的客户端产物增长为数份副本。这组保留状态使 URL 保持不可变，并让进行中的请求跨越一次 HMR 重组后仍能完成。
+接受的代价：vendored Loader 在浏览器里背着闲置机件（EntryTree 持久化是 no-op，分组／隔离未用）；开发期每次修改插件都要付一次 bundle 重建加 fiber 重挂；graph `inject` row 指导 factory 到达，但服务可用性仍是激活权威，因此不匹配会在 settled 扫描时浮出；静态 UI 库保留直接实体导出；每个 bundle 多出一份 sourcemap 产物，外部 script 失败也只能给出粗粒度 URL 诊断，不能像显式 fetch 那样报告 HTTP 状态。Host 会保留逐插件 bundle/map 快照、准备好的 combo 输入、生成的单资源响应、当前启动 combo 响应及上一代启动响应，因此内存会随组合出的客户端产物增长为数份副本。这组保留状态使 URL 保持不可变，并让进行中的请求跨越一次 HMR 重组后仍能完成。
 
 名册位于 web 组合包的配置树（`packages/bundle/web-app/cordis.patch.yml`）；`mountWebPlugins` 与 `CLIENT_PACKAGES` 常量已消失，重组一次部署等于替换 yml/overlay。Graph 组合器位于 `dsh-client-modules` node 半，由 parser 预载的 Client face 则自举浏览器模块表。Webserver 继续作为朴素路由注册插件；`/api/*` 绑定、浏览器认证、RPC envelope 与精确 Fetch 路由属于 Connection node 半，Remote 分发属于 API Gateway，开发期 bundle 监视与 SSE 通道属于 HMR node 半。
 

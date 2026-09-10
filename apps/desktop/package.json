@@ -169,7 +169,7 @@
     "electron-builder": "26.15.3",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8",
+    "vitest": "^4.1.11",
     "@aws-sdk/client-s3": "3.1067.0",
     "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@electron/notarize": "2.5.0",

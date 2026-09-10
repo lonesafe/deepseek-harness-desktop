@@ -8,70 +8,7 @@ afterEach(() => { vi.unstubAllGlobals() })
 const id = SessionId('fork')
 const url = '/api/present.open?sessionId=fork&seq=2&index=1'
 
-it.each([true, false])('opens a reference with current desktop availability %s', async (available) => {
-  const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
-  vi.stubGlobal('fetch', fetcher)
-  const controller = new PresentedOpenController()
-  const preview = vi.fn()
-  controller.host.set({ name: 'host', available, fileManager: 'finder' })
-  await controller.openReference(id, 2, 1, preview)
-  if (available) {
-    expect(fetcher).toHaveBeenCalledWith(url, { method: 'POST', signal: expect.any(AbortSignal) as AbortSignal })
-    expect(preview).not.toHaveBeenCalled()
-  } else {
-    expect(preview).toHaveBeenCalledOnce()
-    expect(fetcher).not.toHaveBeenCalled()
-  }
-  await controller.dispose()
-})
-
-it('waits for the cards\' pending metadata read before previewing an unavailable desktop reference', async () => {
-  const reply = Promise.withResolvers<Response>()
-  const fetcher = vi.fn().mockReturnValue(reply.promise)
-  vi.stubGlobal('fetch', fetcher)
-  const controller = new PresentedOpenController()
-  const preview = vi.fn()
-  const metadata = controller.loadHost()
-  const reference = controller.openReference(id, 2, 1, preview)
-  expect(fetcher).toHaveBeenCalledOnce()
-  expect(preview).not.toHaveBeenCalled()
-  reply.resolve(Response.json({ name: 'remote', available: false, fileManager: 'finder' }))
-  await Promise.all([metadata, reference])
-  expect(preview).toHaveBeenCalledOnce()
-  expect(fetcher).toHaveBeenCalledOnce()
-  expect(fetcher).toHaveBeenCalledWith('/api/present.host', { signal: expect.any(AbortSignal) as AbortSignal })
-  await controller.dispose()
-})
-
-it('previews a reference when its desktop metadata read fails', async () => {
-  const fetcher = vi.fn().mockRejectedValue(new Error('offline'))
-  vi.stubGlobal('fetch', fetcher)
-  const controller = new PresentedOpenController()
-  const preview = vi.fn()
-  await controller.openReference(id, 2, 1, preview)
-  expect(preview).toHaveBeenCalledOnce()
-  expect(fetcher).toHaveBeenCalledOnce()
-  expect(fetcher).toHaveBeenCalledWith('/api/present.host', { signal: expect.any(AbortSignal) as AbortSignal })
-  expect(controller.state.getSnapshot()).toEqual({})
-  await controller.dispose()
-})
-
-it('suppresses a pending reference gesture when its plugin is disposed', async () => {
-  const reply = Promise.withResolvers<Response>()
-  const fetcher = vi.fn().mockReturnValue(reply.promise)
-  vi.stubGlobal('fetch', fetcher)
-  const controller = new PresentedOpenController()
-  const preview = vi.fn()
-  const reference = controller.openReference(id, 2, 1, preview)
-  const disposal = controller.dispose()
-  reply.resolve(Response.json({ name: 'remote', available: false, fileManager: null }))
-  await Promise.all([reference, disposal])
-  await controller.openReference(id, 2, 1, preview)
-  expect(preview).not.toHaveBeenCalled()
-  expect(fetcher).toHaveBeenCalledOnce()
-})
-
-it('coalesces concurrent card and mention gestures, then allows another open', async () => {
+it('coalesces concurrent native-open gestures, then allows another open', async () => {
   const reply = Promise.withResolvers<Response>()
   const fetcher = vi.fn().mockReturnValue(reply.promise)
   vi.stubGlobal('fetch', fetcher)

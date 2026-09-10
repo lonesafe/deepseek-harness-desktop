@@ -30,7 +30,7 @@ Status: implemented
 
 ### 已构建 Client 的导入分类
 
-[Node import sweep](../../../../packages/experimental/webworker-runtime/tests/compile/transform-corpus-check.ts)在裸 Node 中运行，利用原生类型剥离在[支持的 Node 范围](../process/2026-07-06-node-engine-floor.zh.md)内执行仅含可擦除语法的 TypeScript 驱动。工作区依赖通过包导出解析到构建文件，不使用 tsconfig 源码别名。Dockkit 例外要求 `ERR_UNKNOWN_FILE_EXTENSION` 指向自身的 `lib/components/dockkit.module.css` 或依赖中的 `ui-primitives/lib/StateDot.module.css`；任一静态导入都可能首先报告加载失败。源码 CSS、无关样式表、其他错误以及意外成功的豁免导入都会失败。限定范围的 resolve/load hook 覆盖两条接受路径及上述拒绝情况，不修改共享构建产物。
+[Node import sweep](../../../../packages/experimental/webworker-runtime/tests/compile/transform-corpus-check.ts)只有在 Node 针对某个 `.css` 文件报告 `ERR_UNKNOWN_FILE_EXTENSION` 时才接受 Dockkit bundle，其他每个错误以及每个意外成功的豁免导入都会失败；该豁免覆盖哪些样式表由[样式表豁免决策](../bug-fix/2026-09-10-built-bundle-css-exemption.zh.md)拥有。限定范围的 resolve/load hook 覆盖预期 CSS 失败、其他样式表、其他扩展名、任意失败、其他错误码和陈旧豁免，不修改共享构建产物。
 
 ## 考虑过的替代方案
 

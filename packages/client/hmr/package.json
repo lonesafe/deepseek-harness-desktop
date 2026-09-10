@@ -31,7 +31,9 @@
   },
   "dsh": {
     "client": {
-      "inject": [],
+      "inject": [
+        "@deepseek-ai/dsh-client-modules"
+      ],
       "platform": "web",
       "immediately": true
     }

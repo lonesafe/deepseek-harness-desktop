@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
-  "description": "Cross-platform Electron desktop launcher for DeepSeek Harness",
+  "description": "Cross-platform Electron desktop launcher with bundled dsh runtime and external plugins",
   "author": "DeepSeek AI",
   "version": "1.0.0-beta.17",
   "publishConfig": {
@@ -28,7 +28,7 @@
     "dev": "tsx scripts/dev.ts",
     "prepare:runtime": "tsx scripts/prepare-runtime.ts",
     "prepare:packages": "tsx scripts/prepare-package-set.ts",
-    "prepare:seed": "tsx scripts/prepare-seed.ts",
+    "prepare:dsh": "tsx scripts/prepare-dsh.ts",
     "prepare:package": "tsx scripts/package-target.ts --prepare-only",
     "verify:mac-signature": "node scripts/verify-macos-signature.mjs",
     "package": "tsx scripts/package-target.ts",
@@ -38,6 +38,7 @@
     "package:mac:x64": "tsx scripts/package-target.ts mac-x64",
     "package:mac:x64:dir": "tsx scripts/package-target.ts mac-x64 --dir",
     "package:win:x64": "tsx scripts/package-target.ts win-x64",
+    "package:win:x64:unsigned": "tsx scripts/package-target.ts win-x64 --unsigned",
     "package:win:x64:dir": "tsx scripts/package-target.ts win-x64 --dir",
     "upload:mac:arm64": "tsx scripts/upload-target.ts mac-arm64",
     "upload:mac:x64": "tsx scripts/upload-target.ts mac-x64",
@@ -177,7 +178,6 @@
     "app-builder-lib": "26.15.3",
     "extract-zip": "^2.0.1",
     "js-yaml": "^4.2.0",
-    "msgpackr": "2.0.4",
     "pnpm": "11.7.0",
     "tar": "^7.5.0"
   }

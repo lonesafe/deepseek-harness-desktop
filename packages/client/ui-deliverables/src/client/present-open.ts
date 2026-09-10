@@ -1,4 +1,4 @@
-/** Delivery actions and closing-message file references share desktop metadata and native-open status. */
+/** Delivery card actions share desktop metadata and native-open status. */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { presentedFileUrl, PRESENT_HOST_PATH, isPresentedHost, type PresentedAction, type PresentedHost } from '../presented.ts'
@@ -8,7 +8,7 @@ export type PresentedOpenPhase = 'opening' | 'opened' | 'revealing' | 'revealed'
 
 /** One browser plugin's file-open requests, cancelled when that plugin is disposed. */
 export class PresentedOpenController {
-  /** File action URLs key the state across Sessions, turns, and both clickable surfaces. */
+  /** File action URLs key the state across Sessions, turns, and native actions. */
   readonly state = createSnapshotStore<Record<string, PresentedOpenPhase | undefined>>({})
   /** Native destination metadata, or a retryable read failure. */
   readonly host = createSnapshotStore<PresentedHost | 'error' | null>(null)
@@ -16,23 +16,6 @@ export class PresentedOpenController {
   private metadata = new AbortController()
   private readonly lifetime = new AbortController()
   private readonly pending = new Set<Promise<void>>()
-
-  /**
-   * Open a prose reference using current desktop availability, or preview it in the Sidebar.
-   * Missing metadata shares the cards' pending read; failed reads leave preview available.
-   * @param sessionId - viewed Session.
-   * @param seq - durable delivery event sequence.
-   * @param index - original file index within that event.
-   * @param preview - owner's Sidebar action for the declared path.
-   * @returns after preview or the native-open request completes; disposal suppresses both.
-   */
-  async openReference(sessionId: SessionId, seq: number, index: number, preview: () => void): Promise<void> {
-    if (this.host.getSnapshot() === null) await this.loadHost()
-    if (this.lifetime.signal.aborted) return
-    const host = this.host.getSnapshot()
-    if (host !== null && host !== 'error' && host.available) await this.open(sessionId, seq, index)
-    else preview()
-  }
 
   /**
    * Open a declared file once while a request for the same coordinates is pending.

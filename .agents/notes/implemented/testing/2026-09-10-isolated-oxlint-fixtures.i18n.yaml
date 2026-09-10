@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-10-isolated-oxlint-fixtures.md
+2026-09-10-isolated-oxlint-fixtures.md: 6b4ffc0d09d739667393f93cb41e6d3589cb173d
+2026-09-10-isolated-oxlint-fixtures.zh.md: 3f497522a50051a112cfdba9f21c82168096953d

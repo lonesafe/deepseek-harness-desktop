@@ -24,17 +24,20 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repositoryRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
 const DOCKKIT_BUNDLE = 'packages/client/ui-dockkit/lib/index.js'
-const DOCKKIT_CSS = [
-  'packages/client/ui-dockkit/lib/components/dockkit.module.css',
-  'packages/client/ui-primitives/lib/StateDot.module.css',
-].map(path => join(repositoryRoot, path))
 
 /**
  * Files Node's ESM loader cannot import in this repository. None is a finding:
  * each is listed with the reason the import fails, and the run refuses a
  * listed file that imports cleanly so the list stays current in both
- * directions. Dockkit can fail on its own stylesheet or its ui-primitives
- * dependency's first stylesheet; only those exact built paths are admitted.
+ * directions. The koffi entry depends on corpus order: sandbox-windows-acl
+ * imports the win32-process package earlier in the serial sweep (a distinct
+ * module instance under its node_modules URL), so win32-process's own file-URL
+ * import re-registers koffi's type names and fails as the second load.
+ *
+ * The Dockkit entry admits only Node's refusal of a `.css` import, not one
+ * exact stylesheet: the swept bundle's first unresolvable stylesheet depends on
+ * its import graph and on how the launcher resolves workspace packages, so a
+ * pinned path would certify an import order instead of the `.css` exemption.
  */
 const BASELINE_EXEMPT: ReadonlyMap<string, string> = new Map([
   [DOCKKIT_BUNDLE, 'imports .css, which bare Node cannot load'],
@@ -95,6 +98,16 @@ function discover(): string[] {
  */
 const relative = (path: string): string => path.slice(repositoryRoot.length).replaceAll('\\', '/')
 
+/**
+ * @param reason - the value the corpus import rejected with.
+ * @returns whether bare Node refused a `.css` import, the failure the Dockkit
+ * exemption admits.
+ */
+const isUnknownCssExtension = (reason: unknown): boolean =>
+  reason instanceof Error
+  && 'code' in reason && reason.code === 'ERR_UNKNOWN_FILE_EXTENSION'
+  && reason.message.startsWith('Unknown file extension ".css" for ')
+
 const files = process.argv.slice(2).length > 0
   ? process.argv.slice(2).map(path => (path.startsWith('/') ? path : join(process.cwd(), path)))
   : discover()
@@ -111,10 +124,7 @@ if (files.length === 0) {
     try {
       await import(pathToFileURL(file).href)
     } catch (reason) {
-      const expectedDockkitCss = reason instanceof Error
-        && 'code' in reason && reason.code === 'ERR_UNKNOWN_FILE_EXTENSION'
-        && DOCKKIT_CSS.some(path => reason.message === `Unknown file extension ".css" for ${path}`)
-      if (exemption === undefined || (key === DOCKKIT_BUNDLE && !expectedDockkitCss)) {
+      if (exemption === undefined || (key === DOCKKIT_BUNDLE && !isUnknownCssExtension(reason))) {
         // A bundle that stopped being importable is a real finding, so it
         // fails rather than joining a tolerated total.
         fail(`- UNEXPECTED BASELINE FAILURE ${key}: ${(reason as Error).message.split('\n')[0]}`)

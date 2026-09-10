@@ -154,7 +154,7 @@
 - paragraph:
   - text: Wrote
   - code:
-    - button "Open site/report.html": report.html
+    - button "Open site/report.html in sidebar": report.html
   - text: plus two
   - code: style.css
   - text: copies;
@@ -193,9 +193,7 @@
 - button "Back to bottom":
   - img
 - textbox "Message or run a task, / commands, @ files or sessions"
-- button "Commands":
-  - img
-- button "Add attachment":
+- button "Add files or run commands":
   - img
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":

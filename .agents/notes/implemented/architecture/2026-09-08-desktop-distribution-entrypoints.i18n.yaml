@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-08-desktop-distribution-entrypoints.md
-2026-09-08-desktop-distribution-entrypoints.md: cc974be0ba100948a38604ec22ec5934307b3952
-2026-09-08-desktop-distribution-entrypoints.zh.md: fdecbe5f263cc565df37030996c87a6a678bcbf2
+2026-09-08-desktop-distribution-entrypoints.md: 064378beb09c82cb0c3a23ab380dc47ca3989c65
+2026-09-08-desktop-distribution-entrypoints.zh.md: 497136882d826b80f2176495d02ae72b1cf00872

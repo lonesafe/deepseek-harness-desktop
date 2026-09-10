@@ -76,6 +76,7 @@ const ASK_SENTENCE = 'Approval policy: ask. Operations that require approval may
  */
 function hasOpenTurn(session: Session): boolean {
   for (let seq = session.seq - 1; seq >= 0; seq -= 1) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     const type = session.eventAt(SessionSeq(seq))?.type
     if (type === 'turn/start') return true
     if (type === 'turn/end') return false
@@ -249,6 +250,7 @@ export class ApprovalService extends Service {
    */
   overrideOf(session: Session): ApprovalPolicy | undefined {
     for (let seq = session.seq - 1; seq >= 0; seq -= 1) {
+      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       const event = session.eventAt(SessionSeq(seq))
       if (event?.type === 'approval/policy') return event.data.policy
     }
@@ -324,6 +326,7 @@ export class ApprovalService extends Service {
 function hasRememberedGrant(session: Session, key: string): boolean {
   const keys = new Map<ApprovalRequestId, string>()
   for (let seq = 0; seq < session.seq; seq += 1) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     const event = session.eventAt(SessionSeq(seq))
     if (event?.type === 'approval/asked' && event.data.alwaysAllowKey !== undefined) {
       keys.set(event.data.id, event.data.alwaysAllowKey)

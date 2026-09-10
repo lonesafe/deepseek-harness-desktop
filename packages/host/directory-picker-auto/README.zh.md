@@ -119,4 +119,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。唯一 effect 是由插件 fiber 持有的 boot-time Loader-entry mount，store 是权威来源。
+**运行时不变式：** 不发布伴生入口。唯一 effect 是由插件 fiber 持有的 boot-time Loader-entry mount，存储是权威来源。

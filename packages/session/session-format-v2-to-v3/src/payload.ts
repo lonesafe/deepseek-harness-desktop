@@ -65,7 +65,17 @@ export function assertEvent(event: SessionFormatEvent, version: 2 | 3): void {
   }
   // Non-inventory feedback events have returned above.
   const admitted = disposition as NonNullable<typeof disposition>
-  keys(data, admitted.required, admitted.optional, event.type + ' data')
+  // Desktop v2 builds persisted the stable grant key used by the "always allow"
+  // approval choice. Admit only that known extension while keeping every other
+  // released-v2 payload member frozen and strictly validated.
+  const optional = event.type === 'approval/asked'
+    ? [...admitted.optional, 'alwaysAllowKey']
+    : admitted.optional
+  keys(data, admitted.required, optional, event.type + ' data')
+  if (event.type === 'approval/asked' && data['alwaysAllowKey'] !== undefined
+    && (typeof data['alwaysAllowKey'] !== 'string' || data['alwaysAllowKey'].length === 0)) {
+    throw new SessionFormatError('approval/asked alwaysAllowKey must be a non-empty string')
+  }
   assertOwnedContent(event, data)
   // Assistant attempts are introduced by V2; the V0 helper has no case for them.
   if (event.type !== 'assistant/attempt') assertReleasedPayloadSemantics(event, version)

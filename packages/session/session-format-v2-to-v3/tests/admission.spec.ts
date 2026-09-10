@@ -42,6 +42,25 @@ describe('durable V3 admission failures', () => {
     expect(() => restoreReleasedV3Artifact(output, new Set())).not.toThrow()
   })
 
+  it('preserves the desktop v2 always-allow approval key without opening general extensions', () => {
+    const approval = event('approval/asked', {
+      id: 'approval-1',
+      toolName: 'bash',
+      alwaysAllowKey: 'sandbox:bash:workspace-write',
+    })
+    expect(migrate([approval]).events[0]?.data).toEqual(approval.data)
+    expect(() => migrate([event('approval/asked', {
+      id: 'approval-1',
+      toolName: 'bash',
+      alwaysAllowKey: '',
+    })])).toThrow(/non-empty string/)
+    expect(() => migrate([event('approval/asked', {
+      id: 'approval-1',
+      toolName: 'bash',
+      extension: true,
+    })])).toThrow(/unexpected field extension/)
+  })
+
   it('rejects non-dense source stage input rather than generating ambiguous identities', () => {
     const stage = sessionFormatV2ToV3.createStage({ sourceHeader: header, targetHeader: { ...header, version: 3 }, sourceInheritedEventCount: 0, sourceKind: 'decoded' })
     expect(() =>{  stage.transformEvent({ ...opening[0]!, seq: 1 }, new SessionFormatEventCollector()) }).toThrow(/dense/)

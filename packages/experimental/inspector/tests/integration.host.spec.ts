@@ -371,23 +371,19 @@ describe('experimental Inspector real Worker', () => {
       const response = await cdp!.call('DSHInspector.getSources')
       expect(recordArray(response.result?.sources).some(source => source.kind === 'client')).toBe(true)
     })
-    // The MessagePort can deliver log requests before ingest receives Console subscriptions.
-    await client.setIngestPaused(true)
     await Promise.all([cdp.call('Runtime.enable'), secondCdp.call('Runtime.enable')])
     const firstContext = await clientContext(cdp)
     const secondContext = await clientContext(secondCdp)
     const value = { owner: 'client-console' }
     const marker = 'client-console-event'
-    const logged = (async () => {
-      // Both subscriptions precede this request on the same ingest WebSocket.
-      // A Client response, unlike Runtime.enable, acknowledges their delivery.
-      expect((await cdp.call('Runtime.evaluate', {
-        contextId: firstContext,
-        expression: 'void 0',
-      })).error).toBeUndefined()
-      await client.log(value, marker)
-    })()
-    await Promise.all([logged, client.setIngestPaused(false)])
+    // The MessagePort can deliver log requests before ingest receives Console subscriptions.
+    // A Client response on the same ingest WebSocket acknowledges that both preceding
+    // Runtime.enable subscriptions have reached the realm before the fixture logs.
+    expect((await cdp.call('Runtime.evaluate', {
+      contextId: firstContext,
+      expression: 'void 0',
+    })).error).toBeUndefined()
+    await client.log(value, marker)
     let firstEvent: CdpMessage | undefined
     let secondEvent: CdpMessage | undefined
     await vi.waitFor(() => {

@@ -37,7 +37,7 @@ kind: "package-reference"
 
 ### 可观察的失败
 
-取消返回 `null`，不是错误。平台工具缺失、选择器启动失败或 pick 被中止都会以界面可以呈现的拒绝形式浮现；[浏览后端](../directory-picker-browse/README.zh.md)仍是原生选择不可靠的部署在组合层面的回退。
+取消返回 `null`，不是错误。平台工具缺失、选择器启动失败或选择操作中止都会导致 Promise 拒绝，界面可呈现相应错误；[浏览后端](../directory-picker-browse/README.zh.md)仍是原生目录选择不可靠时的组合层回退方案。
 
 -----
 
@@ -49,7 +49,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-后端是平台选择器之上的一层薄服务：`NativeDirectoryPicker` 注册 `native` 能力，其 `pick` 转发给 `pickNativeDirectory`，选择器以子进程运行，宿主进程因此绝不为对话框阻塞。命令边界（`DirectoryPickerRunner`）与平台事实可注入；共享的免 shell 子进程运行器位于 [`dsh-native-command`](../../util/native-command/README.zh.md)。
+后端是平台选择器之上的一层薄服务：`NativeDirectoryPicker` 注册 `native` 能力，其 `pick` 转发给 `pickNativeDirectory`，选择器以子进程运行，因此宿主进程不会因对话框而阻塞。命令边界（`DirectoryPickerRunner`）与平台事实可注入；共享的免 shell 子进程运行器位于 [`dsh-native-command`](../../util/native-command/README.zh.md)。
 
 ### 平台机制
 
@@ -94,7 +94,7 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 
-这些限制说明原生交互何时不可用或易碎。它们是当前包约束，不是任务积压。
+这些限制说明原生交互何时不可用或不稳定。它们是当前包约束，不是任务积压。
 
 - **Linux 依赖桌面工具**——Zenity 与 KDialog 均未安装时，`pick` 以包含解决建议的错误拒绝；它不会回退为手输路径提示（组合层面的回退是浏览后端）。
 - **Windows 没有机制级回退**——通过打包依赖 koffi 运行的子进程选择器是唯一原生层级，因此 COM 拒绝或对话框崩溃会直接上报失败；组合层面的回退仍是浏览后端。
@@ -110,4 +110,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。每次 pick 都是一次无状态 subprocess 往返，chooser outcome 只存在于返回路径。
+**运行时不变式：** 不发布伴生入口。每次选择都是一次无状态的子进程往返；选择器的结果仅为返回的路径。

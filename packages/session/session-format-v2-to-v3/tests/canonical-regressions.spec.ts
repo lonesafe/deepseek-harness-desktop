@@ -1,21 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createSessionFormatCatalog } from '@deepseek-ai/dsh-session-format'
 import type { SessionFormatArtifact, SessionFormatEvent, SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
-import { releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, sessionFormatV0ToV1 } from '@deepseek-ai/dsh-session-format-v0-to-v1'
-import { sessionFormatV1ToV2 } from '@deepseek-ai/dsh-session-format-v1-to-v2'
-import { assertReleasedV3Header, releasedV2SessionFormatCodec, releasedV3SessionFormatCodec, restoreReleasedV3Artifact, sessionFormatV2ToV3 } from '../src/index.ts'
+import { releasedV3SessionFormatCodec, restoreReleasedV3Artifact } from '../src/index.ts'
+import { releasedV3Catalog as catalog } from './fixtures/released-catalog.ts'
 
 const header = { version: 2, id: 'canonical:code:session', createdAt: 1, isSeeded: false, delegationDepth: 0 }
 const config = { provider: 'mock', model: 'mock', stop: [] }
-const catalog = createSessionFormatCatalog({
-  currentVersion: 3,
-  codecs: [releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec, releasedV3SessionFormatCodec],
-  migrations: [sessionFormatV0ToV1, sessionFormatV1ToV2, sessionFormatV2ToV3],
-  currentEncoder: releasedV3SessionFormatCodec,
-  restoreCurrentHeader(value) { assertReleasedV3Header(value); return value },
-  restoreCurrent: value => restoreReleasedV3Artifact(value, new Set()),
-  restoreTransformedCurrent: value => restoreReleasedV3Artifact(value, new Set()),
-})
 
 function event(type: string, seq: number, data: SessionFormatEvent['data'], fields: SessionFormatJsonObject = {}): SessionFormatEvent {
   return { type, seq, time: seq - 20, data, ...fields }

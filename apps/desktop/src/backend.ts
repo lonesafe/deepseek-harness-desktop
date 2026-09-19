@@ -2,7 +2,8 @@
 
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const READY_PATTERN = /^dsh web: (http:\/\/127\.0\.0\.1:\d+(?:\/[^\s)]*)?)(?: \(LAN: (http:\/\/[^\s)]+)\))?(?:\s|$)/m
 const STARTUP_TIMEOUT_MS = 120_000
@@ -72,13 +73,14 @@ export function extractHarnessReady(output: string): HarnessReady | undefined {
 /**
  * Build the embedded-Node invocation required by the production Web profile.
  * @param entry - resolved built dsh CLI entry.
+ * @param lanAccess - persisted choice for authenticated LAN exposure.
  * @returns Node flags followed by the dsh Web command.
  */
 export function harnessArguments(
   entry: string,
   lanAccess?: HarnessProcessOptions['lanAccess'],
 ): string[] {
-  const args = ['--expose-internals', entry, 'web', '--port', '0']
+  const args = ['--expose-internals', entry, 'web', '--no-open', '--port', '0']
   if (lanAccess?.enabled === true) {
     args.push('--host', '0.0.0.0', '--access-token', lanAccess.accessToken)
   }
@@ -99,6 +101,30 @@ function resolveDshEntry(): string {
   const require = createRequire(import.meta.url)
   const manifest = require.resolve('@deepseek-ai/dsh/package.json')
   return join(dirname(manifest), 'lib', 'bin.js')
+}
+
+/**
+ * Resolve the packaged Node and pnpm launchers for the Web profile and its children.
+ * @param executable - Electron executable owned by this application.
+ * @param applicationRoot - Directory containing the desktop package manifest and assets.
+ * @param parent - Parent environment; package operations apply their normal credential scrub.
+ * @returns Environment with bundled commands ahead of system tools on PATH.
+ */
+export function resolveHarnessEnvironment(
+  executable: string, applicationRoot: string, parent: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const require = createRequire(join(applicationRoot, 'package.json'))
+  const pnpm = join(dirname(require.resolve('pnpm')), 'bin', 'pnpm.mjs')
+  const environment = Object.fromEntries(Object.entries(parent).filter(([key]) => key.toUpperCase() !== 'PATH'))
+  const pathKey = Object.keys(parent).find(key => key.toUpperCase() === 'PATH')
+  const parentPath = pathKey === undefined ? undefined : parent[pathKey]
+  return {
+    ...environment,
+    ELECTRON_RUN_AS_NODE: '1',
+    ELECTRON_DESKTOP_EXECUTABLE: executable,
+    ELECTRON_DESKTOP_PNPM_ENTRY: pnpm,
+    PATH: [join(applicationRoot, 'build', 'runtime-bin'), parentPath].filter(Boolean).join(delimiter),
+  }
 }
 
 /** Wait until a child exits or the grace period elapses. */
@@ -149,9 +175,8 @@ export function startHarnessProcess(options: HarnessProcessOptions): HarnessProc
   const child = spawn(options.executable, harnessArguments(resolveDshEntry(), options.lanAccess), {
     cwd: options.cwd,
     env: {
-      ...process.env,
+      ...resolveHarnessEnvironment(options.executable, fileURLToPath(new URL('../', import.meta.url)), process.env),
       DSH_HOME: options.home,
-      ELECTRON_RUN_AS_NODE: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,

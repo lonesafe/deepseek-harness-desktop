@@ -1,10 +1,12 @@
-import { execFileSync } from 'node:child_process'
+import childProcess, { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { syncBuiltinESMExports } from 'node:module'
 import { basename, dirname, join, relative, resolve } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import * as jsonValues from '@deepseek-ai/dsh-util-values'
 import { PythonPtcRuntime, hostFrameParseCeiling, readProcessStart, resolvePythonBin } from '../src/index.ts'
 import { logTruncationMarker } from '../src/protocol.ts'
 import type { Config } from '../src/index.ts'
@@ -59,9 +61,7 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 
 /**
- * Integration suite over REAL python3 subprocesses (no subprocess mocks — it is
- * cheap and local, per docs/testing.md's real-over-mock policy; the only mock is
- * `node:fs.copyFileSync` for the staging-failure cases). Each test builds a fresh
+ * Integration suite over real python3 subprocesses. Each test builds a fresh
  * runtime so budgets can be tuned per case.
  */
 async function setup(config: Config = {}) {
@@ -4616,69 +4616,67 @@ describe('PythonPtcRuntime — hostile peer', () => {
   }, 30_000)
 
   it('coalesces unframed fd-3 fragments without recopying the sealed prefix', async () => {
-    // The frame ceiling meters payload BYTES, but each retained chunk is its own
-    // Buffer with object and backing-store overhead the byte count cannot see:
-    // 5000 single-byte newline-free writes produced 5000 chunks holding 5031
-    // bytes, so a program pacing such writes could accumulate millions of objects
-    // inside the wall budget and exhaust the host heap far below 256 MiB.
-    //
-    // The observable behavior is that the run still completes normally: the
-    // fragments are coalesced rather than rejected, since a slow trickle of bytes
-    // is not itself a protocol violation.
-    //
-    // `Buffer.concat` is wrapped for the duration so the cumulative copy volume
-    // is measured rather than inferred: that total is what separates sealing into
-    // blocks from re-merging the whole buffer, and both shapes pass every
-    // behavioral assertion below.
-    //
-    // The trickle is terminated with its own newline before the real frame is
-    // written. Without that, those 5000 bytes prefix the frame on the SAME line,
-    // which then parses as junk and is dropped — correct framing behavior, but it
-    // would leave this test asserting the wrong thing.
-    // Bound at capture: `Buffer.concat` is a static method, and taking a bare
-    // reference to one trips no-unbound-method.
+    const { runtime, fiber } = await setup({ maxWallMs: 30_000 })
     const realConcat = Buffer.concat.bind(Buffer)
+    const realSpawn = childProcess.spawn.bind(childProcess)
     let copied = 0
-    Buffer.concat = (list: readonly Uint8Array[], total?: number): Buffer<ArrayBuffer> => {
+    let fragments = 0
+    let restorePipe: (() => void) | undefined
+    const spawn = vi.spyOn(childProcess, 'spawn').mockImplementationOnce((...args) => {
+      const child = realSpawn(...args)
+      const pipe = child.stdio[3]
+      if (pipe === null || pipe === undefined) throw new Error('Python fd-3 pipe was not created')
+      const realEmit = pipe.emit.bind(pipe)
+      const emit = vi.spyOn(pipe, 'emit').mockImplementation((event, ...values: unknown[]) => {
+        const chunk: unknown = values[0]
+        if (event !== 'data' || !Buffer.isBuffer(chunk)) return realEmit(event, ...values)
+        // Kernel buffering cannot determine whether this owned stream crosses the fragment-count bound.
+        for (let index = 0; index < chunk.length; index++) {
+          fragments++
+          realEmit('data', chunk.subarray(index, index + 1))
+        }
+        return true
+      })
+      restorePipe = () => { emit.mockRestore() }
+      return child
+    })
+    syncBuiltinESMExports()
+    const concat = vi.spyOn(Buffer, 'concat').mockImplementation((list: readonly Uint8Array[], total?: number): Buffer<ArrayBuffer> => {
       for (const part of list) copied += part.length
       return realConcat(list, total)
+    })
+    const cleanup = async (): Promise<void> => {
+      try {
+        await fiber.dispose()
+      } finally {
+        concat.mockRestore()
+        spawn.mockRestore()
+        syncBuiltinESMExports()
+        restorePipe?.()
+      }
     }
-    const program = [
-      'import os',
-      // Newline-free single-byte writes, spaced so each lands as its own read.
-      // 60000 rather than 5000: the trickle has to cross the seal threshold
-      // enough times for the two shapes to separate. At 5000 writes there are
-      // only four seals, so even the quadratic form copies well under a
-      // megabyte and the budget below could not tell them apart.
-      'for _ in range(60000):',
-      '    os.write(3, b"x")',
-      '    os.sched_yield()',
-      'os.write(3, b"\\n")',
-      // A real frame after the trickle proves framing still works on the
-      // coalesced residual.
-      'print("after-trickle")',
-      'return "done"',
-    ].join('\n')
+    onTestFinished(cleanup)
     let result: PtcRunResult
     try {
-      const { runtime } = await setup({ maxWallMs: 30_000 })
-      result = await runtime.run(runtime.resolve({ program, bindings: [] }))
+      result = await runtime.run(runtime.resolve({
+        program: [
+          'import os',
+          'for _ in range(60000):',
+          '    os.write(3, b"x")',
+          'os.write(3, b"\\n")',
+          'print("after-trickle")',
+          'return "done"',
+        ].join('\n'),
+        bindings: [],
+      }))
     } finally {
-      Buffer.concat = realConcat
+      await cleanup()
     }
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
     expect(result.logs).toContain('after-trickle')
-    // Sealing appends a finished block rather than re-merging everything held, so
-    // each byte is copied once. Re-concatenating the whole buffer at every
-    // threshold made the cumulative copy volume quadratic — 10 MiB trickled a
-    // byte at a time copies 53.7 GB that way. A per-byte-copied budget is the
-    // discriminator, and it is measured rather than reasoned about: this shape
-    // copies about 119 KB for 60000 trickled bytes, the re-merging shape about
-    // 540 KB. 256 KiB sits between them with margin on both sides — most writes
-    // are coalesced by the pipe before they reach us, so the observed ratio is
-    // smaller than the asymptotic one, and the threshold has to sit where a real
-    // measurement lands rather than where the asymptote suggests.
+    expect(fragments).toBeGreaterThanOrEqual(60_000)
+    // Each fragment is copied once into a sealed block and once into its completed line.
     expect(copied).toBeLessThan(256 * 1024)
   }, 40_000)
 
@@ -5101,7 +5099,10 @@ describe('PythonPtcRuntime — hostile peer', () => {
     //
     // The binding echoes its argument's length back, so the assertion proves the
     // call actually round-tripped rather than merely avoiding a crash.
-    const { runtime } = await setup({ addressSpaceMb: 384, maxWallMs: 60_000 })
+    // Validation and JSON transport traverse all six million elements. Their CPU
+    // and wall budgets allow a loaded runner to finish; the memory ceiling owns
+    // the regression assertion.
+    const { runtime } = await setup({ addressSpaceMb: 384, cpuSeconds: 120, maxWallMs: 180_000 })
     const result = await runtime.run(runtime.resolve({
       program: 'return await tools.width([0] * 6_000_000)',
       bindings: [{
@@ -5111,7 +5112,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe(6_000_000)
-  }, 90_000)
+  }, 210_000)
 
   it('decodes a multi-megabyte binding reply without regex backtracking state', async () => {
     // The child parses every host reply with `_decode_json_plain`. Its scalar
@@ -5139,34 +5140,44 @@ describe('PythonPtcRuntime — hostile peer', () => {
   }, 90_000)
 
   it('drops a late binding resolution before snapshotting it', async () => {
-    // `sendReply` checks `settled`, but only after the resolution has been walked
-    // and copied by `snapshotJsonValue`. Binding resolution carries no seam-level
-    // byte cap, so a binding that resolves a wide value AFTER the run already
-    // settled (here on `maxWallMs`) spent host heap building a frame that is then
-    // discarded. The check now runs before the snapshot.
-    //
-    // The binding resolves well after the 1s wall clock with a 2M-element array;
-    // the run must still report `timeout`, and the late value must not appear.
-    let resolvedLate = false
-    const { runtime } = await setup({ maxWallMs: 1_000 })
-    const result = await runtime.run(runtime.resolve({
+    // Binding values have no byte cap; cancellation must discard them before JSON traversal.
+    const entered = Promise.withResolvers<undefined>()
+    const resolution = Promise.withResolvers<number[]>()
+    const controller = new AbortController()
+    const { runtime, fiber } = await setup()
+    const running = runtime.run(runtime.resolve({
       program: 'return await tools.slow({})',
+      signal: controller.signal,
       bindings: [{
         global: 'tools',
         functions: {
-          slow: async () => {
-            await new Promise(resolve => setTimeout(resolve, 2_500))
-            resolvedLate = true
-            return Array.from({ length: 2_000_000 }, () => 0)
+          slow: () => {
+            entered.resolve(undefined)
+            return resolution.promise
           },
         },
       }],
     }))
-    expect(result.error?.kind).toBe('timeout')
+    onTestFinished(async () => {
+      controller.abort()
+      resolution.resolve([])
+      await running
+      await fiber.dispose()
+    })
+
+    await entered.promise
+    controller.abort('binding is still pending')
+    const result = await running
+    expect(result.error?.kind).toBe('abort')
     expect(result.value).toBeUndefined()
-    // Pin that the late path actually ran, so the assertion above is not vacuous.
-    await new Promise(resolve => setTimeout(resolve, 2_000))
-    expect(resolvedLate).toBe(true)
+    const snapshot = vi.spyOn(jsonValues, 'snapshotJsonValue')
+    try {
+      resolution.resolve(Array.from({ length: 2_000_000 }, () => 0))
+      await resolution.promise
+      expect(snapshot.mock.calls.length).toBe(0)
+    } finally {
+      snapshot.mockRestore()
+    }
   }, 90_000)
 
   it('paces concurrent binding replies instead of queueing every frame at once', async () => {

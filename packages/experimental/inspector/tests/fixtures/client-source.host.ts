@@ -16,6 +16,7 @@ interface ClientFixtureSourceCatalog {
 /** Options for one isolated Client fixture. */
 export interface ClientFixtureOptions {
   readonly label?: string
+  readonly captureConsole?: boolean
   readonly sourceCatalog?: ClientFixtureSourceCatalog
 }
 
@@ -59,6 +60,7 @@ export class InspectorClientFixture {
       workerData: {
         bootstrap,
         label: options.label ?? 'Test Client',
+        captureConsole: options.captureConsole ?? true,
         ...(options.sourceCatalog === undefined ? {} : { sourceCatalog: options.sourceCatalog }),
       },
     })
@@ -81,6 +83,19 @@ export class InspectorClientFixture {
   /** Set one JSON-compatible global used by Client Runtime evaluation. */
   async setGlobal(name: string, value: InspectorJsonValue): Promise<void> {
     await this.request({ op: 'set-global', name, value })
+  }
+
+  /**
+   * Read an evaluation marker and outstanding Client Runtime operations over the fixture port.
+   * @param name - Global marker written by the evaluated expression.
+   * @returns The marker, retained operation count, and observed aborted operation count.
+   */
+  async runtimeState(name: string): Promise<{ value: unknown; pendingRequests: number; abortedRequests: number }> {
+    return await this.request({ op: 'runtime-state', name }) as {
+      value: unknown
+      pendingRequests: number
+      abortedRequests: number
+    }
   }
 
   /** Emit one Console event carrying a caller-provided value. */

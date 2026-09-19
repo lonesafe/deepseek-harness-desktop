@@ -147,9 +147,13 @@ describe.skipIf(process.platform === 'win32')('terminal-bash real shell', () => 
       const first = ctx.terminals.startSend(agent, created.sessionId, { text: 'export KEEP=ok; cd /', submit: true })
       expect((await first.done).waitReason).toBe('stdin_read')
       const second = ctx.terminals.startSend(agent, created.sessionId, { text: 'printf "cwd=%s keep=%s secret=%s\\n" "$PWD" "$KEEP" "${DSH_TEST_SECRET-unset}"', submit: true })
-      expect((await second.done).viewport).toContain('cwd=/ keep=ok secret=unset')
+      expect(await second.done).toMatchObject({ sessionStatus: { kind: 'running' }, truncated: false })
 
-      expect(ctx.terminals.read(agent, created.sessionId, { offset: 0, count: 20 }).text).toContain('cwd=/ keep=ok secret=unset')
+      // Silence can settle the send before bash finishes; scrollback retains later output.
+      await expect.poll(
+        () => ctx.terminals.read(agent, created.sessionId, { offset: 0, count: 20 }).text,
+        { timeout: 5_000 },
+      ).toContain('cwd=/ keep=ok secret=unset')
       expect(await ctx.terminals.kill(agent, created.sessionId)).toBe(true)
       expect(ctx.terminals.list(agent)).toEqual([])
     } finally {

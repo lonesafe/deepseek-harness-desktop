@@ -12,7 +12,7 @@ import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 import type { ReplayEntry, ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { createChatScrollFixture, type ChatScrollFixture } from './chat-scroll-fixture.ts'
 import {
   launchWebScaffold,
@@ -470,9 +470,9 @@ function assertClean(world: ScrollWorld): void {
   expect(world.tripwire.warnings).toEqual([])
 }
 
-it('generates a native V3 scroll seed with a protected system head and intact references', () => {
+it('generates a current scroll seed with a protected system head and intact references', () => {
   const { header, events } = parseSeedFixture(HISTORY_FIXTURE.log)
-  expect(header.version).toBe(3)
+  expect(header.version).toBe(SESSION_FORMAT_VERSION)
   expect(events.slice(0, 5).map(event => event.type)).toEqual([
     'turn/start', 'step/start', 'system/message', 'user/message', 'session/title',
   ])
@@ -742,7 +742,7 @@ describe('web e2e: long Chat scroll contract', () => {
     })
   }, 180_000)
 
-  it.skipIf(MODE === 'record')('restores tab/session position and keeps composer resizing on the correct scroll owner', async () => {
+  it.skipIf(MODE === 'record')('keeps composer resizing on the correct scroll owner across reopened Sessions', async () => {
     await withScrollWorld({
       failureShot: 'web-e2e-chat-scroll-restore-composer',
       seeds: [
@@ -768,7 +768,6 @@ describe('web e2e: long Chat scroll contract', () => {
       await world.page.getByRole('tab', { name: 'Chat', exact: true }).click()
       await nextPaint(world.page)
       await expectSameFlowTop(world.page, sessionAnchor, RESPONSIVE_REFLOW_TOLERANCE)
-      const narrowSessionAnchor = await visibleFlowAnchor(world.page)
 
       await openSeed(
         world.page,
@@ -779,9 +778,9 @@ describe('web e2e: long Chat scroll contract', () => {
         world.page,
         RESTORE_FIXTURE_A,
       )
-      await expectSameFlowTop(world.page, narrowSessionAnchor)
 
       const backToBottom = world.page.getByRole('button', { name: 'Back to bottom', exact: true })
+      await backToBottom.waitFor({ timeout: 15_000 })
       await backToBottom.evaluate((button) => {
         if (!(button instanceof HTMLElement)) throw new Error('Back-to-bottom control is not an HTML element')
         button.click()

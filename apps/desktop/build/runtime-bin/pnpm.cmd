@@ -1,0 +1,3 @@
+@echo off
+set ELECTRON_RUN_AS_NODE=1
+"%ELECTRON_DESKTOP_EXECUTABLE%" --expose-internals "%ELECTRON_DESKTOP_PNPM_ENTRY%" %*

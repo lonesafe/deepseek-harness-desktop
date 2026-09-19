@@ -1,0 +1,11 @@
+{
+  "kitVersion": "0.0.1",
+  "coreRevision": "bce0998afefdbc355585ca324285661a2170ba77",
+  "workerSha256": "d4709e6a8a0ad3b9316f443d10c69b194446bc472aed8f5d59e8e58fd3f7c7c9",
+  "entrySha256": "47b074ceaa6cc3c222642291fd629af770c7ed9635a91d1cb0deea6858506b39",
+  "headers": {
+    "include/LibreOfficeKit/LibreOfficeKit.h": "b64561b8b1a19c7d06d91d52c821c68cf2fcbf0206d1cf0b742b4b0889c8cae4",
+    "include/LibreOfficeKit/LibreOfficeKitInit.h": "8c31a6d734081d7e55ce9b7de25bf65474b6e348c1f378331c68cde6c90067a2",
+    "include/LibreOfficeKit/LibreOfficeKitTypes.h": "62534a5f692c327b0be1b6c0331ca160347e815f6f702cf3faf6a5cea44d6464"
+  }
+}

@@ -367,6 +367,15 @@ class DshFamily extends ReleaseFamily {
    */
   validatePayload(member: ReleaseMember, files: readonly string[]): void {
     validateTarballPayload(files, member.name)
+    if (member.name === '@deepseek-ai/dsh-office-to-pdf') {
+      for (const required of ['lib/native/entry.js', 'lib/native/NOTICE', 'native/build.mjs',
+        'native/macos-wakeup.mm', 'native/sources.json',
+        'native/include/LibreOfficeKit/LibreOfficeKit.h',
+        'native/include/LibreOfficeKit/LibreOfficeKitInit.h',
+        'native/include/LibreOfficeKit/LibreOfficeKitTypes.h']) {
+        if (!files.includes(`package/${required}`)) throw new Error(`${member.name} omits ${required}`)
+      }
+    }
   }
 
   readonly installedEntry = { packageName: '@deepseek-ai/dsh', binPath: 'lib/bin.js' }

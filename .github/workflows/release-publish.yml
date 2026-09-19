@@ -16,8 +16,12 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
+  office-native:
+    uses: ./.github/workflows/build-office-native.yml
+
   pack:
     name: Pack npm tarballs
+    needs: office-native
     runs-on: ubuntu-24.04
     steps:
       # Complete history: the release scripts read tags.
@@ -59,6 +63,16 @@ jobs:
 
       - name: Build
         run: pnpm run build:official
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dsh-office-native-macos
+          path: ${{ runner.temp }}/office-native
+
+      - name: Verify bundled macOS Office helper
+        run: |
+          tar -xf "${{ runner.temp }}/office-native/native.tar" -C packages/document/office-to-pdf/lib
+          pnpm run build:office-native --verify
 
       - name: Pack release tarballs
         run: pnpm run release:pack --family dsh --out dist/npm

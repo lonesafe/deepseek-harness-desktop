@@ -4,6 +4,8 @@
 - button "New session":
   - img
   - text: New Session
+- navigation "Global panels":
+  - button "Plugins"
 - text: Workspaces
 - button "Search sessions":
   - img
@@ -21,6 +23,9 @@
   - img
   - text: Settings
 - 'button "Balance: --. Click to refresh"': Balance --
+- banner:
+  - button "Open right sidebar":
+    - img
 - text: Into the Unknown Preview
 - button "Choose workspace":
   - img

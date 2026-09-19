@@ -106,9 +106,8 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
     await card.waitFor({ state: 'visible' })
     expect(await card.count()).toBe(1)
     expect(await page.getByText('产物', { exact: true }).count()).toBe(0)
-    if (await page.locator('[data-produced-files-row]').count() > 0) {
-      expect(await page.getByText('本轮文件改动', { exact: true }).count()).toBe(1)
-    }
+    // The scaffold workspace is not a git repository, so the changed-files card lists the written SVG from the write call alone.
+    expect(await page.locator('[data-changed-files]').count()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })
@@ -122,7 +121,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
   })
 
   it('previews a delivered inline file when the Host desktop is unavailable', async () => {
-    await page.getByText('此主机没有可用的桌面，无法打开文件或文件夹', { exact: true }).waitFor()
+    await page.getByText('此主机没有可用的桌面，无法使用外部程序打开文件或文件夹；文件仍可在侧边栏预览', { exact: true }).waitFor()
     const inline = page.locator('[data-chat-flow] code button').filter({ hasText: FILE })
     const nativeRequests: string[] = []
     const trackNativeRequest = (request: Request): void => {
@@ -139,7 +138,7 @@ describe('web e2e: requested SVG is explicitly delivered', () => {
       const image = preview.locator('[data-image-preview] img')
       await image.waitFor({ state: 'visible' })
       await expect.poll(() => image.evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
-      expect(await inline.getAttribute('aria-label')).toBe(`打开 ${FILE}`)
+      expect(await inline.getAttribute('aria-label')).toBe(`在侧边栏打开 ${FILE}`)
       expect(nativeRequests).toEqual([])
       expect(tripwire.pageErrors).toEqual([])
       expect(tripwire.warnings).toEqual([])

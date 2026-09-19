@@ -841,6 +841,11 @@ describe('Python release workflows', () => {
     expect(String(realApiPreflightPosix.if)).toContain('head.repo.fork')
     expect(String(realApiPreflightPosix.if)).toContain('dependabot[bot]')
     expect(realApiPreflightWindows).toMatchObject({ shell: 'pwsh' })
+    for (const step of [realApiPreflightPosix, realApiPreflightWindows, installedRealApiPosix, installedRealApiWindows]) {
+      expect(String(step.if)).toContain(`(${officialRepository} || vars.DSH_ENABLE_LIVE_API_TESTS == 'true')`)
+      expect(String(step.if)).toContain('head.repo.fork')
+      expect(String(step.if)).toContain('dependabot[bot]')
+    }
     for (const step of [installedRealApiPosix, installedRealApiWindows]) {
       expect(step).toMatchObject({
         env: {
@@ -929,8 +934,9 @@ describe('Weighted approval workflow', () => {
     const record = recordSteps.find(step => step.name === 'Record review event')
 
     expect(publisher.name).toBe('weighted-approval')
-    expect(Object.keys(publisher.on)).toEqual(['pull_request_target', 'workflow_run'])
-    expect(pullRequest.types).toEqual(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft'])
+    expect(Object.keys(publisher.on)).toEqual(['pull_request_target', 'issue_comment', 'workflow_run'])
+    expect(workflowEvent(publisher, 'issue_comment').types).toEqual(['created', 'edited', 'deleted'])
+    expect(pullRequest.types).toEqual(['opened', 'synchronize', 'reopened', 'ready_for_review', 'converted_to_draft', 'edited'])
     expect(workflowRun).toEqual({ workflows: ['weighted-approval-review-event'], types: ['completed'] })
     expect(reviewEvent.name).toBe('weighted-approval-review-event')
     expect(reviewEvent['run-name']).toBe('weighted-approval-review-event:${{ github.event.pull_request.number }}')
@@ -939,15 +945,18 @@ describe('Weighted approval workflow', () => {
     expect(reviewEvent.permissions).toEqual({})
     expect(publisher.permissions).toEqual({
       contents: 'read',
-      'pull-requests': 'read',
+      'pull-requests': 'write',
       statuses: 'write',
     })
     expect(publisher.concurrency).toEqual({
-      group: 'weighted-approval-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}',
+      group: "weighted-approval-${{ (github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}",
       'cancel-in-progress': false,
     })
     expect(job).toMatchObject({
-      if: `${officialRepository} && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')`,
+      if: officialRepository + ' && ' + "(github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') && "
+        + "(github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && "
+        + "(github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&\n"
+        + "  (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))",
       name: 'weighted approval publisher',
       'runs-on': 'ubuntu-latest',
       'timeout-minutes': 5,
@@ -959,7 +968,28 @@ describe('Weighted approval workflow', () => {
         'persist-credentials': false,
       },
     })
+    const setupIndex = steps.findIndex(step => typeof step.uses === 'string' && step.uses.startsWith('actions/setup-python@'))
+    expect(steps[setupIndex]?.if).toBe("steps.revoke.outputs.active == 'true'")
+    expect(steps[setupIndex]?.uses).toBe('actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1')
+    const revokeIndex = steps.findIndex(step => step.id === 'revoke')
+    expect(revokeIndex).toBeGreaterThan(steps.indexOf(checkout!))
+    expect(revokeIndex).toBeLessThan(setupIndex)
+    expect(steps[revokeIndex]?.run).toBe('node .github/review-ownership/check-approval.mjs pending')
+    expect(steps.at(-1)).toMatchObject({
+      if: "failure() && steps.revoke.outputs.active == 'true'",
+      run: 'node .github/review-ownership/check-approval.mjs error',
+    })
+    const pythonJob = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'python-sdk')
+    expect(pythonJob.steps).toContainEqual({
+      name: 'Test production blame scoring',
+      run: "uv run --python 3.10 --with-requirements .github/review-ownership/requirements.txt python -m unittest discover -s .github/review-ownership -p 'test_*.py'",
+    })
+    expect(steps.find(step => step.name === 'Install production lexer')).toMatchObject({
+      if: "steps.revoke.outputs.active == 'true'",
+      run: 'python3 -m pip install -r .github/review-ownership/requirements.txt',
+    })
     expect(publish).toMatchObject({
+      if: "steps.revoke.outputs.active == 'true'",
       env: {
         GITHUB_TOKEN: '${{ github.token }}',
         GITHUB_RUN_URL: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
@@ -967,7 +997,7 @@ describe('Weighted approval workflow', () => {
       run: 'node .github/review-ownership/check-approval.mjs',
     })
     expect(recordJob).toMatchObject({
-      if: officialRepository,
+      if: officialRepository + ' && ' + "github.event.pull_request.state == 'open'",
       name: 'record weighted approval review event',
       'runs-on': 'ubuntu-latest',
       'timeout-minutes': 2,
@@ -1035,7 +1065,7 @@ describe('Issue lifecycle workflow', () => {
     expect(preflightStep?.run).toContain('if [ -f .github/issue-management/selective-preflight.json ]; then')
     expect(preflightStep?.run).toContain('node .github/issue-management/policy.mjs pr-preflight')
     expect(preflightStep?.if).toBeUndefined()
-    expect(policyJob.if).toBeUndefined()
+    expect(policyJob.if).toBe("github.repository == 'deepseek-ai/deepseek-harness'")
     expect(validateStep?.if).toBe("${{ steps.preflight.outputs.legacy-automated != 'true' }}")
 
     expect(tokenStep).toMatchObject({
@@ -1061,12 +1091,37 @@ describe('Issue lifecycle workflow', () => {
 })
 
 describe('npm release workflows', () => {
+  it.each(['release.yml', 'release-publish.yml'])('ships the verified universal Office helper in %s', (file) => {
+    const workflow = loadWorkflow(`.github/workflows/${file}`)
+    expect(workflowJob(workflow, 'office-native').uses).toBe('./.github/workflows/build-office-native.yml')
+    const pack = workflowJob(workflow, 'pack')
+    expect(pack.needs).toBe('office-native')
+    if (!Array.isArray(pack.steps)) throw new TypeError(`${file} must define pack steps`)
+    const steps = pack.steps.filter(isRecord)
+    const build = steps.findIndex(step => step.run === 'pnpm run build:official')
+    const download = steps.findIndex(step => step.uses === 'actions/download-artifact@v4'
+      && isRecord(step.with) && step.with.name === 'dsh-office-native-macos')
+    const verify = steps.findIndex(step => typeof step.run === 'string'
+      && step.run.includes('pnpm run build:office-native --verify'))
+    const publishInput = steps.findIndex(step => step.name === 'Pack release tarballs')
+    expect(build).toBeGreaterThanOrEqual(0)
+    expect(download).toBeGreaterThan(build)
+    expect(verify).toBeGreaterThan(download)
+    expect(publishInput).toBeGreaterThan(verify)
+    expect(steps[verify]).not.toHaveProperty('continue-on-error')
+    const native = workflowJob(loadWorkflow('.github/workflows/build-office-native.yml'), 'build')
+    expect(native['runs-on']).toBe('macos-15')
+    if (!Array.isArray(native.steps)) throw new TypeError('Office native build must define steps')
+    const upload = native.steps.filter(isRecord).find(step => step.uses === 'actions/upload-artifact@v4')
+    expect(upload?.with).toMatchObject({ name: 'dsh-office-native-macos', 'if-no-files-found': 'error' })
+  })
+
   it('keeps publication dispatch-only and pack in the PR workflow', () => {
     // pack stays in the PR/master release workflows so a PR proves the set packs.
     for (const file of ['release.yml', 'release-vendor.yml']) {
       const workflow = loadWorkflow(`.github/workflows/${file}`)
       if (!isRecord(workflow.jobs)) throw new TypeError(`${file} must define jobs`)
-      expect(Object.keys(workflow.jobs).sort()).toEqual(file === 'release.yml' ? ['dependencies', 'pack'] : ['pack'])
+      expect(Object.keys(workflow.jobs).sort()).toEqual(file === 'release.yml' ? ['dependencies', 'office-native', 'pack'] : ['pack'])
     }
 
     // publication is workflow_dispatch-only (never a PR check) and keeps the

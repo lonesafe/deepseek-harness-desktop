@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createSessionFormatCatalog, SessionFormatEventCollector } from '@deepseek-ai/dsh-session-format'
+import { SessionFormatEventCollector } from '@deepseek-ai/dsh-session-format'
 import type { SessionFormatArtifact, SessionFormatEvent, SessionFormatHeader, SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
-import { releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, sessionFormatV0ToV1 } from '@deepseek-ai/dsh-session-format-v0-to-v1'
-import { sessionFormatV1ToV2 } from '@deepseek-ai/dsh-session-format-v1-to-v2'
-import { assertReleasedV3Header, releasedV2SessionFormatCodec, releasedV3SessionFormatCodec, restoreReleasedV3Artifact, sessionFormatV2ToV3 } from '../src/index.ts'
+import { releasedV3SessionFormatCodec, restoreReleasedV3Artifact, sessionFormatV2ToV3 } from '../src/index.ts'
+import { releasedV3Catalog as catalog } from './fixtures/released-catalog.ts'
 
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === 'object') {
@@ -29,15 +28,6 @@ function migrate(events: readonly SessionFormatEvent[], source = header, cut: nu
   const artifact = { header: h.target, inheritedEventCount: h.value.finish(h.collector), events: h.collector.values }
   return restoreReleasedV3Artifact(artifact, new Set(['feedback/message-put', 'feedback/message-delete']))
 }
-const catalog = createSessionFormatCatalog({
-  currentVersion: 3,
-  codecs: [releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec, releasedV3SessionFormatCodec],
-  currentEncoder: releasedV3SessionFormatCodec,
-  migrations: [sessionFormatV0ToV1, sessionFormatV1ToV2, sessionFormatV2ToV3],
-  restoreCurrent: artifact => restoreReleasedV3Artifact(artifact, new Set()),
-  restoreTransformedCurrent: artifact => restoreReleasedV3Artifact(artifact, new Set()),
-  restoreCurrentHeader(value) { assertReleasedV3Header(value); return value },
-})
 function requests(events: readonly SessionFormatEvent[], version: 2 | 3) {
   const surface: SessionFormatEvent[] = []
   let prompt = ''

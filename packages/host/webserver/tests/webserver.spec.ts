@@ -390,7 +390,10 @@ describe('real Loader composition', () => {
   })
 
   it('rejects an all-interfaces bind without a strong access token', { timeout: 60_000 }, async () => {
-    await expect(loadComposition(0, false, '0.0.0.0', 'too-short')).rejects.toThrow(
+    const loaded = await loadComposition(0, false, '0.0.0.0', 'too-short')
+    const entry = [...loaded.loader.entries()].find(e => e.options.name === '@deepseek-ai/dsh-host-webserver')
+    expect(entry?.fiber?.state).toBe(FiberState.FAILED)
+    await expect(entry?.fiber?.await()).rejects.toThrow(
       `requires an accessToken of at least ${String(MIN_LAN_ACCESS_TOKEN_LENGTH)} characters`,
     )
   })

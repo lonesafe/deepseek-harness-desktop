@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-`dsh-experimental-agent-team-web-profile` 是 [Agent Teams](../agent-team/README.zh.md) 公开发布的实验性 Web 层。把它放在 `@deepseek-ai/dsh-web-app` 与 [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.zh.md) 之后，即可在浏览器中显示 Team roster、任务板与 teammate 导航。移除任一实验层都会让稳定的 base 与 Web composition 保持不变。随附 Web profile 默认不会启用它。
+`dsh-experimental-agent-team-web-profile` 是 [Agent Teams](../agent-team/README.zh.md) 公开发布的实验性 Web 层。把它放在 `@deepseek-ai/dsh-web-app` 与 [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.zh.md) 之后，即可在浏览器中显示 Team roster、任务板与 teammate 导航。移除任一实验层都会让稳定的 base 与 Web composition 保持不变。dsh 安装随附本包作为可选组合包，随附 Web profile 不会启用它；在开启 Host 层后可在 Web 侧栏的插件页开启。
 
 ## 目录
 
@@ -50,6 +50,8 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-web-profil
 
 本包的运行时内容是 [`cordis.patch.yml`](cordis.patch.yml)。在 `dsh-web-app` 与 Host Agent Teams 层之后应用时，它唯一的 `insert` 条目会为 `@deepseek-ai/dsh-experimental-client-ui-agent-team` 添加 `ui-agent-team` 行。插入的 Client 插件负责生成的 Remote assembly 与 Team UI；这个静态 bundle 不持有可变状态，也不安装运行时不变式。
 
+本组合包提供 Client 插件生成的 Remote 导入所需的 Team 包。该依赖负责安装代码；Host profile 层负责激活服务。
+
 | 文件 | 职责 |
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | 包含 `ui-agent-team` 行的有序 Web patch |
@@ -85,7 +87,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-web-profil
 
 - **有序组合**——`dsh-base`、`dsh-web-app`、`dsh-experimental-agent-team-profile` 与本包必须保持这个顺序。
 - **Preset-scoped 旧控制项**——稳定 Web preset 仍会在 preset scope 内挂载 continuable Subagent 控制项。顶层 Host profile override 不会替换这些 scoped registration，因此在 Web 获得 Team-aware preset 前，Team roster 与旧 child 控制项可能同时出现。[Web Agent Teams 决策](../../../.agents/notes/archived/feature/2026-08-06-agent-teams-web.md)记录了这项暂缓的 composition 工作。
-- **仅显式启用**——本包公开发布，但随附 Web profile 默认不会启用任何 Agent Teams 层。
+- **仅显式启用**——本包随安装提供但默认关闭；随附 Web profile 不会启用任何 Agent Teams 层。
 
 <a id="dev-note"></a>
 ### 开发备注

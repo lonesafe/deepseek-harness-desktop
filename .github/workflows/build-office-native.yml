@@ -1,0 +1,40 @@
+name: Build macOS Office helper
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build universal Office helper
+        run: |
+          pnpm run build:office-native
+          pnpm run build:office-native --verify
+          node packages/document/office-to-pdf/native/test.mjs
+          tar -cf "${{ runner.temp }}/native.tar" -C packages/document/office-to-pdf/lib native
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-office-native-macos
+          path: ${{ runner.temp }}/native.tar
+          if-no-files-found: error
+          retention-days: 7

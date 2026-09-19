@@ -111,7 +111,8 @@ describe('desktop remote tunnel', () => {
           : { name: 'desktop', available: true, fileManager: 'finder' }))
         return
       }
-      if (decodeURIComponent(url.pathname) === '/api/present.open') localNativeOpens.push(request.url ?? '/')
+      if (['/api/present.open', '/api/changes.open'].includes(decodeURIComponent(url.pathname))
+        || decodeURIComponent(url.pathname).startsWith('/api/pluginManager/')) localNativeOpens.push(request.url ?? '/')
       if (request.url === '/api/settings/describe') {
         response.end(JSON.stringify({
           rpcId: 'settings-rpc',
@@ -297,6 +298,14 @@ describe('desktop remote tunnel', () => {
     })
 
     for (const path of [
+      '/api/changes.open?sessionId=owner&seq=7&index=0',
+      '/api/changes%2Eopen?sessionId=owner&seq=7&index=0',
+      '/api/pluginManager/setPluginEnabled',
+      '/api/pluginManager/setBundleEnabled',
+      '/api/pluginManager/installBundle',
+      '/api/pluginManager/cancelInstall',
+      '/api/pluginManager/removeBundle',
+      '/api/pluginManager%2FinstallBundle',
       '/api/present.open',
       '/api/present.open?sessionId=owner&seq=7&index=0',
       '/api/present.open?sessionId=owner&seq=7&index=0&action=reveal',

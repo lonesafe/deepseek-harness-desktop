@@ -382,7 +382,10 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     const originalViewport = page.viewportSize() ?? { width: 1680, height: 1000 }
     try {
       await page.setViewportSize({ width: 390, height: 844 })
-      await expect.poll(() => page.locator('[data-composer-stats]').evaluate((element) => {
+      const dock = page.locator('[data-composer-card] + div').filter({
+        has: page.getByRole('button', { name: /Cache hit 99\.5%/ }),
+      })
+      await expect.poll(() => dock.evaluate((element) => {
         const stats = element.getBoundingClientRect()
         return stats.left >= 8 && stats.right <= innerWidth - 8
           && stats.bottom <= innerHeight - 8
@@ -514,6 +517,9 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
         name: 'Disconnected, reconnect now', exact: true,
       })
       await offline.waitFor({ timeout: 2_000 })
+      // Installation alone advances with wall time. Pause while retries are
+      // suspended so recovery confirmation survives separate browser commands.
+      await recoveryPage.clock.pauseAt(await recoveryPage.evaluate(() => Date.now() + 60_000))
       await recoveryPage.clock.fastForward(60_000)
       expect(sockets).toHaveLength(1)
 
@@ -574,7 +580,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       const automaticRecovery = recoveryPage.getByRole('status')
       await automaticRecovery.waitFor({ timeout: 10_000 })
       expect(await automaticRecovery.innerText()).toBe('Connected')
-      await recoveryPage.clock.fastForward(2_000)
+      await recoveryPage.clock.runFor(2_150)
       await automaticRecovery.waitFor({ state: 'detached' })
 
       holdConnections = true
@@ -592,6 +598,8 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       await recoveryPage.mouse.up()
 
       await expect.poll(() => sockets.length).toBe(12)
+      // The connecting indicator remains visible for at least 800 ms.
+      await recoveryPage.clock.fastForward(800)
       const recovered = recoveryPage.getByRole('status')
       await recovered.waitFor({ timeout: 10_000 })
       expect(await recovered.innerText()).toBe('Connected')
@@ -600,7 +608,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       expect(recoveredGeometry.outer[3]).toBe(connectingGeometry.outer[3])
       expect(recoveredGeometry.icon).toEqual(connectingGeometry.icon)
       expect(await connectionIndicatorTextAlignment(recovered)).toBe('left')
-      await recoveryPage.clock.fastForward(2_000)
+      await recoveryPage.clock.runFor(2_150)
       await recovered.waitFor({ state: 'detached', timeout: 5_000 })
       expect(recoveryTripwire.pageErrors).toEqual([])
       expect(recoveryTripwire.warnings.filter(warning => /connection lost, retry #/i.test(warning)))

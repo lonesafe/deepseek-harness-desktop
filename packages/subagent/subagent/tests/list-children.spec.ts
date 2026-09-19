@@ -1208,7 +1208,8 @@ describe('SubagentRuntime.listDescendants', () => {
   })
 
 
-  it('walks a deeply nested ordinary-session chain without consuming the call stack', { timeout: 20_000 }, async () => {
+  // Creating and enumerating 10,000 Sessions uses the coverage lane's 90-second budget.
+  it('walks a deeply nested ordinary-session chain without consuming the call stack', { timeout: 90_000 }, async () => {
     const { ctx, parent } = await setup([])
     const depth = 10_000
     let parentId = parent.id

@@ -53,6 +53,8 @@ kind: "package-reference"
 
 ### 磁盘布局
 
+[格式与发布状态](../../../docs/session-format-status.zh.md)说明当前写入版本与已发布代际。
+
 每个会话在可读项目目录下获得一个会话自有目录。每个规范 generation 都以版本与文件名一致的物理 header 开始。当前格式为每个持久事件存储一行；冻结的 v0 与 v1 reader 也能理解其历史 packed Assistant delta 行。当前格式在 header 中存储 `isSeeded`，并从最后一个带标记的 `session/end-seed` 推导 inherited cut；历史 codec 则转换其数字 `seedLength`。格式 catalog 会在句柄暴露当前逻辑值之前完成该转换。当前存储记录使用下文所述的无损来源序列表示：
 
 ```text
@@ -62,11 +64,11 @@ kind: "package-reference"
       session.jsonl.zstd         # released v0, compressed root
       session.v1.jsonl.zstd      # released v1, compressed root
       session.v2.jsonl.zstd      # released v2, compressed root
-      session.v3.jsonl.zstd      # released v3/current, compressed root
+      session.v3.jsonl.zstd      # released v3, compressed root
       session.jsonl              # released v0, raw root
       session.v1.jsonl           # released v1, raw root
       session.v2.jsonl           # released v2, raw root
-      session.v3.jsonl           # released v3/current, raw root; later versions use vN
+      session.v3.jsonl           # released v3, raw root; later versions use vN
 ```
 
 会话 id 在使用前被单射转义为一个安全路径段（无遍历、无冲突）。规范化 cwd 让项目目录保持可读、便于导航；规范化相同的 cwd 字符串共享项目目录，而会话 id 仍选择不同会话目录。运行时操作选择数值最高的规范 generation，格式拒绝诊断会点名该绝对路径，让操作者能找到构建拒绝解读的原始日志。

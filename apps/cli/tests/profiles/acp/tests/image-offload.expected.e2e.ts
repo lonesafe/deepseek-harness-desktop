@@ -290,4 +290,4 @@ it.each(['chat-completions', 'messages'] as const)('pins %s Files offload and in
   } finally {
     await new Promise<void>(resolve => server.close(() => { resolve() }))
   }
-}, 45_000)
+})

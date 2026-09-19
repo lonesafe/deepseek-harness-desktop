@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-team-web-profile` is the published experimental Web layer for [Agent Teams](../agent-team/README.md). Add it after `@deepseek-ai/dsh-web-app` and [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.md) to show the Team roster, task board, and teammate navigation in the browser. Removing either experimental layer leaves the stable base and Web composition unchanged. No shipped Web profile enables it by default.
+`dsh-experimental-agent-team-web-profile` is the published experimental Web layer for [Agent Teams](../agent-team/README.md). Add it after `@deepseek-ai/dsh-web-app` and [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.md) to show the Team roster, task board, and teammate navigation in the browser. Removing either experimental layer leaves the stable base and Web composition unchanged. The dsh installation ships it as an optional bundle that no shipped Web profile enables; switch it on from the Web sidebar's Plugins page after the Host layer.
 
 ## Table of Contents
 
@@ -50,6 +50,8 @@ The conversation header gains the Team roster, shared task board, and teammate n
 
 The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied after `dsh-web-app` and the Host Agent Teams layer, its single `insert` entry adds the `ui-agent-team` row for `@deepseek-ai/dsh-experimental-client-ui-agent-team`. The inserted Client plugin owns the generated Remote assembly and Team UI; this static bundle holds no mutable state and installs no runtime invariant.
 
+The bundle supplies the Team package required by its Client plugin's generated Remote imports. This dependency installs the code; the Host profile layer owns service activation.
+
 | File | Role |
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | Ordered Web patch containing the `ui-agent-team` row |
@@ -85,7 +87,7 @@ This Web bundle adds no model request content; the Host-side Team tools own prom
 
 - **Ordered composition** — `dsh-base`, `dsh-web-app`, `dsh-experimental-agent-team-profile`, and this package must remain in that order.
 - **Preset-scoped legacy controls** — stable Web presets still mount continuable Subagent controls inside the preset scope. Top-level Host profile overrides do not replace those scoped registrations, so the Team roster and legacy child controls can both appear until Web has a Team-aware preset. The [Web Agent Teams decision](../../../.agents/notes/archived/feature/2026-08-06-agent-teams-web.md) records this deferred composition work.
-- **Opt-in only** — the package is public, but no shipped Web profile enables either Agent Teams layer.
+- **Opt-in only** — the package ships with the installation switched off; no shipped Web profile enables either Agent Teams layer.
 
 <a id="dev-note"></a>
 ### Dev Note

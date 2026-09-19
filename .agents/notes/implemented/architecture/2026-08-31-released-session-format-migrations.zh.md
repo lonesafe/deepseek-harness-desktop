@@ -88,6 +88,8 @@ v0-to-v1 除了有限的 released-v0 归一化外，会保留逻辑 header、seq
 
 Catalog 为 production、Worker、fixture 与 replay 暴露同一个 `createRestore()`。Recovery policy 与最终 validation policy 在 restore 创建时一次确定。Historical production 使用 recoverable source parsing 与 transformed-current validation；这种策略会在迁移后校验已发布 current 结果，而已经是 current 的输入只接受 codec 校验。Worker 与 fixture verification 使用 strict parsing 与已安装 current 格式的完整 restoration。Migration stage 或 transformed-current validation 的拒绝会保持为 `SessionFormatUnsupportedMigrationError`；物理解码失败仍是 corruption。Test support 只保留 fixture 自身需要的 token 和 envelope materialization。
 
+[V3 到 V4 迁移](../../../../packages/session/session-format-v3-to-v4/README.zh.md)保留桌面分支会话内记忆的审批决定，同时推进持久化类型历史记录中的封闭结果声明。它保留正文记录、逻辑坐标、身份与继承切点，仅改变头部代际。已有 V3 确认坐标在 V4 中仍属于历史坐标，V3 源记录不能激活预先声称属于 V4 的标记。已接受的类型记录与已发布的编解码器保持不变。
+
 ### JSONL 串联
 
 JSONL provider 只扫描一次 frame boundary，复用一个 Zstandard decoder，增量解析完整 JSONL record，并把 row 直接送入 catalog restore。外层循环按有界 cadence yield；不存在逐 frame `await`、完整 plaintext 或 source-row array。

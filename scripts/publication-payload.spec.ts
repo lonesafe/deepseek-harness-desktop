@@ -3,6 +3,7 @@ import {
   hasTypertRemoteNavigation,
   isForbiddenPublicationFile,
   validateTarballPayload,
+  validateOfficeReleaseFiles,
 } from './publication-payload.ts'
 
 function validateFixtureTarball(files: readonly string[]): () => void {
@@ -12,6 +13,18 @@ function validateFixtureTarball(files: readonly string[]): () => void {
 }
 
 describe('publication payload policy', () => {
+  it('requires the universal Office assets before npm publication', () => {
+    const name = '@deepseek-ai/dsh-office-to-pdf'
+    const files = ['entry.js', 'libreoffice-kit-macos', 'manifest.json', 'NOTICE']
+      .map(file => `package/lib/native/${file}`)
+    expect(() => { validateOfficeReleaseFiles(name, files) }).not.toThrow()
+    expect(() => { validateOfficeReleaseFiles('@deepseek-ai/dsh-other', []) }).not.toThrow()
+    for (const omitted of files) {
+      expect(() => { validateOfficeReleaseFiles(name, files.filter(file => file !== omitted)) })
+        .toThrow(`npm release omits ${omitted.slice('package/'.length)}`)
+    }
+  })
+
   it.each([
     'lib/index.js',
     'lib/types/index.d.ts',

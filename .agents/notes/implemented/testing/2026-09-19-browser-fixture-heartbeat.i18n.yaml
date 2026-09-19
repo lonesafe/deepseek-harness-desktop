@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-19-browser-fixture-heartbeat.md
+2026-09-19-browser-fixture-heartbeat.md: 2948b7d64ebafc5335053297150df06a124337af
+2026-09-19-browser-fixture-heartbeat.zh.md: a08cb6b159c21a4993fdf23383c6f7e0bfb6d8a7

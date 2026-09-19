@@ -26,6 +26,9 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
+  office-native:
+    uses: ./.github/workflows/build-office-native.yml
+
   dependencies:
     name: Dependency layout
     # Persistent runners accept only trusted, credential-free rehearsals.
@@ -88,6 +91,7 @@ jobs:
 
   pack:
     name: Pack npm tarballs
+    needs: office-native
     # Persistent runners accept only trusted, credential-free rehearsals.
     runs-on: >-
       ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
@@ -147,6 +151,16 @@ jobs:
 
       - name: Build
         run: pnpm run build:official
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dsh-office-native-macos
+          path: ${{ runner.temp }}/office-native
+
+      - name: Verify bundled macOS Office helper
+        run: |
+          tar -xf "${{ runner.temp }}/office-native/native.tar" -C packages/document/office-to-pdf/lib
+          pnpm run build:office-native --verify
 
       # Concurrency here is rehearsal-only: the credentialed publish workflows
       # invoke release:pack without the flag and keep the strictly serial path.

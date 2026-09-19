@@ -373,6 +373,7 @@ jobs:
       - name: Preflight installed-wheel real API test (POSIX)
         if: >-
           inputs.ci
+          && (github.repository == 'deepseek-ai/deepseek-harness' || vars.DSH_ENABLE_LIVE_API_TESTS == 'true')
           && runner.os != 'Windows'
           && (github.event_name != 'pull_request'
               || !(github.event.pull_request.head.repo.fork
@@ -389,6 +390,7 @@ jobs:
       - name: Preflight installed-wheel real API test (Windows)
         if: >-
           inputs.ci
+          && (github.repository == 'deepseek-ai/deepseek-harness' || vars.DSH_ENABLE_LIVE_API_TESTS == 'true')
           && runner.os == 'Windows'
           && (github.event_name != 'pull_request'
               || !(github.event.pull_request.head.repo.fork
@@ -404,6 +406,7 @@ jobs:
       - name: Run installed-wheel real API black-box test (POSIX)
         if: >-
           inputs.ci
+          && (github.repository == 'deepseek-ai/deepseek-harness' || vars.DSH_ENABLE_LIVE_API_TESTS == 'true')
           && runner.os != 'Windows'
           && (github.event_name != 'pull_request'
               || !(github.event.pull_request.head.repo.fork
@@ -424,6 +427,7 @@ jobs:
       - name: Run installed-wheel real API black-box test (Windows)
         if: >-
           inputs.ci
+          && (github.repository == 'deepseek-ai/deepseek-harness' || vars.DSH_ENABLE_LIVE_API_TESTS == 'true')
           && runner.os == 'Windows'
           && (github.event_name != 'pull_request'
               || !(github.event.pull_request.head.repo.fork

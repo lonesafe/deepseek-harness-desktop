@@ -10,6 +10,7 @@
   - tablist:
     - tab "对话" [selected]
     - tab "轨迹"
+    - tab "文件"
 - button "系统提示词":
   - img
   - img
@@ -47,7 +48,6 @@
 - button "选择模型，当前 DeepSeek-V4-Flash，推理等级 high":
   - text: DeepSeek-V4-Flash high
   - img
-- button "上下文已用 1%"
 - button "发送消息" [disabled]
 - button "1 轮 1 步 · {{throughput}} tok/s":
   - img
@@ -55,3 +55,4 @@
 - button "8.2K tok · 缓存命中 16%":
   - img
   - text: 8.2K tok缓存命中 16%
+- button "上下文已用 1%": 1%

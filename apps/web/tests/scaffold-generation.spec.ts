@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory,
   recordedSessionFixturePath,
+  parseSeedFixture,
   selectedSessionFixture,
 } from './scaffold.ts'
 
@@ -15,6 +17,20 @@ afterEach(async () => {
 })
 
 describe('Web snapshot generation filenames', () => {
+  it.each([3, SESSION_FORMAT_VERSION])('preserves v%i embedded stream timing when preparing a cold seed', async (version) => {
+    const fixture = await readFile(new URL('../../../snapshots/session/skill-load/session.v3.jsonl', import.meta.url), 'utf8')
+    const [headerLine, ...rows] = fixture.trim().split('\n')
+    const header = JSON.parse(headerLine!) as Record<string, unknown>
+    const expected = rows.flatMap((row) => {
+      const event = JSON.parse(row) as { type: string; data: { stream?: unknown } }
+      return event.type === 'assistant/message' ? [event.data.stream] : []
+    })
+    expect(expected.length).toBeGreaterThan(0)
+    const seeded = parseSeedFixture([JSON.stringify({ ...header, version }), ...rows, ''].join('\n'))
+    const actual = seeded.events.flatMap(event => event.type === 'assistant/message' ? [event.data.stream] : [])
+    expect(actual).toEqual(expected)
+  })
+
   it('selects the highest parent and child generations without counting retained inputs twice', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-web-fixture-generations-'))
     roots.push(root)

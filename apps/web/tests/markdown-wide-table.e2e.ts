@@ -364,9 +364,12 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     await sweep()
     await settleAt(1680)
     const wide = page.locator('[class*="tableScroll"]', { hasText: WIDE_MARKER })
-    // Chromium makes scrollable containers keyboard-focusable by default;
-    // arrow keys then scroll the focused wrapper.
-    await wide.focus()
+    await page.mouse.move(4, 4)
+    await page.locator('[class*="tableScroll"]', { hasText: SHORT_MARKER }).focus()
+    await page.keyboard.press('Tab')
+    await expect.poll(() => wide.evaluate(element => document.activeElement === element
+      && element.matches(':focus-visible') && getComputedStyle(element).overflowX === 'scroll'))
+      .toBe(true)
     await page.keyboard.press('ArrowRight')
     await page.keyboard.press('ArrowRight')
     await expect.poll(() => wide.evaluate(element => element.scrollLeft), { timeout: 5_000 })
@@ -428,6 +431,44 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     await expect.poll(position).toEqual(resting)
     await short.evaluate((element) => { element.blur() })
     await expect.poll(position).toEqual(resting)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 120_000)
+
+  it('gives the gutter to painted table content, not transparent breakout padding', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-markdown-width-handle-hit'))
+    await settleAt(1680)
+    const hitAtHandle = async (marker: string) => {
+      const wrapper = page.locator('[class*="tableScroll"]', { hasText: marker })
+      await wrapper.evaluate((element) => { element.scrollIntoView({ block: 'center', behavior: 'instant' }) })
+      return await page.evaluate((tableMarker) => {
+        const handle = document.querySelector<HTMLElement>('[data-width-handle="right"]')
+        const wrapper = [...document.querySelectorAll<HTMLElement>('[class*="tableScroll"]')]
+          .find(candidate => candidate.textContent?.includes(tableMarker) ?? false)
+        const table = wrapper?.querySelector('table') ?? null
+        if (handle === null || table === null) throw new Error(`missing hit-test geometry for ${tableMarker}`)
+        const handleRect = handle.getBoundingClientRect()
+        const tableRect = table.getBoundingClientRect()
+        const x = handleRect.left + handleRect.width / 2
+        const y = tableRect.top + tableRect.height / 2
+        const hit = document.elementFromPoint(x, y)
+        return {
+          tableCoversHandle: tableRect.left <= x && tableRect.right >= x,
+          hitTable: hit !== null && table.contains(hit),
+          hitHandle: hit !== null && handle.contains(hit),
+        }
+      }, marker)
+    }
+
+    expect(await hitAtHandle(WIDE_MARKER)).toEqual({
+      tableCoversHandle: true,
+      hitTable: true,
+      hitHandle: false,
+    })
+    expect(await hitAtHandle(SHORT_MARKER)).toEqual({
+      tableCoversHandle: false,
+      hitTable: false,
+      hitHandle: true,
+    })
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 

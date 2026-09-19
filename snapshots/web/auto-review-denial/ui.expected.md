@@ -10,6 +10,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Files"
 - text: Inspect the protected operation, but do not run it unless authorized. {{clock}}
 - button "Copy":
   - img
@@ -51,6 +52,7 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
+    - tab "Files"
 - text: Inspect the protected operation, but do not run it unless authorized. {{clock}}
 - button "Copy":
   - img
@@ -96,6 +98,7 @@
   - tablist:
     - tab "Chat"
     - tab "Trajectory" [selected]
+    - tab "Files"
 - toolbar "Trajectory toolbar":
   - button "Use actual duration": Duration
   - button "Collapse turns": Turns

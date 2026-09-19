@@ -20,6 +20,7 @@ describe('Agent Teams Web profile bundle', () => {
     expect(manifest.publishConfig?.access).toBe('public')
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     expect(manifest.dependencies).toEqual({
+      '@deepseek-ai/dsh-experimental-agent-team': 'workspace:^',
       '@deepseek-ai/dsh-experimental-client-ui-agent-team': 'workspace:^',
     })
 

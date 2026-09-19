@@ -424,7 +424,7 @@ async function showLanAccessDialog(): Promise<void> {
     cancelId: 2,
   })
   if (response === 0) {
-    clipboard.writeText(lanConnectionText())
+    await clipboard.writeText(lanConnectionText())
     return
   }
   if (response === 1) await applyLanAccess({ ...preference, enabled: false })

@@ -88,6 +88,8 @@ The v0-to-v1 edge preserves logical headers, sequence numbers, references, times
 
 The catalog exposes one `createRestore()` operation for production, Worker, fixture, and replay callers. Recovery policy and final validation policy are chosen once at restore creation. Historical production uses recoverable source parsing with transformed-current validation; this validates the released current result after migration, while input that is already current receives only codec validation. Worker and fixture verification use strict parsing with full installed current restoration. A migration-stage or transformed-current validation refusal remains `SessionFormatUnsupportedMigrationError`; physical decoding failures remain corruption. Test support keeps only fixture-specific token and envelope materialization.
 
+The [V3-to-V4 edge](../../../../packages/session/session-format-v3-to-v4/README.md) preserves the desktop fork’s session-local remembered approval decisions while advancing the closed outcome declaration recorded by persistence-type history. It preserves body records, logical coordinates, identities, and the inherited cut; only the header generation changes. Existing V3 acknowledgement coordinates remain historical in V4, and a V3 source cannot activate a marker that already claims V4. Accepted type records and released codecs remain unchanged.
+
 ### JSONL integration
 
 The JSONL provider scans frame boundaries once, reuses one Zstandard decoder, parses complete JSONL records incrementally, and feeds rows directly into the catalog restore. The outer loop yields at a bounded cadence; there is no per-frame `await` and no complete plaintext or source-row array.

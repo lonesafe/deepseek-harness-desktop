@@ -61,7 +61,7 @@ const COMPACTION_ID = CompactionId('replay-compaction')
 /** Build a minimal session-JSONL string: a header line + the given events. */
 function sessionJsonl(
   events: SessionEvent[],
-  header?: { id?: string; createdAt?: number; seedLength?: number; version?: 0 | 1 | 2 | 3 },
+  header?: { id?: string; createdAt?: number; seedLength?: number; version?: 0 | 1 | 2 | 3 | typeof SESSION_FORMAT_VERSION },
 ): string {
   const version = header?.version ?? 0
   const headerLine = JSON.stringify({
@@ -79,7 +79,7 @@ function sessionJsonl(
 /** Build a valid one-turn Session around recorded model calls. */
 function replaySessionJsonl(
   calls: readonly StreamChunk[][],
-  header?: { id?: string; createdAt?: number; seedLength?: number; version?: 0 | 1 | 2 | 3 },
+  header?: { id?: string; createdAt?: number; seedLength?: number; version?: 0 | 1 | 2 | 3 | typeof SESSION_FORMAT_VERSION },
 ): string {
   const version = header?.version ?? SESSION_FORMAT_VERSION
   const events: SessionEvent[] = []
@@ -593,7 +593,7 @@ describe('parseSessionLog', () => {
 
   it('preserves the current system envelope and tool sidecar token during comparison', () => {
     const source = [
-      sessionJsonl([], { version: 3 }).trimEnd(),
+      sessionJsonl([], { version: SESSION_FORMAT_VERSION }).trimEnd(),
       JSON.stringify({ type: 'turn/start', data: { turn: 1 } }),
       JSON.stringify({ type: 'step/start', data: { turn: 1, step: 1 } }),
       JSON.stringify({
@@ -635,7 +635,7 @@ describe('parseSessionLog', () => {
   it('rejects genuine empty current tools instead of treating them as a placeholder', () => {
     const tools: unknown[] = []
     const source = [
-      sessionJsonl([], { version: 3 }).trimEnd(),
+      sessionJsonl([], { version: SESSION_FORMAT_VERSION }).trimEnd(),
       JSON.stringify({ type: 'turn/start', data: { turn: 1 } }),
       JSON.stringify({
         type: 'request/header',

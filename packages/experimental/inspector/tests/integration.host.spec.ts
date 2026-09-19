@@ -253,22 +253,21 @@ describe('experimental Inspector real Worker', () => {
 
   it('cancels Client Runtime work when the Worker deadline expires', async () => {
     inspector = await startInspector({ port: 0, captureFetch: false, clientRuntimeTimeoutMs: 20 })
-    client = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Timeout Client' })
+    // Console activation shares this deadline; this case observes only Runtime cancellation.
+    client = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Timeout Client', captureConsole: false })
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
     await cdp.call('Runtime.enable')
     const contextId = await clientContext(cdp)
 
     const timedOut = await cdp.call('Runtime.evaluate', {
-      expression: 'new Promise(() => {})',
+      expression: 'globalThis.__inspectorTimeoutStarted = true; new Promise(() => {})',
       contextId,
       awaitPromise: true,
     })
     expect(timedOut.error?.message).toContain('timed out after 20ms')
-    expect((await cdp.call('Runtime.evaluate', {
-      expression: '42',
-      contextId,
-      returnByValue: true,
-    })).result?.result).toMatchObject({ type: 'number', value: 42 })
+    await vi.waitFor(async () => {
+      expect(await client!.runtimeState('__inspectorTimeoutStarted')).toEqual({ value: true, pendingRequests: 0, abortedRequests: 1 })
+    })
   })
 
   it('preserves native Host execution-context selectors', async () => {

@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { ok, RemoteMock } from '@deepseek-ai/dsh-remote-mock'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { remoteDefaultResponses } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/remote-default-responses.ts'
 
 interface SessionSummary {
@@ -184,7 +185,7 @@ export function createAssembledRemote(options: AssembledRemoteOptions = {}): Ass
     stream.push({
       type: 'snapshot',
       header: {
-        version: 3,
+        version: SESSION_FORMAT_VERSION,
         id: sessionId,
         createdAt: summary.updatedAt,
         cwd: summary.cwd,

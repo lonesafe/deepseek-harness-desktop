@@ -53,3 +53,18 @@ export function validateTarballPayload(files: readonly string[], context: string
     throw new Error(`${context} publishes source map ${file}`)
   }
 }
+
+/**
+ * Require the macOS helper in the platform-independent Office npm release.
+ * Target-only Desktop tarballs may omit it but cannot be published to npm.
+ * @param packageName - Identity read from the packed manifest.
+ * @param files - Members of the packed tarball, rooted at `package/`.
+ */
+export function validateOfficeReleaseFiles(packageName: string, files: readonly string[]): void {
+  if (packageName !== '@deepseek-ai/dsh-office-to-pdf') return
+  for (const required of ['entry.js', 'libreoffice-kit-macos', 'manifest.json', 'NOTICE']) {
+    if (!files.includes(`package/lib/native/${required}`)) {
+      throw new Error(`${packageName} npm release omits lib/native/${required}`)
+    }
+  }
+}

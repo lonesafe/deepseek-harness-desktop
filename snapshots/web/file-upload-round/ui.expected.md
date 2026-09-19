@@ -47,7 +47,6 @@
 - button "Select model, current DeepSeek-V4-Flash-Vision-Exp, reasoning effort high":
   - text: DeepSeek-V4-Flash-Vision-Exp high
   - img
-- button "1% of context used"
 - button "Send message" [disabled]
 - button "1 turns 2 steps · {{throughput}} tok/s":
   - img
@@ -55,3 +54,4 @@
 - button "17.3K tok · Cache hit 51%":
   - img
   - text: 17.3K tokCache hit 51%
+- button "1% of context used": 1%

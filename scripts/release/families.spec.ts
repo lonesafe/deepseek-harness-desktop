@@ -318,6 +318,21 @@ describe('release families', () => {
     expect(() => { vendor.validatePayload(vendored, []) }).toThrow(/empty tarball/)
   })
 
+  it('rejects Office tarballs that omit the adapter or its rebuild sources', () => {
+    const family = releaseFamily('dsh')
+    const office = member('packages/document/office-to-pdf', '@deepseek-ai/dsh-office-to-pdf')
+    const required = ['lib/native/entry.js', 'lib/native/NOTICE', 'native/build.mjs',
+      'native/macos-wakeup.mm', 'native/sources.json',
+      'native/include/LibreOfficeKit/LibreOfficeKit.h',
+      'native/include/LibreOfficeKit/LibreOfficeKitInit.h',
+      'native/include/LibreOfficeKit/LibreOfficeKitTypes.h'].map(file => `package/${file}`)
+    expect(() => { family.validatePayload(office, required) }).not.toThrow()
+    for (const omitted of required) {
+      expect(() => { family.validatePayload(office, required.filter(file => file !== omitted)) })
+        .toThrow(`omits ${omitted.slice('package/'.length)}`)
+    }
+  })
+
   it('drives the installed entry only for the family that publishes one', () => {
     expect(releaseFamily('dsh').installedEntry).toEqual({ packageName: '@deepseek-ai/dsh', binPath: 'lib/bin.js' })
     expect(releaseFamily('vendor').installedEntry).toBeUndefined()

@@ -1,8 +1,8 @@
 /**
- * Verify that the executable deploy manifest supplies every plugin referenced
- * by a shipped agent preset and every required workspace peer in its dependency
- * graph. With auto peer installation disabled, either omission can otherwise
- * fail only when Cordis loads the packaged plugin.
+ * Verify shipped-preset plugins and required workspace peers in deploy dependencies.
+ * The Python runtime supplies peers at its root; other deployments can also use
+ * providers declared by enclosing bundles on every installation path. With auto
+ * peer installation disabled, missing providers fail when Cordis loads the plugin.
  */
 import { globSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -40,7 +40,7 @@ export interface RuntimeClosureResult {
 }
 
 /**
- * Check that the runtime manifest contains every shipped-preset plugin and workspace peer.
+ * Check shipped-preset plugins and workspace peer providers in the runtime dependency graph.
  * @param root repository root containing the runtime manifest and shipped presets.
  * @param manifestPath runtime manifest path relative to {@link root}.
  * @returns the discovered preset count, reachable workspace package count, and violations.
@@ -63,11 +63,13 @@ export async function verifyRuntimeClosure(
   const presetPaths = checkShippedPresets ? globSync(AGENT_PRESET_GLOB, { cwd: root }).sort() : []
   const targets = Object.keys(platforms).sort()
   const parents = new Map<string, string | undefined>()
+  const referrers = new Map<string, Set<string | undefined>>()
   const queue: string[] = []
 
   for (const dependency of Object.keys(runtimeDependencies).sort()) {
     if (!workspace.has(dependency)) continue
     parents.set(dependency, undefined)
+    referrers.set(dependency, new Set([undefined]))
     queue.push(dependency)
   }
 
@@ -82,21 +84,31 @@ export async function verifyRuntimeClosure(
     if (packageName === undefined) continue
     const current = workspace.get(packageName)
     if (current === undefined) continue
-    const peers = current.manifest.peerDependencies ?? {}
-    const peerMeta = current.manifest.peerDependenciesMeta ?? {}
-    for (const peer of Object.keys(peers).sort()) {
-      if (!workspace.has(peer) || peerMeta[peer]?.optional === true) continue
-      if (runtimeDependencies[peer]?.startsWith('workspace:') === true) continue
-      failures.push(`${formatChain(runtimeName, packageName, parents)} -> ${peer}`)
-    }
     const dependencies = {
       ...current.manifest.dependencies,
       ...current.manifest.optionalDependencies,
     }
     for (const dependency of Object.keys(dependencies).sort()) {
-      if (!workspace.has(dependency) || parents.has(dependency)) continue
+      if (!workspace.has(dependency)) continue
+      const owners = referrers.get(dependency) ?? new Set<string | undefined>()
+      owners.add(packageName)
+      referrers.set(dependency, owners)
+      if (parents.has(dependency)) continue
       parents.set(dependency, packageName)
       queue.push(dependency)
+    }
+  }
+
+  for (const packageName of queue) {
+    const current = workspace.get(packageName)
+    if (current === undefined) continue
+    const peers = current.manifest.peerDependencies ?? {}
+    const peerMeta = current.manifest.peerDependenciesMeta ?? {}
+    for (const peer of Object.keys(peers).sort()) {
+      if (!workspace.has(peer) || peerMeta[peer]?.optional === true) continue
+      if (runtimeDependencies[peer]?.startsWith('workspace:') === true) continue
+      if (!checkShippedPresets && ancestorSuppliesPeer(peer, packageName, referrers, workspace)) continue
+      failures.push(`${formatChain(runtimeName, packageName, parents)} -> ${peer}`)
     }
   }
 
@@ -230,6 +242,24 @@ async function loadManifest(path: string): Promise<PackageManifest> {
 
 async function loadJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, 'utf8')) as T
+}
+
+/** A nested bundle can supply its plugins' peers without exposing them at the application root. */
+function ancestorSuppliesPeer(
+  peer: string,
+  packageName: string,
+  referrers: ReadonlyMap<string, ReadonlySet<string | undefined>>,
+  workspace: ReadonlyMap<string, WorkspacePackage>,
+  visited: ReadonlySet<string> = new Set(),
+): boolean {
+  if (visited.has(packageName)) return false
+  const owners = referrers.get(packageName)
+  if (owners === undefined || owners.size === 0) return false
+  const next = new Set([...visited, packageName])
+  return [...owners].every(parent => parent !== undefined && (
+    workspace.get(parent)?.manifest.dependencies?.[peer]?.startsWith('workspace:') === true
+    || ancestorSuppliesPeer(peer, parent, referrers, workspace, next)
+  ))
 }
 
 function formatChain(

@@ -65,7 +65,7 @@ DeepSeek Harness Desktop 将官方开源的 [DeepSeek Harness](https://github.co
 
 ## 从源码构建
 
-需要 Git、Node.js 24 和 pnpm 11。
+需要 Git、Node.js 24 和 pnpm 11，以及[桌面构建说明](apps/desktop/README.zh.md)列出的平台原生工具：macOS 的 Xcode Command Line Tools、Linux 的 `musl-tools`，或 Windows 的 Visual Studio C++ Build Tools。
 
 ```sh
 git clone https://github.com/lonesafe/deepseek-harness-desktop.git

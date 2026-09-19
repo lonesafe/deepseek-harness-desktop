@@ -1,6 +1,6 @@
 appId: ai.deepseek.harness
 productName: DeepSeek Harness
-electronVersion: 43.4.0
+electronVersion: 44.0.0
 artifactName: DeepSeek-Harness-${version}-${os}-${arch}.${ext}
 asar: false
 compression: normal
@@ -12,6 +12,7 @@ directories:
   output: ../desktop
 files:
   - lib/**
+  - build/runtime-bin/**
   - package.json
   - '!**/*.map'
 mac:

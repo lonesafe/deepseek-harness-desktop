@@ -823,6 +823,12 @@ time.sleep(60)
         ),
         _launch_args=(sys.executable, str(script)),
     ) as client:
+        # The timeout measures an unanswered request after stderr has arrived.
+        ready_deadline = time.monotonic() + 10
+        while "bridge is still starting" not in client._stderr_lines:
+            if time.monotonic() >= ready_deadline:
+                raise AssertionError("bridge startup diagnostic was not received")
+            time.sleep(0.01)
         start = time.monotonic()
         try:
             client.initialize(provider="deepseek-official", cwd="/workspace", model="dsagent")

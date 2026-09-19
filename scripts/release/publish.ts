@@ -18,8 +18,9 @@ import { join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { parseArgs } from 'node:util'
 import { releaseFamily } from './families.ts'
+import { validateOfficeReleaseFiles } from '../publication-payload.ts'
 import { attempt, attemptEchoed, isEntry } from './process.ts'
-import { packedIdentity, readPublishOrder } from './tarball.ts'
+import { packedIdentity, readPublishOrder, tarballFiles } from './tarball.ts'
 
 /**
  * Registry codes that answer a write which did not settle, rather than a
@@ -144,6 +145,11 @@ async function main(): Promise<void> {
   // one counter answers "how far along is this run" for whoever is watching a
   // release that takes minutes per family.
   const order = readPublishOrder(directory)
+  for (const filename of order) {
+    const tarball = join(directory, filename)
+    const { name } = packedIdentity(tarball)
+    if (name === '@deepseek-ai/dsh-office-to-pdf') validateOfficeReleaseFiles(name, tarballFiles(tarball))
+  }
   const total = String(order.length)
   let published = 0
   let skipped = 0

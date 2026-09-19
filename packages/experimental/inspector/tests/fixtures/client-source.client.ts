@@ -5,6 +5,7 @@ import { Context, type Fiber } from '@deepseek-ai/cordis'
 import WebSocket from 'ws'
 import { ClientInspectorSource } from '../../src/client/bridge/transport.ts'
 import { ClientSourceCatalog } from '../../src/client/cdp/sources.ts'
+import { ClientRealmSource } from '../../src/client/inspection/realm.ts'
 import { publishCordisTree } from '../../src/client/inspection/cordis.ts'
 import { inspectorId } from '../../src/shared/bridge/ids.ts'
 import type { InspectorClientBootstrap } from '../../src/shared/bridge/messages/control.ts'
@@ -14,6 +15,7 @@ import { createInspectorService } from '../../src/shared/service.ts'
 interface ClientFixtureInput {
   readonly bootstrap: InspectorClientBootstrap
   readonly label: string
+  readonly captureConsole: boolean
   readonly sourceCatalog?: {
     readonly sourceText: string
     readonly sourceMap: string
@@ -34,6 +36,7 @@ interface ClientFixtureRequest {
     | 'publish'
     | 'refresh-tree'
     | 'remove-fiber'
+    | 'runtime-state'
     | 'set-global'
     | 'set-ingest-paused'
   readonly paused?: boolean
@@ -46,6 +49,17 @@ interface ClientFixtureRequest {
 const port = parentPort
 if (port === null) throw new Error('Inspector Client fixture requires a Worker parent port')
 const input = workerData as ClientFixtureInput
+
+class FixtureRealmSource extends ClientRealmSource {
+  override connect(hasSources: boolean) {
+    const descriptor = super.connect(hasSources)
+    return input.captureConsole ? descriptor : {
+      ...descriptor,
+      capabilities: descriptor.capabilities.filter(capability => capability.type !== 'client-console'),
+    }
+  }
+}
+
 globalThis.WebSocket = WebSocket as unknown as typeof globalThis.WebSocket
 console.log = () => {}
 
@@ -66,7 +80,13 @@ const sourceCatalog = input.sourceCatalog === undefined
     loadSource: async () => input.sourceCatalog!.sourceText,
     loadSourceMap: async () => input.sourceCatalog!.sourceMap,
   }])
-const source = new ClientInspectorSource(input.bootstrap, input.label, sourceCatalog)
+const source = new ClientInspectorSource(input.bootstrap, input.label, sourceCatalog, new FixtureRealmSource(input.label))
+const runtimeRequests = Reflect.get(source, 'runtimeRequests') as Map<unknown, { controller: AbortController }>
+const runtimeSignals = new Set<AbortSignal>()
+const socket = Reflect.get(source, 'socket') as WebSocket
+socket.on('message', () => {
+  for (const { controller } of runtimeRequests.values()) runtimeSignals.add(controller.signal)
+})
 const disposeCordis = publishCordisTree(context, source, {
   maxNodes: input.bootstrap.maxCordisNodes,
   maxBytes: input.bootstrap.maxFrameBytes - 4_096,
@@ -100,6 +120,12 @@ async function dispatch(message: ClientFixtureRequest): Promise<unknown> {
     case 'set-global':
       Reflect.set(globalThis, requiredString(message.name, 'name'), message.value)
       return undefined
+    case 'runtime-state':
+      return {
+        value: Reflect.get(globalThis, requiredString(message.name, 'name')) as unknown,
+        pendingRequests: runtimeRequests.size,
+        abortedRequests: [...runtimeSignals].filter(signal => signal.aborted).length,
+      }
     case 'log-value':
       console.log(message.value, requiredString(message.marker, 'marker'))
       return undefined

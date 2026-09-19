@@ -50,6 +50,7 @@ function normalizedOutput(result: ReturnType<typeof runOxlint>): string {
 }
 
 interface FixtureTsconfig {
+  files?: string[]
   compilerOptions?: {
     paths?: Record<string, string[]>
     typeRoots?: string[]
@@ -86,6 +87,9 @@ async function createFixture(): Promise<string> {
     const config = parsed.config as FixtureTsconfig
     // Includes and local project ownership stay unchanged; uncopied dependencies
     // resolve to their real source projects without adding files to those trees.
+    if (config.files !== undefined) {
+      config.files = config.files.map(path => resolve(dirname(original), path))
+    }
     for (const reference of config.references ?? []) {
       const target = resolve(dirname(original), reference.path)
       const targetConfig = target.endsWith('.json') ? target : join(target, 'tsconfig.json')

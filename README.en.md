@@ -65,7 +65,7 @@ The current desktop beta provides installers for macOS Apple Silicon, macOS Inte
 
 ## Build from source
 
-Requirements: Git, Node.js 24, and pnpm 11.
+Requirements: Git, Node.js 24, pnpm 11, and the platform-native tools in the [desktop build guide](apps/desktop/README.md): Xcode Command Line Tools on macOS, `musl-tools` on Linux, or Visual Studio C++ Build Tools on Windows.
 
 ```sh
 git clone https://github.com/lonesafe/deepseek-harness-desktop.git

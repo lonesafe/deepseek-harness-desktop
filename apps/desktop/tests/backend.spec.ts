@@ -30,6 +30,7 @@ describe('desktop backend readiness', () => {
       '--expose-internals',
       '/runtime/dsh.js',
       'web',
+      '--no-open',
       '--port',
       '0',
       '--host',
@@ -48,6 +49,7 @@ describe('desktop backend readiness', () => {
       '--expose-internals',
       '/runtime/dsh.js',
       'web',
+      '--no-open',
       '--port',
       '0',
     ])

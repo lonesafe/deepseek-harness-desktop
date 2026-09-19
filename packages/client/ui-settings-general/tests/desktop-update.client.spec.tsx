@@ -1,140 +1,156 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
-import { DesktopUpdateBadge } from '../src/client/DesktopUpdateBadge.tsx'
-import { DesktopVersionLabel } from '../src/client/DesktopVersionLabel.tsx'
-import { zh } from '../src/client/locales.ts'
-import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
-import {
-  DESKTOP_UPDATE_CANCEL_URL, DESKTOP_UPDATE_SNAPSHOT_KEY, DESKTOP_UPDATE_STATE_EVENT,
-  desktopUpdateConfiguration, desktopUpdateSnapshot, type DesktopUpdateDownloadState,
-} from '../src/client/desktop-update.ts'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useSyncExternalStore } from 'react'
+import { afterEach, expect, it, vi } from 'vitest'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import { DesktopUpdateIndicator } from '../src/client/DesktopUpdateIndicator.tsx'
+import type { DesktopUpdateBridge, DesktopUpdatePresentation } from '../src/client/desktop-update-bridge.ts'
+import { DesktopUpdateSource } from '../src/client/desktop-update-source.ts'
+import { en, zh } from '../src/client/locales.ts'
 
-const desktopSearch = '?dsh_desktop_version=1.0.0-beta.5&dsh_desktop_platform=darwin&dsh_desktop_arch=arm64&dsh_update_origin=https%3A%2F%2Fdsh.roubsite.com'
-const desktopConfiguration = {
-  version: '1.0.0-beta.5', platform: 'darwin', arch: 'arm64', portalOrigin: 'https://dsh.roubsite.com',
-} as const
-const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
-  let value = zh[key]
-  for (const [name, replacement] of Object.entries(params ?? {})) {
-    value = value.replaceAll(`{${name}}`, String(replacement))
-  }
-  return value
-}) as SettingsRootComponentProps['t']
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-  vi.unstubAllGlobals()
-  window.history.replaceState({}, '', '/')
-  delete (window as unknown as { __dshDesktopUpdateSnapshot?: unknown }).__dshDesktopUpdateSnapshot
-})
+type SettingsTranslate = PropsLocale<'settings'>['t']
 
-function setSnapshot(update: DesktopUpdateDownloadState): void {
-  (window as unknown as Record<string, unknown>)[DESKTOP_UPDATE_SNAPSHOT_KEY] = {
-    configuration: desktopConfiguration,
-    update,
-  }
+function translate(dictionary: typeof zh | typeof en): SettingsTranslate {
+  const messages: Readonly<Record<string, string>> = dictionary
+  return (key, params) => Object.entries(params ?? {})
+    .reduce((message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
+      messages[key] ?? key)
 }
 
-describe('desktop update configuration', () => {
-  it('accepts only complete desktop metadata and a safe portal origin', () => {
-    expect(desktopUpdateConfiguration(desktopSearch)).toEqual({
-      ...desktopConfiguration,
-    })
-    expect(desktopUpdateConfiguration('')).toBeUndefined()
-    expect(desktopUpdateConfiguration(desktopSearch.replace('https%3A', 'http%3A'))).toBeUndefined()
-  })
+function fixture() {
+  let listener: ((state: DesktopUpdatePresentation) => void) | undefined
+  const status = Promise.withResolvers<DesktopUpdatePresentation>()
+  const unsubscribe = vi.fn()
+  const open = vi.fn(async () => {})
+  const bridge: DesktopUpdateBridge = {
+    status: () => status.promise,
+    open,
+    subscribe: (next) => { listener = next; return unsubscribe },
+  }
+  const source = new DesktopUpdateSource(bridge)
+  const subscribe = (notify: () => void) => source.store.subscribe(notify)
+  const snapshot = () => source.store.getSnapshot()
+  function Indicator({ wide = true, hidden = false, dictionary = zh }: {
+    wide?: boolean
+    hidden?: boolean
+    dictionary?: typeof zh | typeof en
+  }) {
+    const state = useSyncExternalStore(subscribe, snapshot)
+    return <DesktopUpdateIndicator wide={wide} hidden={hidden} t={translate(dictionary)} view={state} onOpen={() => { source.open() }} />
+  }
+  const view = render(<Indicator />)
+  const unmount = view.unmount
+  view.unmount = () => { source.dispose(); unmount() }
+  return { open, status, unsubscribe, view, Indicator, source, emit: async (state: DesktopUpdatePresentation) => {
+    await act(async () => { listener?.(state) })
+  } }
+}
 
-  it('validates the retained main-process snapshot', () => {
-    expect(desktopUpdateSnapshot({
-      configuration: desktopConfiguration,
-      update: { status: 'available', version: '1.0.0-beta.6', fileName: 'package.dmg' },
-    })).toEqual({
-      configuration: desktopConfiguration,
-      update: { status: 'available', version: '1.0.0-beta.6', fileName: 'package.dmg' },
-    })
-    expect(desktopUpdateSnapshot({
-      configuration: { ...desktopConfiguration, portalOrigin: 'http://portal.example' },
-      update: { status: 'available', version: '1.0.0-beta.6', fileName: 'package.dmg' },
-    })).toBeUndefined()
-    expect(desktopUpdateSnapshot({
-      configuration: desktopConfiguration,
-      update: { status: 'downloading', version: '1.0.0-beta.6', fileName: 'package.dmg', received: 101, total: 100 },
-    })).toBeUndefined()
-  })
+const available = { phase: 'available', version: '1.0.1' } as const
+
+it('renders nothing outside the Desktop carrier', () => {
+  const source = new DesktopUpdateSource(undefined)
+  const view = render(<DesktopUpdateIndicator wide hidden={false} t={translate(zh)}
+    view={source.store.getSnapshot()} onOpen={() => { source.open() }} />)
+  source.open()
+  source.dispose()
+  expect(view.container.innerHTML).toBe('')
 })
 
-describe('DesktopUpdateBadge', () => {
-  it('shows the current version beside Settings only in the wide desktop sidebar', () => {
-    window.history.replaceState({}, '', desktopSearch)
-    const { rerender } = render(<DesktopVersionLabel wide t={t} />)
-    expect(screen.getByText('v1.0.0-beta.5')).toBeTruthy()
-    rerender(<DesktopVersionLabel wide={false} t={t} />)
-    expect(screen.queryByText('v1.0.0-beta.5')).toBeNull()
-    cleanup()
-    window.history.replaceState({}, '', '/')
-    render(<DesktopVersionLabel wide t={t} />)
-    expect(screen.queryByText('v1.0.0-beta.5')).toBeNull()
-  })
+it('keeps the newest event, hides for connection priority, and invokes only the shell action', async () => {
+  const f = fixture()
+  try {
+    await f.emit(available)
+    await act(async () => { f.status.resolve({ phase: 'idle' }) })
+    fireEvent.click(screen.getByRole('button', { name: '新版本' }))
+    await act(async () => {})
+    expect(f.open).toHaveBeenCalledOnce()
+    f.view.rerender(<f.Indicator hidden />)
+    expect(screen.queryByRole('button')).toBeNull()
+    await f.emit({ phase: 'downloading', version: available.version, percent: 58 })
+    f.view.rerender(<f.Indicator />)
+    fireEvent.click(screen.getByRole('button', { name: '58%…' }))
+    expect(f.open).toHaveBeenCalledOnce()
+    await f.emit({ phase: 'error', version: available.version, failure: 'download' })
+    const retry = screen.getByRole('button', { name: '重试更新' })
+    expect(retry.getAttribute('data-error')).toBe('true')
+    fireEvent.focus(retry)
+    expect((await screen.findByRole('tooltip')).textContent).toBe('下载更新失败，请重试。')
+    f.view.rerender(<f.Indicator wide={false} />)
+    expect(screen.queryByRole('button')).toBeNull()
+  } finally { f.view.unmount(); f.status.resolve(available) }
+  expect(f.unsubscribe).toHaveBeenCalledOnce()
+})
 
-  it('shows the current version when the desktop snapshot arrives after mounting', () => {
-    render(<DesktopVersionLabel wide t={t} />)
-    expect(screen.queryByText('v1.0.0-beta.5')).toBeNull()
-    setSnapshot({ status: 'idle' })
-    act(() => {
-      window.dispatchEvent(new CustomEvent(DESKTOP_UPDATE_STATE_EVENT, { detail: { status: 'idle' } }))
-    })
-    expect(screen.getByText('v1.0.0-beta.5')).toBeTruthy()
-  })
+it('keeps bridge failures actionable and ignores status completion after unmount', async () => {
+  const f = fixture()
+  await act(async () => { f.status.reject(new Error('IPC unavailable')) })
+  f.open.mockRejectedValueOnce(new Error('IPC unavailable'))
+  fireEvent.click(screen.getByRole('button', { name: '重试更新' }))
+  await act(async () => {})
+  expect(screen.getByRole('button').getAttribute('data-error')).toBe('true')
+  f.view.unmount()
+  const late = fixture()
+  late.view.unmount()
+  await act(async () => { late.status.resolve(available) })
+  expect(late.unsubscribe).toHaveBeenCalledOnce()
+})
 
-  it('renders a retained update after route search parameters have been removed', () => {
-    setSnapshot({ status: 'available', version: '1.0.0-beta.6', fileName: 'package.dmg' })
-    render(<DesktopUpdateBadge wide t={t} />)
-    expect(screen.getByRole('link', { name: /有新版本/u })).toBeTruthy()
-  })
+it('accepts initial status, coalesces actions, and ignores late events and action rejection after disposal', async () => {
+  const f = fixture()
+  const pending = Promise.withResolvers<undefined>()
+  try {
+    await act(async () => { f.status.resolve(available) })
+    expect(screen.getByRole('button', { name: '新版本' })).toBeTruthy()
+    await f.emit({ phase: 'verifying', version: available.version })
+    f.source.open()
+    expect(f.open).not.toHaveBeenCalled()
+    await f.emit(available)
+    f.open.mockImplementationOnce(() => pending.promise)
+    act(() => { f.source.open(); f.source.open() })
+    expect(f.open).toHaveBeenCalledOnce()
+    const state = f.source.store.getSnapshot()
+    f.view.unmount()
+    f.source.open()
+    await f.emit({ phase: 'error', version: available.version, failure: 'install' })
+    await act(async () => { pending.reject(new Error('late IPC failure')) })
+    expect(f.source.store.getSnapshot()).toBe(state)
+  } finally { pending.resolve(undefined); f.status.resolve(available) }
+})
 
-  it('recovers when the main-process snapshot arrives after the component mounts', () => {
-    render(<DesktopUpdateBadge wide t={t} />)
-    expect(screen.queryByRole('link')).toBeNull()
-    setSnapshot({ status: 'available', version: '1.0.0-beta.6', fileName: 'package.dmg' })
-    act(() => {
-      window.dispatchEvent(new CustomEvent(DESKTOP_UPDATE_STATE_EVENT, { detail: {
-        status: 'available', version: '1.0.0-beta.6', fileName: 'package.dmg',
-      } }))
-    })
-    expect(screen.getByRole('link', { name: /有新版本/u })).toBeTruthy()
-  })
+it('keeps an event newer than an initial-status failure', async () => {
+  const f = fixture()
+  try {
+    await f.emit(available)
+    await act(async () => { f.status.reject(new Error('stale initial request')) })
+    expect(f.source.store.getSnapshot().failed).toBe(false)
+  } finally { f.view.unmount(); f.status.resolve(available) }
+})
 
-  it('does not enable update polling in an ordinary browser', () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    render(<DesktopUpdateBadge wide t={t} />)
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(screen.queryByRole('link')).toBeNull()
-  })
+it('renders the same semantic update in the active Web locale', async () => {
+  const f = fixture()
+  try {
+    await f.emit(available)
+    expect(screen.getByRole('button', { name: '新版本' })).toBeTruthy()
+    f.view.rerender(<f.Indicator dictionary={en} />)
+    expect(screen.getByRole('button', { name: 'Update' })).toBeTruthy()
+  } finally { f.view.unmount(); f.status.resolve(available) }
+})
 
-  it('shows desktop download progress and exposes an explicit cancel action', () => {
-    setSnapshot({ status: 'available', version: '1.0.0-beta.6', fileName: 'package.dmg' })
-    render(<DesktopUpdateBadge wide t={t} />)
-
-    act(() => {
-      window.dispatchEvent(new CustomEvent(DESKTOP_UPDATE_STATE_EVENT, { detail: {
-        status: 'downloading', version: '1.0.0-beta.6', fileName: 'package.dmg', received: 25, total: 100,
-      } }))
-    })
-
-    expect(screen.getByRole('status').textContent).toContain('正在下载更新')
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25')
-    expect(screen.getByText('25%')).toBeTruthy()
-    expect(screen.getByRole('link', { name: '取消更新下载' }).getAttribute('href')).toBe(DESKTOP_UPDATE_CANCEL_URL)
-
-    act(() => {
-      window.dispatchEvent(new CustomEvent(DESKTOP_UPDATE_STATE_EVENT, { detail: {
-        status: 'available', version: '1.0.0-beta.6', fileName: 'package.dmg',
-      } }))
-    })
-    expect(screen.queryByRole('status')).toBeNull()
-    expect(screen.getByRole('link', { name: /有新版本/u })).toBeTruthy()
-  })
+it('shows fallback progress and error details when the shell omits optional fields', async () => {
+  const f = fixture()
+  try {
+    await f.emit({ phase: 'downloading' })
+    const progress = screen.getByRole('button', { name: '0%…' })
+    fireEvent.focus(progress)
+    expect((await screen.findByRole('tooltip')).textContent).toBe('0%…')
+    await f.emit({ phase: 'downloading', version: '1.0.1' })
+    fireEvent.focus(screen.getByRole('button', { name: '0%…' }))
+    expect((await screen.findByRole('tooltip')).textContent).toContain('1.0.1')
+    await f.emit({ phase: 'error' })
+    fireEvent.focus(screen.getByRole('button', { name: '重试更新' }))
+    expect((await screen.findByRole('tooltip')).textContent).toBe('安装更新失败，请稍后重试。')
+  } finally { f.view.unmount(); f.status.resolve({ phase: 'idle' }) }
 })

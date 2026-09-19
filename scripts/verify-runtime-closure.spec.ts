@@ -168,4 +168,34 @@ describe('verifyRuntimeClosure', () => {
     expect(result.workspacePackageCount).toBe(1)
     expect(result.failures).toEqual(['runtime -> @scope/root -> @scope/required'])
   })
+
+  it('accepts a peer supplied by the optional bundle that owns the plugin', async () => {
+    const root = fixture({
+      'apps/desktop/package.json': { name: 'desktop', dependencies: { '@scope/bundle': 'workspace:^' } },
+    })
+    workspace(root, '@scope/bundle', {
+      dependencies: { '@scope/plugin': 'workspace:^', '@scope/domain': 'workspace:^' },
+    })
+    workspace(root, '@scope/plugin', { peerDependencies: { '@scope/domain': 'workspace:^' } })
+    workspace(root, '@scope/domain', {})
+
+    expect((await verifyRuntimeClosure(root, 'apps/desktop/package.json')).failures).toEqual([])
+  })
+
+  it('rejects a peer missing from another installation path of the same plugin', async () => {
+    const root = fixture({
+      'apps/desktop/package.json': { name: 'desktop', dependencies: {
+        '@scope/a-bundle': 'workspace:^', '@scope/b-bundle': 'workspace:^',
+      } },
+    })
+    workspace(root, '@scope/a-bundle', {
+      dependencies: { '@scope/plugin': 'workspace:^', '@scope/domain': 'workspace:^' },
+    })
+    workspace(root, '@scope/b-bundle', { dependencies: { '@scope/plugin': 'workspace:^' } })
+    workspace(root, '@scope/plugin', { peerDependencies: { '@scope/domain': 'workspace:^' } })
+    workspace(root, '@scope/domain', {})
+
+    expect((await verifyRuntimeClosure(root, 'apps/desktop/package.json')).failures)
+      .toEqual(['desktop -> @scope/a-bundle -> @scope/plugin -> @scope/domain'])
+  })
 })

@@ -575,7 +575,7 @@
   "follow": {
     "type": "snapshot",
     "header": {
-      "version": 3,
+      "version": 4,
       "id": "fx-alpha",
       "createdAt": 1789268875874,
       "cwd": "/tmp/fixture",

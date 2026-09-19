@@ -17,6 +17,7 @@ import type {
   WorkspaceFileReadRequest,
   WorkspaceInsertSessionBeforeRequest,
   WorkspaceOrderValue,
+  WorkspaceUnarchiveSessionRequest,
   WorkspaceValue,
   WorkspaceId,
   WorkspaceView,
@@ -67,6 +68,8 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
   private orderFrameGeneration = 0
   /** Last complete order accepted from a baseline, increment, or current unary echo. */
   private committedOrder: WorkspaceId[] = []
+  /** Latest archive-set request; a later request or a pushed set supersedes it. */
+  private archiveRequestSeq = 0
   /** Host Workspace ids are never reused, so delayed data cannot resurrect a removed row. */
   private readonly removedIds = new Set<WorkspaceId>()
   private readonly listeners = new Set<() => void>()
@@ -189,14 +192,35 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
 
   /**
    * Archive one Session and install the returned complete archive set.
+   * A reply superseded by a later archive request or a pushed set installs nothing.
    * @param sessionId - Session to archive.
    * @returns generated Remote result.
    */
   async archiveSession(
     sessionId: WorkspaceArchiveSessionRequest['sessionId'],
   ): Promise<RemoteResult<WorkspaceArchiveValue>> {
+    const requestSeq = ++this.archiveRequestSeq
     const result = await this.remote.archiveSession({ sessionId })
-    if (result.ok) this.installArchived(result.value.archivedSessionIds)
+    if (result.ok && requestSeq === this.archiveRequestSeq) {
+      this.installArchived(result.value.archivedSessionIds)
+    }
+    return result
+  }
+
+  /**
+   * Unarchive one Session and install the returned complete archive set.
+   * A reply superseded by a later archive request or a pushed set installs nothing.
+   * @param sessionId - Session to unarchive.
+   * @returns generated Remote result.
+   */
+  async unarchiveSession(
+    sessionId: WorkspaceUnarchiveSessionRequest['sessionId'],
+  ): Promise<RemoteResult<WorkspaceArchiveValue>> {
+    const requestSeq = ++this.archiveRequestSeq
+    const result = await this.remote.unarchiveSession({ sessionId })
+    if (result.ok && requestSeq === this.archiveRequestSeq) {
+      this.installArchived(result.value.archivedSessionIds)
+    }
     return result
   }
 
@@ -206,6 +230,7 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
    */
   replaceBaseline(baseline: WorkspaceBaseline): void {
     this.orderFrameGeneration++
+    this.archiveRequestSeq++
     this.installViews(baseline.items)
     this.installArchived(baseline.archivedSessionIds)
     this.state = 'idle'
@@ -235,6 +260,7 @@ export class ClientWorkspaceModel implements WorkspaceFollowSink {
    * @param archivedSessionIds - complete Host-confirmed archive set.
    */
   replaceArchived(archivedSessionIds: WorkspaceArchiveValue['archivedSessionIds']): void {
+    this.archiveRequestSeq++
     this.installArchived(archivedSessionIds)
   }
 

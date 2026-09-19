@@ -29,10 +29,7 @@ const DOCKKIT_BUNDLE = 'packages/client/ui-dockkit/lib/index.js'
  * Files Node's ESM loader cannot import in this repository. None is a finding:
  * each is listed with the reason the import fails, and the run refuses a
  * listed file that imports cleanly so the list stays current in both
- * directions. The koffi entry depends on corpus order: sandbox-windows-acl
- * imports the win32-process package earlier in the serial sweep (a distinct
- * module instance under its node_modules URL), so win32-process's own file-URL
- * import re-registers koffi's type names and fails as the second load.
+ * directions.
  *
  * The Dockkit entry admits only Node's refusal of a `.css` import, not one
  * exact stylesheet: the swept bundle's first unresolvable stylesheet depends on

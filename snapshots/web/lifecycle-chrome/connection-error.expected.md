@@ -2,4 +2,4 @@
   - img
   - text: Settings
 - 'button "Balance: --. Click to refresh"': Balance --
-- button "Reconnecting automatically, reconnect now": Reconnect now
+- button "Reconnecting, reconnect now": Reconnecting

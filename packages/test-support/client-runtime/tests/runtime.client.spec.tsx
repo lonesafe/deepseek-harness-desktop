@@ -492,9 +492,13 @@ describe('workspaces action face', () => {
     // state's archive set (features render against the same snapshot).
     await ws.archiveSession('s1' as SessionId)
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
+    await ws.archiveSession('s0' as SessionId)
+    // Default unarchive mirrors it: the id leaves the same set.
+    await ws.unarchiveSession('s0' as SessionId)
+    expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
     expect(ws.calls.map(c => c.method)).toEqual(
-      ['create', 'create', 'listFiles', 'readFile', 'rename', 'delete', 'insertBefore',
-        'insertSessionBefore', 'archiveSession'])
+      ['create', 'create', 'listFiles', 'readFile', 'rename', 'delete', 'insertBefore', 'insertSessionBefore',
+        'archiveSession', 'archiveSession', 'unarchiveSession'])
 
     ws.stub('create', () => Promise.resolve({ workspaceId: 'ws-x', title: 'X', path: '/x', sessionIds: [] } as never))
     ws.stub('listFiles', (_workspaceId, path = '') => Promise.resolve({ path, entries: [], truncated: true }))
@@ -514,6 +518,7 @@ describe('workspaces action face', () => {
     ws.stub('insertBefore', insertBefore)
     ws.stub('insertSessionBefore', () => Promise.resolve({ workspaceId: 'w1', title: '', path: '', sessionIds: [] } as never))
     ws.stub('archiveSession', () => Promise.resolve())
+    ws.stub('unarchiveSession', () => Promise.resolve())
     expect((await ws.create({ path: '/y' })).title).toBe('X')
     expect((await ws.listFiles('w1' as WorkspaceId, 'docs')).truncated).toBe(true)
     expect((await ws.readFile('w1' as WorkspaceId, 'docs/a.md')).content).toBe('stub')
@@ -524,6 +529,8 @@ describe('workspaces action face', () => {
     expect((await ws.insertSessionBefore('w1' as WorkspaceId, 's1' as SessionId)).sessionIds).toEqual([])
     // The stub replaces the default set mutation: the set stays as-is.
     await ws.archiveSession('s2' as SessionId)
+    expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
+    await ws.unarchiveSession('s1' as SessionId)
     expect(ws.list.getSnapshot().archivedSessionIds).toEqual(['s1'])
     await runtime.dispose()
   })

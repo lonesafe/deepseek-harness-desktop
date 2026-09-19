@@ -63,8 +63,10 @@ const MIME: Readonly<Record<string, string>> = {
 
 interface RuntimeResources {
   readonly node: string
+  readonly host: string
   readonly pnpm: string
   readonly dsh: string
+  readonly profileResolution?: 'runtime'
 }
 
 function runtimeResources(): RuntimeResources {
@@ -73,8 +75,10 @@ function runtimeResources(): RuntimeResources {
     ?? join(process.resourcesPath, 'runtime', 'node', process.platform === 'win32' ? 'node.exe' : 'node')
   const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
     ?? join(process.resourcesPath, 'runtime', 'pnpm', 'bin', 'pnpm.mjs')
-  const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined) ?? join(process.resourcesPath, 'dsh')
-  return { node, pnpm, dsh }
+  const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined)
+    ?? (development ? join(process.resourcesPath, 'dsh') : join(app.getAppPath(), 'dsh'))
+  return { node, host: development ? node : process.execPath, pnpm, dsh,
+    ...(development ? {} : { profileResolution: 'runtime' }) }
 }
 
 function developmentHostInspectPort(enabled: boolean): number | undefined {
@@ -203,7 +207,7 @@ async function main(): Promise<void> {
   const backend = new DesktopBackendController((onFailure) => {
     if (development === undefined) manager.assertProfileRuntime(activeProject)
     const hostInspectPort = developmentHostInspectPort(development !== undefined)
-    const host = new DesktopHostProcess(resources.node, development ?? resources.dsh, activeProject,
+    const host = new DesktopHostProcess(resources.host, development ?? resources.dsh, activeProject,
       hostInspectPort, process.env, onFailure)
     return {
       start: () => host.start(),

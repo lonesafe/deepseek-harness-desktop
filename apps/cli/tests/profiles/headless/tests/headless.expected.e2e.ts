@@ -1,6 +1,7 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -59,10 +60,12 @@ interface PersistedLog {
 interface DeepSeekDefaultsServer {
   readonly url: string
   readonly requests: JsonObject[]
+  readonly paths: string[]
   close(): Promise<void>
 }
 
 interface DeepSeekDefaultsServerOptions {
+  readonly protocol?: 'messages'
   /** Keep the primary response open until the background title request arrives. */
   readonly waitForTitleRequest?: boolean
   /** SSE comments written before the deterministic response. */
@@ -96,12 +99,14 @@ async function deepseekDefaultsServer(
   const keepAliveCount = options.keepAlives ?? 3
   const keepAliveIntervalMs = options.keepAliveIntervalMs ?? 60
   const requests: JsonObject[] = []
+  const paths: string[] = []
   const server = createServer((request: IncomingMessage, response: ServerResponse) => {
     let body = ''
     request.setEncoding('utf8')
     request.on('data', (chunk: string) => { body += chunk })
     request.on('end', () => {
       requests.push(JSON.parse(body) as JsonObject)
+      paths.push(request.url ?? '')
       response.writeHead(200, { 'content-type': 'text/event-stream' })
       let keepAlives = keepAliveCount
       const write = (): void => {
@@ -110,6 +115,17 @@ async function deepseekDefaultsServer(
           || (options.waitForTitleRequest === true && !requests.some(request => request.max_tokens === 64))) {
           response.write(': keep-alive\n\n')
           timer = setTimeout(write, keepAliveIntervalMs)
+          return
+        }
+        if (options.protocol === 'messages') {
+          response.end([
+            { type: 'message_start', message: { id: 'defaults-response', model: 'deepseek-v4-flash', usage: { input_tokens: 3, output_tokens: 0 } } },
+            { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+            { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'DEFAULTS_OK' } },
+            { type: 'content_block_stop', index: 0 },
+            { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } },
+            { type: 'message_stop' },
+          ].map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''))
           return
         }
         response.end([
@@ -129,6 +145,7 @@ async function deepseekDefaultsServer(
   return {
     url: `http://127.0.0.1:${address.port}`,
     requests,
+    paths,
     close: () => new Promise(resolve => server.close(() => { resolve() })),
   }
 }
@@ -264,6 +281,117 @@ describe('headless stream-json snapshots', () => {
     expect(result.stderr).toBe(await readFile(headlessReasoningExpected, 'utf8'))
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
+  it('projects the same run as JSON events under a generated session identity', async () => {
+    const task = 'Prove the machine-readable product headless profile path.'
+    const result = await runLoaderSmoke({
+      label: 'product headless profile json snapshot',
+      tempDirPrefix: 'headless-snapshot-profile-json-',
+      binScript: dshBinScript,
+      configPath: headlessOverlayPath,
+      binArgs: [
+        '--profile', 'headless', '--patch', headlessOverlayPath,
+        '--json', task,
+      ],
+      tsconfigPath,
+      env: {
+        DSH_PERMISSION_MODE: 'danger-full-access',
+        DSH_TELEMETRY_DISABLED: '1',
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+      },
+    })
+
+    const events = result.stdout.trim().split('\n').map(line => JSON.parse(line) as JsonObject)
+    expect(events[0]).toMatchObject({ type: 'session' })
+    expect(events[0]?.sessionId).toMatch(/^session-/)
+    expect(typeof events[0]?.cwd).toBe('string')
+    expect(events.at(-1)).toMatchObject({ type: 'final', text: 'CLI tool round trip complete: CLI_TOOL_ROUND_TRIP' })
+    expect(events.map(event => event.type)).toContain('thinking')
+    expect(events.map(event => event.type)).toContain('tool_call')
+    expect(events.map(event => event.type)).toContain('tool_result')
+    expect(events.map(event => event.type)).not.toContain('error')
+    expect(result.stderr).toBe('')
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('fails the JSON run when --session-id names no stored Session', async () => {
+    const result = await runLoaderSmoke({
+      label: 'product headless profile unknown session',
+      tempDirPrefix: 'headless-snapshot-profile-unknown-session-',
+      binScript: dshBinScript,
+      configPath: headlessOverlayPath,
+      binArgs: [
+        '--profile', 'headless', '--patch', headlessOverlayPath,
+        '--json', '--session-id', 'headless-unknown-session', 'Continue the conversation.',
+      ],
+      tsconfigPath,
+      expectedExitCode: 1,
+      env: {
+        DSH_TELEMETRY_DISABLED: '1',
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+      },
+    })
+
+    const events = result.stdout.trim().split('\n').map(line => JSON.parse(line) as JsonObject)
+    expect(events).toEqual([{
+      type: 'error',
+      message: 'session "headless-unknown-session" does not exist; omit --session-id to start a new Session',
+    }])
+    expect(result.stderr).toContain('omit --session-id to start a new Session')
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('resumes one persisted Session across two real --session-id wakes', async () => {
+    const firstTask = 'Record the first wake of the resume proof.'
+    const secondTask = 'Continue from the first wake of the resume proof.'
+    const env = {
+      DSH_PERMISSION_MODE: 'danger-full-access',
+      DSH_TELEMETRY_DISABLED: '1',
+      NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+    }
+    const cwd = await mkdtemp(join(tmpdir(), 'headless-session-resume-'))
+    try {
+      const first = await runLoaderSmoke({
+        label: 'product headless profile resume first wake',
+        cwd,
+        binScript: dshBinScript,
+        configPath: headlessOverlayPath,
+        binArgs: ['--profile', 'headless', '--patch', headlessOverlayPath, '--json', firstTask],
+        tsconfigPath,
+        env,
+      })
+      const firstEvents = first.stdout.trim().split('\n').map(line => JSON.parse(line) as JsonObject)
+      expect(firstEvents[0]).toMatchObject({ type: 'session' })
+      const sessionId = firstEvents[0]?.sessionId
+      if (typeof sessionId !== 'string') throw new Error('the first wake reported no Session identity')
+
+      const second = await runLoaderSmoke({
+        label: 'product headless profile resume second wake',
+        cwd,
+        binScript: dshBinScript,
+        configPath: headlessOverlayPath,
+        binArgs: [
+          '--profile', 'headless', '--patch', headlessOverlayPath,
+          '--json', '--session-id', sessionId, secondTask,
+        ],
+        tsconfigPath,
+        env,
+        inspect: async (inspected) => {
+          const logs = await persistedLogs(inspected, join(inspected, '.dsh', 'sessions'))
+          expect(logs).toHaveLength(1)
+          const content = logs[0]?.content ?? ''
+          expect(content).toContain(firstTask)
+          expect(content).toContain(secondTask)
+        },
+      })
+      const secondEvents = second.stdout.trim().split('\n').map(line => JSON.parse(line) as JsonObject)
+      expect(secondEvents[0]).toMatchObject({ type: 'session', sessionId })
+      expect(secondEvents.at(-1)).toMatchObject({
+        type: 'final',
+        text: 'CLI tool round trip complete: CLI_TOOL_ROUND_TRIP',
+      })
+    } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS * 2)
+
   it('prints a terminal model failure through the product headless profile command', async () => {
     const result = await runLoaderSmoke({
       label: 'product headless profile model failure snapshot',
@@ -284,19 +412,27 @@ describe('headless stream-json snapshots', () => {
     await expect(result.stderr).toMatchFileSnapshot(headlessFailureExpected)
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
-  it('prints the original Loader activation error through the assembled one-shot app', async () => {
+  it('warns about an unrelated activation error and completes the headless task', async () => {
     const result = await runLoaderSmoke({
-      label: 'headless startup activation error snapshot',
+      label: 'headless best-effort startup snapshot',
       tempDirPrefix: 'headless-snapshot-startup-error-',
-      binScript,
-      libBinScript: binScript,
+      binScript: dshBinScript,
       configPath: startupFailureConfigPath,
-      binArgs: [startupFailureConfigPath, 'unreachable task'],
+      binArgs: [
+        '--profile', 'headless',
+        '--patch', headlessOverlayPath,
+        '--patch', startupFailureConfigPath,
+        'Complete the task despite the unrelated startup failure.',
+      ],
       tsconfigPath,
-      expectedExitCode: 1,
+      env: {
+        DSH_PERMISSION_MODE: 'danger-full-access',
+        DSH_TELEMETRY_DISABLED: '1',
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+      },
     })
-    expect(result.stdout).toBe('')
-    await expect(result.stderr.replace(startupFailurePluginUrl, './activation-error.mjs'))
+    expect(result.stdout).toBe('CLI tool round trip complete: CLI_TOOL_ROUND_TRIP\n')
+    await expect(result.stderr.replaceAll(startupFailurePluginUrl, './activation-error.mjs'))
       .toMatchFileSnapshot(startupFailureExpected)
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
@@ -459,7 +595,7 @@ describe('headless stream-json snapshots', () => {
 
   it('keeps provider comments alive and sends DeepSeek defaults through the one-shot app', async () => {
     // The response outlives the one-second idle budget while each heartbeat has 20× scheduling margin.
-    const server = await deepseekDefaultsServer({ keepAlives: 24, keepAliveIntervalMs: 50 })
+    const server = await deepseekDefaultsServer({ keepAlives: 24, keepAliveIntervalMs: 50, protocol: 'messages' })
     try {
       const result = await runLoaderSmoke({
         label: 'DeepSeek adapter defaults headless stream-json snapshot',
@@ -483,9 +619,10 @@ describe('headless stream-json snapshots', () => {
 
       expect(result.stderr).toBe('')
       expect(server.requests).toHaveLength(2)
+      expect(server.paths).toEqual(['/v1/messages', '/v1/messages'])
       const agentRequest = server.requests.find(request => request.max_tokens === 256_000)
       const titleRequest = server.requests.find(request => request.max_tokens === 64)
-      expect(agentRequest?.reasoning_effort).toBe('low')
+      expect(agentRequest?.output_config).toEqual({ effort: 'low' })
       expect(titleRequest).toBeDefined()
       const header = (parseJsonl(result.stdout)
         .map(record => record.event)
@@ -613,7 +750,7 @@ describe('headless stream-json snapshots', () => {
       configPath: teamConfigPath,
       binArgs: [
         teamConfigPath,
-        '请明确使用 Agent Teams，把调研和实现拆给两个 teammate，等待完成后汇总。',
+        '请先运行 workflow 检查，再使用 Agent Teams 把调研和实现拆给两个 teammate，等待完成后汇总。',
       ],
       tsconfigPath,
       processTimeoutMs: 60_000,
@@ -626,6 +763,15 @@ describe('headless stream-json snapshots', () => {
         const parent = logs.find(log => typeof log.header.parentSession !== 'string')
         if (parent === undefined) throw new Error('Agent Teams snapshot did not persist its Lead')
         const rows = parseJsonl(parent.content)
+        const workflowChild = logs.find(log => parseJsonl(log.content).some(row => row.type === 'subagent/descriptor'
+          && (row.data as JsonObject).mode === 'one-shot'))
+        if (workflowChild === undefined) throw new Error('Team profile did not persist its workflow child')
+        const workflowRows = parseJsonl(workflowChild.content)
+        expect(workflowRows.find(row => row.type === 'subagent/descriptor')?.data)
+          .toMatchObject({ mode: 'one-shot', provider: 'spawn' })
+        expect(workflowRows.filter(row => row.type === 'user/message'
+          && ((row.data as JsonObject).source as JsonObject).kind === 'user').map(row => row.data))
+          .toEqual([expect.objectContaining({ content: [{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }] })])
         const members = rows.filter(row => row.type === 'team/member')
           .map(row => ((row.data as JsonObject).member as JsonObject))
         const tasks = rows.filter(row => row.type === 'team/task')
@@ -674,9 +820,22 @@ describe('headless stream-json snapshots', () => {
           if (data.name !== 'team_task_update' || typeof data.arguments !== 'string') return false
           return (JSON.parse(data.arguments) as JsonObject).action === 'complete'
         })
+        const identityReminders = logs.flatMap((log) => {
+          if (log === parent || log === workflowChild) return []
+          const initial = parseJsonl(log.content).find(row => row.type === 'user/message'
+            && ((row.data as JsonObject).source as JsonObject).kind === 'user')
+          if (initial === undefined) throw new Error('Teammate Session has no initial task')
+          const content = (initial.data as JsonObject).content as JsonObject[]
+          expect(content).toHaveLength(2)
+          const identity = content[0]!.text
+          if (typeof identity !== 'string') throw new Error('Teammate initial task has no identity text')
+          return [identity.trimEnd()]
+        }).sort()
         projection = {
           sessions: logs.length,
+          workflowStopReason: (rows.find(row => row.type === 'tool-workflow/run-end')?.data as JsonObject)?.stopReason,
           memberEdges: members.length,
+          identityReminders,
           activeMembers: members.filter(member => member.phase === 'active').map(member => member.name).sort(),
           tasks: latestTasks.map(task => ({
             subject: task.subject,
@@ -711,9 +870,17 @@ describe('headless stream-json snapshots', () => {
         ],
         "checkedRoster": true,
         "deliveredMessages": 2,
+        "identityReminders": [
+          "<system-reminder>
+      You are teammate "implementer".
+      </system-reminder>",
+          "<system-reminder>
+      You are teammate "researcher".
+      </system-reminder>",
+        ],
         "memberEdges": 4,
         "queuedMessages": 2,
-        "sessions": 3,
+        "sessions": 4,
         "steerEvidence": {
           "completedAfterMessage": true,
           "enteredOpenTurn": true,
@@ -733,6 +900,7 @@ describe('headless stream-json snapshots', () => {
           },
         ],
         "waited": true,
+        "workflowStopReason": "completed",
       }
     `)
   }, 75_000)

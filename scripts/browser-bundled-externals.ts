@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Rolldown, type UserConfigExport } from 'tsdown'
 import ts from 'typescript'
+import { browserDependencyAnalysis } from '../apps/web/product-isolation.ts'
 
 interface Manifest {
   name: string
@@ -117,7 +118,9 @@ interface ShellConfig {
 }
 
 interface ViteApi {
-  resolveConfig(config: Record<string, unknown>, command: 'build'): Promise<ShellConfig>
+  resolveConfig(
+    config: Record<string, unknown>, command: 'build', defaultMode: string, defaultNodeEnv: string,
+  ): Promise<ShellConfig>
   build(config: Record<string, unknown>): Promise<unknown>
 }
 
@@ -132,7 +135,7 @@ async function collectShell(
     if (manifest.private === true || manifest.exports?.['./dist/*'] === undefined) continue
     const vitePath = createRequire(resolve(dir, 'package.json')).resolve('vite')
     const vite = await import(pathToFileURL(vitePath).href) as ViteApi
-    const config = await vite.resolveConfig({ root: dir, logLevel: 'error' }, 'build')
+    const config = await vite.resolveConfig({ root: dir, logLevel: 'error' }, 'build', 'production', 'production')
     const input = config.build.rollupOptions?.input
     const entries = typeof input === 'string' ? [input] : Object.values(input ?? {})
     const pages = entries.filter(entry => entry.endsWith('.html'))
@@ -140,7 +143,7 @@ async function collectShell(
     await vite.build({
       root: dir,
       logLevel: 'error',
-      plugins: [recorder(seen, workspaceNames, true)],
+      plugins: [browserDependencyAnalysis(), recorder(seen, workspaceNames, true)],
       resolve: { alias: browserSourceAliases(root) },
       build: {
         write: false,
@@ -159,22 +162,22 @@ async function collectShell(
 
 /**
  * Direct third-party packages resolved by published browser builds.
- * @param root - Repository root with installed build dependencies; lib/ is not required.
+ * @param root - Repository root, possibly symlinked, with installed build dependencies; lib/ is not required.
  * @returns Names of distributed browser inputs, excluding workspace packages and erased types.
  */
 export async function browserBundledExternals(root: string): Promise<Set<string>> {
-  // Vite's root-relative HTML names must use the same real paths as module resolution.
-  const canonicalRoot = realpathSync(root)
+  // Vite resolves HTML through native realpath, including Windows 8.3 alias expansion.
+  root = realpathSync.native(root)
   const manifests = new Map<string, Manifest>()
   for (const glob of ['packages/*/*/package.json', 'vendor/*/package.json']) {
-    for (const path of globSync(glob, { cwd: canonicalRoot }).sort()) {
-      const absolute = resolve(canonicalRoot, path)
+    for (const path of globSync(glob, { cwd: root }).sort()) {
+      const absolute = resolve(root, path)
       manifests.set(absolute, readManifest(absolute))
     }
   }
   const names = new Set([...manifests.values()].map(manifest => manifest.name))
   const seen = new Set<string>()
-  await collectClientBundles(canonicalRoot, manifests, names, seen)
-  await collectShell(canonicalRoot, names, seen)
+  await collectClientBundles(root, manifests, names, seen)
+  await collectShell(root, names, seen)
   return seen
 }

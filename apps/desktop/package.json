@@ -180,7 +180,7 @@
     "@types/ws": "^8.18.1",
     "tsdown": "^0.22.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8",
+    "vitest": "^4.1.11",
     "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@electron/get": "^5.1.0",
     "@electron/notarize": "2.5.0",

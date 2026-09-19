@@ -34,7 +34,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-atomic-write": "workspace:^",
     "@deepseek-ai/dsh-package-manifest": "workspace:^",
-    "js-yaml": "^4.2.0",
+    "js-yaml": "^4.3.2",
     "node-addon-require-builtin": "^0.1.6",
     "resolve.exports": "^2.0.3"
   },

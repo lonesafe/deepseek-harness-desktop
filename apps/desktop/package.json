@@ -192,7 +192,7 @@
     "electron-builder": "26.15.3",
     "extract-zip": "^2.0.1",
     "fflate": "^0.8.2",
-    "js-yaml": "^4.2.0",
+    "js-yaml": "^4.3.2",
     "tar": "^7.5.0"
   }
 }

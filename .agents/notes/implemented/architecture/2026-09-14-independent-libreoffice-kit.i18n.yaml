@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-independent-libreoffice-kit.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md
-2026-09-14-independent-libreoffice-kit.md: 41dc6f8716286fcb574d573ec2c99e28069c80e5
-2026-09-14-independent-libreoffice-kit.zh.md: a030d5ef93b1420b996ef3e9bb6f42020db8a91e
+/agent-note-independent-libreoffice-kit-ownership:
+  en: ee1625b5a309d9e6
+  zh: c3e78e1b1aa92fd8
+/agent-note-independent-libreoffice-kit-ownership/problem:
+  en: 2fc4ac7bdd4a3474
+  zh: 21ebdd3ac9264132
+/agent-note-independent-libreoffice-kit-ownership/decision:
+  en: 631673796aa504ab
+  zh: dd28e0f46e743117
+/agent-note-independent-libreoffice-kit-ownership/alternatives-considered:
+  en: 55175bb30630bf0c
+  zh: 788853ddd5f7a4e9
+/agent-note-independent-libreoffice-kit-ownership/consequences:
+  en: ace5eeafb4795ab6
+  zh: 136489e75455c8e7

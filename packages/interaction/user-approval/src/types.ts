@@ -26,9 +26,9 @@ export function ApprovalRequestId(id: string): ApprovalRequestId {
 }
 
 /**
- * Closed approval outcomes: a one-shot or remembered grant, explicit
- * rejection, withdrawn request, or unavailable answerer. Callers fail closed
- * on `unavailable`.
+ * Closed approval outcomes: a one-shot grant, a session-local remembered
+ * grant, explicit rejection, withdrawn request, or unavailable answerer.
+ * Callers fail closed on `unavailable`.
  */
 export type ApprovalOutcome = 'allowed-once' | 'allowed-always' | 'rejected' | 'cancelled' | 'unavailable'
 
@@ -40,14 +40,14 @@ declare module '@deepseek-ai/dsh-session/types' {
      * it with the `approval/decided` that always follows; `toolName` is the
      * tool the question is about, `callId` the exact tool call when the asker
      * had one, `reason` the asker's human-readable explanation (e.g. a hook's
-     * permission-decision reason).
+     * permission-decision reason), and `alwaysAllowKey` the optional stable
+     * identity for a session-local remembered grant.
      */
     'approval/asked': {
       id: ApprovalRequestId
       toolName: string
       callId?: ToolCallId
       reason?: string
-      /** Stable identity for a session-local remembered grant. */
       alwaysAllowKey?: string
     }
     /**
@@ -72,8 +72,13 @@ export interface ApprovalRequestEvent {
   readonly callId?: ToolCallId
   /** Human-readable reason supplied by the asker. */
   readonly reason?: string
-  /** Whether the requester can remember a matching grant for this session. */
+  /**
+   * Whether the answerer may create a remembered grant for this request.
+   * Only requests carrying this flag can return `allowed-always`.
+   */
   readonly allowAlways?: boolean
+  /** Localized presentation only; never persisted in approval audit events. */
+  readonly displayReason?: { readonly en: string; readonly [locale: string]: string }
   /** Cancellation lifetime of the pending request. */
   readonly signal?: AbortSignal
 }

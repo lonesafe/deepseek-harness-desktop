@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/agent-team-web-profile/README.md
-README.md: 7a6ffb677ea08ccd88a020c8b26301805a0faf3b
-README.zh.md: 03e438f18ccfa78ff20100afd6c7d9e91d9f99e9
+/:
+  en: 7417b72ee953318c
+  zh: 39a963cf65ea2afb
+/deepseek-ai-dsh-experimental-agent-team-web-profile:
+  en: 0db82086b2904e44
+  zh: bd6b34c55c96f5ee
+/deepseek-ai-dsh-experimental-agent-team-web-profile/summary:
+  en: 69cbf2bc9820d262
+  zh: 861ef708b21503be
+/deepseek-ai-dsh-experimental-agent-team-web-profile/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-experimental-agent-team-web-profile/use-this-package:
+  en: bbff250eba0f1b89
+  zh: 0a618f05cc88ee2b
+/deepseek-ai-dsh-experimental-agent-team-web-profile/use-this-package/install-into-a-profile:
+  en: 4c976bcd17bfd615
+  zh: 2f5b0c0024404dd8
+/deepseek-ai-dsh-experimental-agent-team-web-profile/use-this-package/what-you-get:
+  en: 2466f3308f7472cc
+  zh: 5b1817943e75f6d9
+/deepseek-ai-dsh-experimental-agent-team-web-profile/understand-the-implementation:
+  en: 175ed5d74e0ebc20
+  zh: 543cdacbc5bffbe7
+/deepseek-ai-dsh-experimental-agent-team-web-profile/further-exploration:
+  en: 70ac2341a76ae187
+  zh: 004c9458ac17ad22
+/deepseek-ai-dsh-experimental-agent-team-web-profile/model-experience:
+  en: 78597e4915ffb252
+  zh: d80cf9e16ffcd829
+/deepseek-ai-dsh-experimental-agent-team-web-profile/model-experience/kv-cache-effect:
+  en: fd005940699dac76
+  zh: c9e14e07b9c3fb58
+/deepseek-ai-dsh-experimental-agent-team-web-profile/known-limitations-and-deferred-work:
+  en: f9681354abe286d1
+  zh: 571e601399fb7ce3
+/deepseek-ai-dsh-experimental-agent-team-web-profile/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

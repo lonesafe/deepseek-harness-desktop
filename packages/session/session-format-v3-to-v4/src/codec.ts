@@ -1,35 +1,75 @@
-/** V4 physical records retain the released V3 event encoding. */
+/** V4 framing with native tool-role admission and released physical rows. */
 
-import { SessionFormatError, isSessionFormatJsonObject, snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
-import type { SessionFormatCodec, SessionFormatCurrentEncoder, SessionFormatHeader } from '@deepseek-ai/dsh-session-format'
-import { releasedV3SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v2-to-v3'
+import { SessionFormatError, isSessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
+import type { SessionFormatCodec, SessionFormatCurrentEncoder, SessionFormatHeader, SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
+import { releasedV2SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v2-to-v3'
+import { assertV4SourceRowAdmission } from './message-sources.ts'
+import { assertV4RetiredSyntax } from './retired-syntax.ts'
+import { assertV4SystemMessageFields } from './system-message.ts'
+import { assertV4DeveloperData } from './developer.ts'
+import { assertV4ForkResult } from './fork-result.ts'
+import { assertV4ToolResultMessage } from './tool-role.ts'
 import { assertReleasedV4Header } from './validation.ts'
 
-/** Physical V4 codec with literal historical versions independent of the installed writer. */
+function physicalV2(value: unknown): SessionFormatHeader {
+  if (!isSessionFormatJsonObject(value) || value['version'] !== 4) throw new SessionFormatError('expected format v4 physical header')
+  return { ...value, version: 2 } as SessionFormatHeader
+}
+
+/**
+ * V4 physical encoder and decoder retain the released row framing while
+ * validating the native tool-role message directly.
+ */
 export const releasedV4SessionFormatCodec = Object.freeze({
   version: 4,
-  decodeHeader(value) {
-    return { ...releasedV3SessionFormatCodec.decodeHeader(v3PhysicalHeader(value)), version: 4 }
+  decodeHeader(value: unknown) {
+    return { ...releasedV2SessionFormatCodec.decodeHeader(physicalV2(value)), version: 4 }
   },
   createDecoder(value, recovery) {
-    const decoder = releasedV3SessionFormatCodec.createDecoder(v3PhysicalHeader(value), recovery)
+    const decoder = releasedV2SessionFormatCodec.createDecoder(physicalV2(value), recovery)
     return {
+      ...decoder,
       header: { ...decoder.header, version: 4 },
-      decodeRow: decoder.decodeRow.bind(decoder),
-      finish: decoder.finish.bind(decoder),
+      decodeRow(row, context) {
+        assertV4RowAdmission(row)
+        decoder.decodeRow(row, {
+          emitRun: context.emitRun.bind(context),
+          emitEvent: context.emitEvent.bind(context),
+        })
+      },
     }
   },
   encodeHeader(header, inheritedEventCount) {
     assertReleasedV4Header(header)
-    return { ...releasedV3SessionFormatCodec.encodeHeader({ ...header, version: 3 }, inheritedEventCount), version: 4 }
+    return { ...releasedV2SessionFormatCodec.encodeHeader({ ...header, version: 2 }, inheritedEventCount), version: 4 }
   },
-  encodeEvent: releasedV3SessionFormatCodec.encodeEvent,
+  encodeEvent(event: SessionFormatEvent) {
+    if (event.type === 'developer/message' && event['ignorable'] === true) {
+      assertV4DeveloperData(event)
+      assertV4RetiredSyntax(event)
+    }
+    assertV4RowAdmission(event)
+    return releasedV2SessionFormatCodec.encodeEvent(event)
+  },
 } satisfies SessionFormatCodec & SessionFormatCurrentEncoder)
 
-function v3PhysicalHeader(value: unknown): SessionFormatHeader {
-  const header = snapshotSessionFormatJson(value, 'format v4 physical header')
-  if (!isSessionFormatJsonObject(header) || header['version'] !== 4) {
-    throw new SessionFormatError('expected format v4 physical Session header')
+/**
+ * Apply native V4 admission before a scanner discards a recoverable suffix.
+ * Ignorable developer payloads require reader vocabulary; physical decoding defers them.
+ * @param row - parsed physical row before framing and source-event range decoding.
+ * @param knownEventTypes - installed event types, supplied by native readers before tail recovery.
+ */
+export function assertV4RowAdmission(row: unknown, knownEventTypes?: ReadonlySet<string>): void {
+  if (isSessionFormatJsonObject(row)) {
+    if (row['type'] === 'developer/message' && row['ignorable'] === true
+      && knownEventTypes?.has('developer/message') !== true) return
+    assertV4DeveloperData(row as unknown as SessionFormatEvent)
   }
-  return { ...header, version: 3 } as SessionFormatHeader
+  assertV4SourceRowAdmission(row)
+  assertV4RetiredSyntax(row)
+  assertV4SystemMessageFields(row)
+  if (!isSessionFormatJsonObject(row) || row['type'] !== 'tool/result') return
+  const event = row as unknown as SessionFormatEvent
+  assertV4ToolResultMessage(event)
+  assertV4ForkResult(event)
 }

@@ -195,3 +195,7 @@ The few required Client symbols are mirrored on the test side: `scaffold.ts` exp
 - **Capabilities deliberately omitted.** Payload projection and redaction are unsupported, scopes other than Agent are unsupported, and ordinary notifications are not replayed. Recoverable state needs a query, cursor, or opening baseline; a waterfall is replayed only while its original Host invocation remains pending.
 - **Client Connection remains in the Host graph.** API Gateway and the directory-picker packages reach the package's explicit Host face. Session and Workspace Client state lives in their domain controllers, so the build no longer relies on a monolithic Client Runtime project being reachable from Host tests.
 - **The package intentionally publishes no invariant companion.** A prior revision asserted delivery form on the live event bus, coupling diagnostics to the allowlist and causing Rolldown to emit a third bundle chunk omitted by the mechanically derived publication list. The Host-face `TypertForwardableEventEntry` assertion already rejects those mismatches at compile time, and the package README records why no independent runtime relation remains.
+
+## Related
+
+- [Remote duplex stream](2026-09-19-remote-duplex-stream.md): every Remote stream carries a Client uplink on the same logical stream; the duplex `$events` listed under its Deferred section replaces the unary `$events/result` path once it lands.

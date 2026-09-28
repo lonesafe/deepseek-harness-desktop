@@ -23,6 +23,7 @@ import {
   JsonlGenerationTargetConflictError,
   JsonlGenerationUnsupportedMigrationError,
   prepareJsonlMigration,
+  readDecodedJsonlSource,
   verifyJsonlCurrentGeneration,
   type JsonlGenerationFormatAdapter,
   type PrepareJsonlMigrationOptions,
@@ -30,7 +31,7 @@ import {
 import { createJsonlGenerationTestRuntime } from '../src/testing/generation.ts'
 import { compressZstdFrame, decompressZstdFrame, scanZstdFrames } from '../src/zstd.ts'
 import type { JsonlCompression } from '../src/format.ts'
-import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
+import { createSessionFormatCatalogWithChildren, sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import type {
   SessionFormatArtifact,
   SessionFormatEvent,
@@ -85,6 +86,20 @@ function header(version: number, id = 'generation-test'): Record<string, unknown
 
 const event0 = { type: 'turn/start', seq: 0, time: 2, data: { turn: 1 } }
 const event1 = { type: 'turn/end', seq: 1, time: 3, data: { turn: 1, reason: { kind: 'completed' } } }
+
+it('preserves cancellation raised while creating a child source decoder', async () => {
+  const path = join(await tempRoot(), 'session.v3.jsonl')
+  await writeFile(path, line(header(3)))
+  const controller = new AbortController()
+  const reason = new Error('child decoding cancelled')
+  await expect(readDecodedJsonlSource(path, 3, 'none', {
+    createRestore() {
+      controller.abort(reason)
+      throw reason
+    },
+  }, controller.signal)).rejects.toBe(reason)
+})
+
 const assistantUsage = { inputTokens: 3, outputTokens: 2 }
 const assistantReplayState = { response: { id: 'response' } }
 
@@ -179,7 +194,7 @@ function adapter(overrides: Partial<TestGenerationFormatAdapter> = {}): TestGene
 function catalogAdapter(): JsonlGenerationFormatAdapter {
   return {
     currentVersion: sessionFormatCatalog.currentVersion,
-    createRestore: header => sessionFormatCatalog.createRestore(header, {
+    createRestore: header => createSessionFormatCatalogWithChildren([]).createRestore(header, {
       recovery: 'recoverable', validation: 'transformed',
     }),
     encodeHeader: (header, inheritedEventCount) =>
@@ -333,7 +348,7 @@ describe('JSONL immutable generation publication', () => {
     expect(await readdir(root)).toEqual(['session.v2.jsonl'])
   })
 
-  it('publishes canonical current replacements and headers while retaining exact V2 bytes', async () => {
+  it('publishes canonical replacements and current headers while retaining exact V2 bytes', async () => {
     const root = await tempRoot()
     const request = options(root, 'none', catalogAdapter(), 2)
     const config = { provider: 'mock', model: 'mock' }
@@ -346,7 +361,7 @@ describe('JSONL immutable generation publication', () => {
       { type: 'user/message', seq: 3, time: 5,
         surfaceOp: { op: 'replace', start: 2, end: 2 }, sourceEventSeqs: [2], data: {
           id: 'summary', role: 'user', content: [{ type: 'text', text: 'summary' }],
-          source: { kind: 'plugin', plugin: 'summary-fixture' },
+          source: { kind: 'plugin', plugin: 'summary-fixture', form: 'notice', summary: 'summary-fixture' },
         } },
       { type: 'request/header', seq: 4, time: 6, data: {
         header: { config, system: '', tools: [], adapterDefaults: {} }, reason: 'initial',
@@ -361,7 +376,10 @@ describe('JSONL immutable generation publication', () => {
       events[0], events[1],
       expect.objectContaining({ type: 'system/message', seq: 2, surfaceOp: 'append', data: expect.objectContaining({ message: expect.objectContaining({ role: 'system', content: [] }) as unknown }) as unknown }) as unknown,
       ...events.slice(2).map(event => event.seq === 3
-        ? { ...event, seq: 4, surfaceOp: { op: 'replace', startSeq: 3, endSeq: 3 }, sourceEventSeqs: [3] }
+        ? { ...event, seq: 4, surfaceOp: { op: 'replace', startSeq: 3, endSeq: 3 }, sourceEventSeqs: [3],
+          data: { ...event.data as Record<string, unknown>, source: {
+            kind: 'plugin:summary-fixture', form: 'notice', summary: 'summary-fixture',
+          } } }
         : event.seq === 4 ? { ...event, seq: 5, data: { header: { config }, reason: 'initial' } } : { ...event, seq: event.seq + 1 }),
     ]
 
@@ -383,7 +401,10 @@ describe('JSONL immutable generation publication', () => {
       ...boundaryBase,
       data: { ...boundaryBase.data, text: 'x'.repeat(1024 * 1024 - JSON.stringify(boundaryBase).length) },
     }
-    const largeEvent = { ...event0, seq: 1, data: { turn: 1, text: 'y'.repeat(1024 * 1024) } }
+    const largeEvent = { type: 'user/message', seq: 1, time: 3, surfaceOp: 'append', data: {
+      id: 'large-message', role: 'user', source: { kind: 'user' },
+      content: [{ type: 'text', text: 'y'.repeat(1024 * 1024) }],
+    } }
     const finalEvent = { ...event1, seq: 2 }
     await writeFile(request.sourcePath, line(header(0)) + line(boundaryEvent) + line(largeEvent) + line(finalEvent))
     let now = 0

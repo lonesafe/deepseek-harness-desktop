@@ -197,3 +197,7 @@ Client 要求首项是带非空 `clientId` 与 `host.home` 的 `ready`；后续 
 - **放弃的能力**：不支持投影或脱敏载荷，不支持 Agent 以外的 Scope，也不为普通通知提供重放。需要可靠恢复的状态必须拥有查询、cursor 或 opening baseline；waterfall 只重放仍处于同一次 Host 调用生命周期内的 pending request。
 - **Client Connection 仍留在 Host 图里**：API Gateway 与 directory-picker 包会到达该包显式的 Host face。Session 和 Workspace 的 Client 状态已经归各自领域 Controller 所有，构建不再依赖一个单体 Client Runtime 工程恰好能从 Host 测试到达。
 - **本包不发布 invariant companion**：早先的修订曾在活事件总线上断言投递形状（`thisArg === null`、`mode === 'emit'`），这让诊断逻辑与名单值耦合，并使 rolldown 把它提成第三个 bundle chunk——而机械推导的发布文件清单并不携带它。Host 面的 `TypertForwardableEventEntry` 断言已在编译期拒绝这些偏离，包 README 也记录了不再存在独立运行时关系的原因。
+
+## 相关
+
+- [Remote 双工流](2026-09-19-remote-duplex-stream.zh.md)：所有 Remote 流在同一逻辑流上承载客户端上行；其「后续」列出的双工 `$events` 落地后取代 unary `$events/result` 路径。

@@ -1,6 +1,5 @@
 import { defineConfig } from 'tsdown'
 
-/** Build the adjacent-migration library from its emitted ESM declarations. */
 export default defineConfig({
   entry: ['lib/types/index.js'],
   outDir: 'lib',

@@ -1,201 +1,220 @@
-/** V4 restores released generations without changing V3 approval history or coordinates. */
-
 import { describe, expect, it } from 'vitest'
-import { createSessionFormatCatalog, SessionFormatEventCollector } from '@deepseek-ai/dsh-session-format'
-import type { SessionFormatEvent, SessionFormatHeader, SessionFormatJsonValue, SessionFormatRecovery } from '@deepseek-ai/dsh-session-format'
-import { releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, sessionFormatV0ToV1 } from '@deepseek-ai/dsh-session-format-v0-to-v1'
-import { releasedV2SessionFormatCodec, sessionFormatV1ToV2 } from '@deepseek-ai/dsh-session-format-v1-to-v2'
-import { sessionFormatV2ToV3 } from '@deepseek-ai/dsh-session-format-v2-to-v3'
-import { assertReleasedV4Header, releasedV3SessionFormatCodec, releasedV4SessionFormatCodec, restoreReleasedV4Artifact, sessionFormatV3ToV4 } from '../src/index.ts'
+import { restoreReleasedV3Artifact } from '@deepseek-ai/dsh-session-format-v2-to-v3'
+import { SessionFormatEventCollector } from '@deepseek-ai/dsh-session-format'
+import type { SessionFormatEvent, SessionFormatHeader, SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
+import { createSessionFormatCatalogWithChildren, historicalSessionFormatCatalog, sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
+import { releasedV3SessionFormatCodec, createSessionFormatV3ToV4, sessionFormatV3ToV4 } from '../src/index.ts'
 
-const header: SessionFormatHeader = {
-  version: 3, id: 'remembered-approval', createdAt: 1, isSeeded: false, delegationDepth: 0,
-}
-const catalog = createSessionFormatCatalog({
-  currentVersion: 4,
-  migrations: [sessionFormatV0ToV1, sessionFormatV1ToV2, sessionFormatV2ToV3, sessionFormatV3ToV4],
-  codecs: [releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec,
-    releasedV3SessionFormatCodec, releasedV4SessionFormatCodec],
-  currentEncoder: releasedV4SessionFormatCodec,
-  restoreCurrentHeader(value) { assertReleasedV4Header(value); return value },
-  restoreCurrent: value => restoreReleasedV4Artifact(value, new Set(['fork/known'])),
-  restoreTransformedCurrent: value => restoreReleasedV4Artifact(value, new Set(['fork/known'])),
+const header: SessionFormatHeader = { version: 3, id: 'identity', createdAt: 1, isSeeded: false, delegationDepth: 0 }
+const fact: SessionFormatEvent = { type: 'feedback/record', seq: 0, time: 2, data: { text: 'retained' } }
+const seed: SessionFormatEvent = { type: 'session/end-seed', seq: 1, time: 3, data: { inherited: true } }
+const delivery = (version: number | undefined, sessionId = header.id): SessionFormatEvent => ({
+  type: 'session-log-deepseek/delivery-accepted', seq: 1, time: 3,
+  data: { sessionId, throughSeq: 0, ...(version === undefined ? {} : { sessionFormatVersion: version }) },
 })
 
-function event(type: string, seq: number, data: SessionFormatJsonValue, extra = {}): SessionFormatEvent {
-  return { type, seq, time: seq + 10, data, ...extra }
+function stage(sourceHeader = header, sourceInheritedEventCount?: number) {
+  return createSessionFormatV3ToV4([]).createStage({
+    sourceHeader, targetHeader: sessionFormatV3ToV4.migrateHeader(sourceHeader),
+    sourceInheritedEventCount, sourceKind: 'decoded',
+  })
 }
 
-function restore(rows: readonly unknown[], source = header, recovery: SessionFormatRecovery = 'strict') {
-  const reader = catalog.createRestore({ type: 'session', ...source }, { recovery, validation: 'current' })
-  for (const row of rows) reader.decodeRow(row)
+function migrate(events: readonly SessionFormatEvent[], sourceHeader = header, cut?: number) {
+  const current = stage(sourceHeader, cut)
+  const output = new SessionFormatEventCollector()
+  for (const event of events) current.transformEvent(event, output)
+  return { events: output.values, cut: current.finish(output) }
+}
+
+function restore(events: readonly SessionFormatEvent[], sourceHeader = header) {
+  const reader = createSessionFormatCatalogWithChildren([]).createRestore({ type: 'session', ...sourceHeader }, { recovery: 'strict', validation: 'current' })
+  for (const event of events) reader.decodeRow(event)
   return reader.finish()
 }
 
-function stage(source = header, cut: number | undefined = source.isSeeded ? undefined : 0) {
-  return sessionFormatV3ToV4.createStage({
-    sourceHeader: source, targetHeader: sessionFormatV3ToV4.migrateHeader(source),
-    sourceInheritedEventCount: cut, sourceKind: 'decoded',
-  })
+function restoreHistorical(events: readonly SessionFormatEvent[], sourceHeader: SessionFormatHeader) {
+  const reader = historicalSessionFormatCatalog.createRestore({ type: 'session', ...sourceHeader }, { recovery: 'strict', validation: 'current' })
+  for (const event of events) reader.decodeRow(event)
+  return reader.finish()
 }
 
-const approvals = [
-  event('approval/asked', 0, { id: 'approval', toolName: 'bash', alwaysAllowKey: 'sandbox:bash:workspace-write' }),
-  event('approval/decided', 1, { id: 'approval', outcome: 'allowed-always' }),
-]
-
-describe('V3-to-V4 body preservation', () => {
-  it('preserves remembered grants, opaque payloads, header metadata, order, and the inherited cut on repeat restores', () => {
-    const source = {
-      ...header, cwd: '/workspace', agentPreset: 'code', parentSession: 'parent', origin: 'subagent' as const,
-      isSeeded: true, delegationDepth: 2,
-    }
-    const rows = [
-      ...approvals,
-      event('session/end-seed', 2, { inherited: true }),
-      event('external/event', 3, { seq: 42, capturedFormatVersion: 3 }, { ignorable: true }),
-      event('fork/known', 4, { nested: ['allowed-always', 3] }),
+describe('V3 to V4 source preservation', () => {
+  it('rejects required V3 developer events while preserving ignorable events and native V4 admission', () => {
+    const rows: SessionFormatEvent[] = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+      { type: 'developer/message', seq: 2, time: 3, surfaceOp: 'append', data: {
+        turn: 1, step: 1, message: { id: 'developer', role: 'developer', source: { kind: 'tool-registry' }, content: [] },
+      } },
+      { type: 'step/end', seq: 3, time: 4, data: { turn: 1, step: 1 } },
+      { type: 'turn/end', seq: 4, time: 5, data: { turn: 1, reason: { kind: 'completed' } } },
     ]
-    const before = JSON.stringify({ source, rows })
-    const expected = { header: { ...source, version: 4 }, inheritedEventCount: 2, events: rows }
-    expect(restore(rows, source)).toEqual(expected)
-    expect(restore(rows, source)).toEqual(expected)
-    expect(JSON.stringify({ source, rows })).toBe(before)
-    const physical = releasedV4SessionFormatCodec.encodeHeader(expected.header, expected.inheritedEventCount)
-    const reader = catalog.createRestore(physical, { recovery: 'strict', validation: 'current' })
-    for (const row of rows) reader.decodeRow(releasedV4SessionFormatCodec.encodeEvent(row))
-    expect(reader.finish()).toEqual(expected)
+    const before = structuredClone(rows)
+    expect(() => migrate(rows)).toThrow('format v3 contains unknown event type "developer/message" at seq 2')
+    expect(() => restore(rows)).toThrow('format v3 contains unknown event type "developer/message" at seq 2')
+    expect(() => restoreHistorical(rows, header)).toThrow('unknown event type')
+    const ignorable = rows.map(row => row.type === 'developer/message' ? { ...row, ignorable: true } : row)
+    expect(restore(ignorable).events).toEqual(ignorable.map(row =>
+      row.type === 'developer/message' ? { ...row, type: 'plugin:developer/message' } : row))
+    const native = sessionFormatCatalog.createRestore({ type: 'session', ...header, version: 4 }, {
+      recovery: 'strict', validation: 'current',
+    })
+    for (const row of rows) native.decodeRow(row)
+    expect(native.finish().events).toEqual(rows)
+    expect(rows).toEqual(before)
   })
 
-  it('retains system heads, replacement endpoints, message ids, and source references', () => {
-    const user = { id: 'user', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'input' }] }
-    const rows = [
-      event('turn/start', 0, { turn: 1 }),
-      event('step/start', 1, { turn: 1, step: 1 }),
-      event('system/message', 2, { turn: 1, step: 1, message: { id: 'system', role: 'system', source: { kind: 'plugin', plugin: 'context' }, content: [] } }, { surfaceOp: 'append' }),
-      event('user/message', 3, user, { surfaceOp: 'append' }),
-      event('user/message', 4, { ...user, id: 'replacement' }, { surfaceOp: { op: 'replace', startSeq: 3, endSeq: 3 }, sourceEventSeqs: [3] }),
-    ]
-    expect(restore(rows).events).toEqual(rows)
-    const shadowHead = { ...rows[4]!, surfaceOp: { op: 'replace', startSeq: 2, endSeq: 2 }, sourceEventSeqs: [2] }
-    expect(() => restore([...rows.slice(0, 4), shadowHead])).toThrow(/protected/)
+  it('rejects generic required V3 extensions before target vocabulary admission', () => {
+    const required = { ...fact, type: 'external/required' }
+    expect(() => migrate([required])).toThrow('format v3 contains unknown event type "external/required" at seq 0')
+    expect(() => restore([required])).toThrow('format v3 contains unknown event type "external/required" at seq 0')
+    const ignorable = { ...required, ignorable: true }
+    expect(restore([ignorable]).events).toEqual([{ ...ignorable, type: 'plugin:external/required' }])
   })
 
-  it.each([0, 1, 2])('retains the derived inherited cut after earlier stages transform V%s', (version) => {
-    const physical = {
-      type: 'session', version, id: 'seeded-chain', createdAt: 1, delegationDepth: 0,
-      ...(version === 2 ? { isSeeded: true } : { seedLength: 3 }),
-    }
-    const rows = [
-      event('turn/start', 0, { turn: 1 }),
-      event('step/start', 1, { turn: 1, step: 1 }),
-      event('feedback/record', 2, { text: 'inherited' }),
-      event('session/end-seed', 3, version === 2 ? { inherited: true } : {}),
-    ]
-    const reader = catalog.createRestore(physical, { recovery: 'strict', validation: 'current' })
-    for (const row of rows) reader.decodeRow(row)
-    const output = reader.finish()
-    expect(output.header.version).toBe(4)
-    expect(output.inheritedEventCount).toBe(4)
-    expect(output.events[2]?.type).toBe('system/message')
-    expect(output.events.at(-1)).toEqual({ ...rows[3], seq: 4, data: { inherited: true } })
+  it('changes only the header version and retains event objects, payloads, timestamps, and coordinates', () => {
+    const rows = [fact, delivery(3)]
+    const before = JSON.stringify({ header, rows })
+    expect(sessionFormatV3ToV4.migrateHeader(header)).toEqual({ ...header, version: 4 })
+    expect(migrate(rows)).toEqual({ events: rows, cut: 0 })
+    expect(migrate(rows).events[0]).toBe(fact)
+    expect(migrate(rows).events[1]).toBe(rows[1])
+    expect(JSON.stringify({ header, rows })).toBe(before)
+    expect(stage().headerInheritedEventCount).toBe(0)
+    expect(migrate([])).toEqual({ events: [], cut: 0 })
+    expect(restore(rows)).toEqual({ header: { ...header, version: 4 }, inheritedEventCount: 0, events: rows })
+    expect(restore(rows)).toEqual(restore(rows))
   })
 
-  it('keeps interleaved stages independent and derives an unknown cut from an expanded run', () => {
-    const seeded = stage({ ...header, isSeeded: true }, undefined)
+  it('keeps interleaved stage state independent and derives an inherited cut unavailable before EOF', () => {
+    const inherited = stage({ ...header, isSeeded: true, parentSession: 'ancestor' })
     const local = stage()
-    const inherited = new SessionFormatEventCollector()
-    const ordinary = new SessionFormatEventCollector()
-    const rows = [...approvals, event('session/end-seed', 2, { inherited: true })]
-    expect(seeded.headerInheritedEventCount).toBeUndefined()
-    expect(local.headerInheritedEventCount).toBe(0)
-    local.transformEvent(approvals[0]!, ordinary)
-    seeded.transformRun({ runType: 'fixture', firstSeq: 0, eventCount: rows.length, expand: () => rows }, inherited)
-    local.transformEvent(approvals[1]!, ordinary)
-    expect(seeded.finish(inherited)).toBe(2)
-    expect(local.finish(ordinary)).toBe(0)
-    expect(inherited.values).toEqual(rows)
-    expect(ordinary.values).toEqual(approvals)
+    const a = new SessionFormatEventCollector()
+    const b = new SessionFormatEventCollector()
+    expect(inherited.headerInheritedEventCount).toBeUndefined()
+    inherited.transformEvent(fact, a)
+    local.transformEvent(fact, b)
+    inherited.transformEvent(seed, a)
+    expect(local.finish(b)).toBe(0)
+    expect(inherited.finish(a)).toBe(1)
+    expect(a.values).toEqual([fact, seed])
+    expect(b.values).toEqual([fact])
+    expect(migrate([fact, seed], { ...header, isSeeded: true }, 1).cut).toBe(1)
   })
 
-  it('rejects sparse stage input and inconsistent or missing seed markers', () => {
+  it('consumes compact runs without changing their event values', () => {
+    const current = stage()
     const output = new SessionFormatEventCollector()
-    expect(() => { stage().transformEvent(approvals[1]!, output) }).toThrow(/dense/)
-    const marker = event('session/end-seed', 0, { inherited: true })
-    expect(() => { stage().transformEvent(marker, output) }).toThrow(/unseeded/)
-    expect(() => stage({ ...header, isSeeded: true }, undefined).finish(output)).toThrow(/inherited end-seed marker/)
-    const mismatch = stage({ ...header, isSeeded: true }, 1)
-    mismatch.transformEvent(marker, output)
-    expect(() => mismatch.finish(output)).toThrow(/disagrees/)
-  })
-})
-
-describe('V4 decoding and admission', () => {
-  it('classifies headers without body access and rejects other generations or malformed fields', () => {
-    expect(catalog.readHeader({ type: 'session', ...header })).toMatchObject({ status: 'migration-required', storedVersion: 3, targetVersion: 4 })
-    expect(releasedV4SessionFormatCodec.decodeHeader({ type: 'session', ...header, version: 4 })).toEqual({ ...header, version: 4 })
-    expect(() => releasedV4SessionFormatCodec.decodeHeader({ type: 'session', ...header })).toThrow(/v4 physical/)
-    expect(() => releasedV4SessionFormatCodec.decodeHeader(null)).toThrow(/v4 physical/)
-    expect(() => { assertReleasedV4Header(header) }).toThrow(/v4 header/)
-    expect(() => sessionFormatV3ToV4.migrateHeader({ ...header, version: 4 })).toThrow(/v3 header/)
-    expect(() => { assertReleasedV4Header({ ...header, version: 4, cwd: 'relative' }) }).toThrow(/absolute/)
-    expect(() => releasedV4SessionFormatCodec.encodeHeader({ ...header, version: 4 }, 1)).toThrow(/unseeded/)
+    current.transformRun({ runType: 'identity', eventCount: 1, firstSeq: 0, *expand() { yield fact } }, output)
+    expect(current.finish(output)).toBe(0)
+    expect(output.values[0]).toBe(fact)
   })
 
-  it.each([3, 4])('refuses unknown required and malformed events from V%s while retaining ignorable events', (version) => {
-    expect(() => restore([event('external/event', 0, null)], { ...header, version })).toThrow(/unknown event type/)
-    expect(() => restore([event('feedback/record', 1, { text: 'gap' })], { ...header, version })).toThrow(/seq gap/)
-    const opaque = event('external/event', 0, null, { ignorable: true })
-    expect(restore([opaque], { ...header, version }).events).toEqual([opaque])
-    expect(() => restore([event('tool/code-dispatch', 0, {})], { ...header, version }, 'recoverable')).toThrow(/unknown event type/)
-    expect(() => restore([event('request/header', 0, { header: { system: '' } })], { ...header, version }, 'recoverable')).toThrow(/retired/)
+  it('rejects sparse sequences and inconsistent inheritance', () => {
+    expect(() => migrate([{ ...fact, seq: 1 }])).toThrow('dense')
+    expect(() => migrate([fact, seed])).toThrow('unseeded')
+    expect(() => migrate([fact], { ...header, isSeeded: true })).toThrow('inherited event count')
+    expect(() => migrate([fact, seed], { ...header, isSeeded: true }, 0)).toThrow('disagrees')
+    expect(() => migrate([fact, { ...seed, data: {} }], { ...header, isSeeded: true })).toThrow('inherited event count')
   })
 
-  it('keeps recoverable tail policy and accepted inherited cut from the frozen decoder', () => {
-    const rows = [...approvals, event('session/end-seed', 2, { inherited: true })]
-    const decoder = releasedV4SessionFormatCodec.createDecoder({ type: 'session', ...header, version: 4, isSeeded: true }, 'recoverable')
-    const output = new SessionFormatEventCollector()
-    for (const row of rows) decoder.decodeRow(row, output)
-    decoder.decodeRow({ bad: true }, output)
-    decoder.decodeRow(event('session/end-seed', 4, { inherited: true }), output)
-    expect(decoder.finish(output)).toBe(2)
-    expect(output.values).toEqual(rows)
-    expect(() => { decoder.decodeRow(event('turn/end', 5, { turn: 1, reason: { kind: 'completed' } }), output) }).toThrow(/required field/)
-  })
-})
-
-describe('delivery generation ownership', () => {
-  const delivery = (version: number, sessionId = header.id) => event('session-log-deepseek/delivery-accepted', 2, { sessionId, throughSeq: 1, sessionFormatVersion: version })
-
-  it('preserves V3 delivery coordinates and refuses activation of a target-generation marker', () => {
-    const rows = [...approvals, delivery(3)]
-    expect(restore(rows).events).toEqual(rows)
-    expect(() => restore([...approvals, delivery(4)])).toThrow(/claims target format v4/)
-    expect(() => restore([...approvals, delivery(3, 'foreign')])).toThrow(/wrong Session/)
+  it('refuses target-generation delivery while retaining other generations unchanged', () => {
+    expect(() => migrate([fact, delivery(4)])).toThrow('claims target format v4')
+    expect(() => restore([fact, delivery(4)])).toThrow('claims target format v4')
+    for (const version of [undefined, 0, 1, 2, 3, 5, 99]) {
+      const marker = delivery(version)
+      expect(migrate([fact, marker]).events[1]).toBe(marker)
+      expect(restore([fact, marker]).events[1]).toEqual(marker)
+    }
   })
 
-  it('admits foreign source markers only within an inherited prefix with a parent', () => {
-    const rows = [...approvals, delivery(3, 'parent'), event('session/end-seed', 3, { inherited: true })]
-    expect(restore(rows, { ...header, isSeeded: true, parentSession: 'parent' }).events).toEqual(rows)
-    expect(() => restore(rows, { ...header, isSeeded: true })).toThrow(/wrong Session/)
-    const local = [...approvals, event('session/end-seed', 2, { inherited: true }), { ...delivery(3, 'parent'), seq: 3 }]
-    expect(() => restore(local, { ...header, isSeeded: true, parentSession: 'parent' })).toThrow(/wrong Session/)
+  it('checks active V3 coordinates before the delivery becomes historical', () => {
+    const marker = delivery(3)
+    const data = marker.data as SessionFormatJsonObject
+    for (const throughSeq of [-1, 1, 1.5]) {
+      expect(() => migrate([fact, { ...marker, data: { ...data, throughSeq } }])).toThrow('throughSeq')
+    }
+    expect(() => migrate([fact, { ...marker, data: { ...data, sessionId: '' } }])).toThrow('nonempty')
+    expect(() => restore([fact, { ...marker, data: { ...data, throughSeq: 1 } }])).toThrow('throughSeq')
+    const historical = { ...marker, data: { sessionId: 'ancestor', throughSeq: 500, sessionFormatVersion: 2 } }
+    expect(restore([fact, historical]).events[1]).toEqual(historical)
   })
 
-  it('validates V4 ownership without treating a historical V3 marker as current or changing its value', () => {
-    const rows = [...approvals, delivery(3, 'historical'), { ...delivery(4), seq: 3 }]
-    const artifact = { header: { ...header, version: 4 }, inheritedEventCount: 0, events: rows }
-    const before = JSON.stringify(artifact)
-    expect(restoreReleasedV4Artifact(artifact, new Set())).toBe(artifact)
-    expect(JSON.stringify(artifact)).toBe(before)
-    expect(() => restore([...approvals, delivery(4, 'foreign')], { ...header, version: 4 })).toThrow(/wrong Session/)
-    const inherited = [...approvals, delivery(4, 'parent'), event('session/end-seed', 3, { inherited: true })]
-    expect(restore(inherited, { ...header, version: 4, isSeeded: true, parentSession: 'parent' }).events).toEqual(inherited)
+  it('permits foreign active deliveries only inside a parent seed', () => {
+    const foreign = delivery(3, 'ancestor')
+    expect(() => migrate([fact, foreign])).toThrow('wrong Session')
+    expect(() => migrate([fact, foreign], { ...header, parentSession: 'ancestor' })).toThrow('wrong Session')
+    const rows = [fact, foreign, { ...seed, seq: 2 }]
+    expect(migrate(rows, { ...header, isSeeded: true, parentSession: 'ancestor' }).cut).toBe(2)
+    expect(() => migrate(rows, { ...header, isSeeded: true })).toThrow('wrong Session')
+    expect(() => migrate([fact, seed, { ...foreign, seq: 2 }], { ...header, isSeeded: true, parentSession: 'ancestor' })).toThrow('wrong Session')
   })
 
-  it('leaves other historical and future delivery generations untouched', () => {
-    const rows = [0, 1, 2, 5].map((version, seq) => ({ ...delivery(version, 'foreign'), seq }))
-    expect(restore(rows).events).toEqual(rows)
-    expect(() => restore([event('session-log-deepseek/delivery-accepted', 0, null)], { ...header, version: 4 })).toThrow(/object/)
+  it('retains unknown ignorable values and refuses unknown required events during strict catalog restoration', () => {
+    const opaque: SessionFormatEvent = {
+      type: 'external/opaque', seq: 0, time: -5, ignorable: true,
+      data: { nested: { seq: 40 }, content: ['opaque'] }, surfaceOp: { future: { ref: 9 } },
+    }
+    expect(restore([opaque]).events).toEqual([{ ...opaque, type: 'plugin:external/opaque' }])
+    const { ignorable: _ignorable, ...required } = opaque
+    expect(() => restore([required])).toThrow('unknown event type')
+    expect(() => restore([{ ...fact, time: 1.5 }])).toThrow('time')
+    expect(() => restore([{ ...fact, extra: 1 }])).toThrow(/field|member/)
+  })
+
+  it.each([0, 1, 2, 3])('restores a seeded V%i chain, including upstream cardinality changes, and reopens V4', (version) => {
+    const rows = [
+      { type: 'turn/start', data: { turn: 1 } },
+      { type: 'step/start', data: { turn: 1, step: 1 } },
+      { type: 'user/message', data: { id: 'user', role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'input' }] }, surfaceOp: 'append' },
+      { type: 'request/header', data: { header: { config: { provider: 'mock', model: 'mock' }, system: 'seed prompt' }, reason: 'initial' } },
+      { type: 'step/end', data: { turn: 1, step: 1 } },
+      { type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } },
+      { type: 'session/end-seed', data: version < 2 ? {} : { inherited: true } },
+    ].map((event, seq): SessionFormatEvent => ({ ...event, seq, time: seq + 1 }))
+    const source = version === 3 ? restoreHistorical(rows, { ...header, version: 2, isSeeded: true }).events : rows
+    const physical = version < 2
+      ? { type: 'session', version, id: header.id, createdAt: 1, delegationDepth: 0, parentSession: 'ancestor', seedLength: 6 }
+      : { type: 'session', ...header, version, isSeeded: true, parentSession: 'ancestor' }
+    const before = JSON.stringify({ physical, source })
+    const reader = createSessionFormatCatalogWithChildren([]).createRestore(physical, { recovery: 'strict', validation: 'current' })
+    for (const row of source) reader.decodeRow(version === 3 ? releasedV3SessionFormatCodec.encodeEvent(row) : row)
+    const artifact = reader.finish()
+    expect(artifact.header.version).toBe(4)
+    expect(artifact.inheritedEventCount).toBe(8)
+    expect(artifact.events.filter(event => event.type === 'system/message')).toHaveLength(2)
+    expect(artifact.events.at(-1)?.seq).toBe(8)
+    const reopened = sessionFormatCatalog.createRestore(sessionFormatCatalog.encodeCurrentHeader(artifact.header, 8), {
+      recovery: 'strict', validation: 'current',
+    })
+    for (const event of artifact.events) reopened.decodeRow(sessionFormatCatalog.encodeCurrentEvent(event))
+    expect(reopened.finish()).toEqual(artifact)
+    expect(JSON.stringify({ physical, source })).toBe(before)
+  })
+
+  it.each(['strict', 'recoverable'] as const)('retains delivery inside a nested inherited prefix during %s restoration', (recovery) => {
+    const physical = { type: 'session', ...header, isSeeded: true, parentSession: 'ancestor' }
+    const rows = [fact, seed, { ...delivery(3, 'ancestor'), seq: 2 }, { ...seed, seq: 3 }]
+    const decoder = releasedV3SessionFormatCodec.createDecoder(physical, 'strict')
+    const source = new SessionFormatEventCollector()
+    for (const row of rows) decoder.decodeRow(row, source)
+    const artifact = restoreReleasedV3Artifact({ header: decoder.header, events: source.values,
+      inheritedEventCount: decoder.finish(source) }, new Set(rows.map(row => row.type)))
+    expect(artifact.inheritedEventCount).toBe(3)
+
+    const reader = createSessionFormatCatalogWithChildren([]).createRestore(physical, { recovery, validation: 'current' })
+    for (const row of rows) reader.decodeRow(row)
+    expect(reader.finish()).toEqual({ ...artifact, header: { ...artifact.header, version: 4 } })
+  })
+
+  it.each(['strict', 'recoverable'] as const)('refuses foreign delivery after the final inherited cut during %s restoration', (recovery) => {
+    const reader = createSessionFormatCatalogWithChildren([]).createRestore({ type: 'session', ...header, isSeeded: true, parentSession: 'ancestor' }, {
+      recovery, validation: 'current',
+    })
+    for (const row of [fact, seed, { ...delivery(3, 'ancestor'), seq: 2 }, { ...seed, seq: 3 }, { ...delivery(3, 'ancestor'), seq: 4 }]) {
+      reader.decodeRow(row)
+    }
+    expect(() => reader.finish()).toThrow('wrong Session')
   })
 })

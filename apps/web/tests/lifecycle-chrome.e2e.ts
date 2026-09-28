@@ -23,7 +23,8 @@ import {
   launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import {
-  connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot, writeComposerDraft, ZH_BROWSER_LOCALE,
+  connectFreshWorkspace, connectFreshWorkspaceZh, expandOwningTurnProcess, newEnglishPage, saveFailureShot,
+  writeComposerDraft, ZH_BROWSER_LOCALE,
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome', import.meta.url))
@@ -34,6 +35,7 @@ const COMMAND_MENU_EXPECTED = join(SNAPSHOT_DIR, 'command-menu.expected.md')
 const COMMAND_MENU_ZH_EXPECTED = join(SNAPSHOT_DIR, 'command-menu-zh.expected.md')
 const FUZZY_COMMAND_MENU_EXPECTED = join(SNAPSHOT_DIR, 'command-menu-fuzzy.expected.md')
 const PLAN_ACTIVE_EXPECTED = join(SNAPSHOT_DIR, 'plan-active.expected.md')
+const PLAN_ACTIVE_ZH_EXPECTED = join(SNAPSHOT_DIR, 'plan-active-zh.expected.md')
 const CONNECTION_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'connection-error.expected.md')
 // Post-reload golden: the same settled conversation rebuilt purely from
 // persistence + history — byte-equal rendering is exactly the recovery claim.
@@ -153,7 +155,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       await inputPage.keyboard.insertText('这是任务')
       await expect.poll(() => input.textContent()).toBe(`${token} 这是任务`)
       for (let i = 0; i < 5; i++) await input.press('Backspace')
-      const tokenText = () => input.locator('[data-lexical-text][style*="warn-label"]').textContent()
+      const tokenText = () => input.locator('[data-lexical-text][style*="business-primary"]').textContent()
       await expect.poll(() => input.textContent()).toBe(token)
       await expect.poll(() => input.getAttribute('data-phase')).toBe('claimed')
       await expect.poll(tokenText).toBe(token)
@@ -195,7 +197,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     }
   })
 
-  it.skipIf(MODE === 'record')('shows active Plan as the warn-state status action', async () => {
+  it.skipIf(MODE === 'record')('shows active Plan as the business-state status action', async () => {
     const activeScaffold = await launchWebScaffold()
     const activePage = await newEnglishPage(browser)
     const activeTripwire = watchConsole(activePage)
@@ -220,25 +222,36 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       await compareOrRefreshGolden(PLAN_ACTIVE_EXPECTED, planSnapshot, MODE)
       const planStyle = await planButton.evaluate((element) => {
         const probe = document.createElement('span')
-        probe.style.color = 'var(--dsw-alias-state-warn-label)'
-        probe.style.backgroundColor = 'var(--dsw-alias-state-warn-tertiary)'
+        probe.style.color = 'var(--dsw-alias-state-business-primary)'
+        probe.style.backgroundColor = 'var(--dsw-alias-state-business-tertiary)'
         document.body.append(probe)
         const actual = getComputedStyle(element)
         const reference = getComputedStyle(probe)
+        // The sibling access-mode trigger: the chip shares its corner
+        // curvature (the theme's superellipse, not a circular capsule).
+        const accessMode = document.querySelector('button[aria-label^="Access mode"]')
         const result = {
           color: actual.color,
           backgroundColor: actual.backgroundColor,
+          height: actual.height,
           borderRadius: actual.borderRadius,
+          cornerShape: actual.getPropertyValue('corner-shape'),
           fontSize: actual.fontSize,
           referenceColor: reference.color,
           referenceBackgroundColor: reference.backgroundColor,
+          siblingCornerShape: accessMode === null ? null : getComputedStyle(accessMode).getPropertyValue('corner-shape'),
         }
         probe.remove()
         return result
       })
       expect(planStyle.color).toBe(planStyle.referenceColor)
       expect(planStyle.backgroundColor).toBe(planStyle.referenceBackgroundColor)
-      expect(planStyle.borderRadius).toBe('999px')
+      expect(planStyle.height).toBe('28px')
+      // Half the 28px height, the compact Button geometry, under the theme's
+      // corner curvature; a 999px pill would need the circular opt-out.
+      expect(planStyle.borderRadius).toBe('8px')
+      expect(planStyle.siblingCornerShape).not.toBeNull()
+      expect(planStyle.cornerShape).toBe(planStyle.siblingCornerShape)
       expect(planStyle.fontSize).toBe('13px')
       await planButton.click()
       await expect.poll(() => planButton.count()).toBe(0)
@@ -250,6 +263,39 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     } finally {
       await activePage.close()
       await activeScaffold.close()
+    }
+  })
+
+  it.skipIf(MODE === 'record')('shows the active Plan chip with the Chinese copy', async () => {
+    const zhScaffold = await launchWebScaffold()
+    const zhPage = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
+    const zhTripwire = watchConsole(zhPage)
+    try {
+      await zhPage.goto(zhScaffold.authenticatedUrl, { waitUntil: 'load' })
+      await zhPage.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+      await connectFreshWorkspaceZh(zhPage, zhScaffold.workspaceCwd)
+      const input = zhPage.locator('[data-composer-input]').first()
+      await zhPage.getByRole('button', { name: '添加文件或调用指令' }).click()
+      const menu = zhPage.getByRole('listbox', { name: '触发候选建议' })
+      await menu.waitFor({ timeout: 10_000 })
+      await menu.getByRole('option', { name: '计划 plan 进入或退出计划模式', exact: true }).click()
+      await expect.poll(() => input.textContent()).toBe('/计划 ')
+      await input.press('Enter')
+      const planButton = zhPage.getByRole('button', { name: '计划模式已开启，按下关闭' })
+      await planButton.waitFor({ timeout: 10_000 })
+      await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
+      const planSnapshot = await captureStableAria(zhPage, '[class*="frame"]', zhScaffold.workspaceCwd)
+      await compareOrRefreshGolden(PLAN_ACTIVE_ZH_EXPECTED, planSnapshot, MODE)
+      await planButton.click()
+      await expect.poll(() => planButton.count()).toBe(0)
+      expect(zhTripwire.pageErrors).toEqual([])
+      expect(zhTripwire.warnings).toEqual([])
+    } catch (error) {
+      await saveFailureShot(zhPage, 'web-e2e-plan-active-zh').catch(() => undefined)
+      throw error
+    } finally {
+      await zhPage.close()
+      await zhScaffold.close()
     }
   })
 
@@ -275,12 +321,14 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await writeComposerDraft(page, input, PROMPT)
     const observeTurn = async () => {
       const originalViewport = page.viewportSize() ?? { width: 1680, height: 1000 }
-      if (MODE !== 'record') await page.setViewportSize({ width: 390, height: 844 })
+      if (MODE !== 'record') await page.setViewportSize({ width: 480, height: 1000 })
       const observedReasoning = Promise.withResolvers<undefined>()
+      const reasoningComplete = Promise.withResolvers<undefined>()
       const releaseStream = MODE === 'record' ? undefined : scaffold.ctx.on('llm/stream', async function* (_options, next) {
         let reasoning = false
         for await (const chunk of next()) {
           if (reasoning && chunk.type !== 'reasoning-delta') {
+            reasoningComplete.resolve(undefined)
             await observedReasoning.promise
           }
           if (chunk.type === 'reasoning-delta') reasoning = true
@@ -291,52 +339,12 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
         await input.press('Enter')
         if (MODE !== 'record') {
           const thinking = page.locator('[data-variant="think"][data-state="running"]')
+          await expandOwningTurnProcess(page, thinking)
           await expect.poll(() => thinking.getByRole('button').getAttribute('aria-expanded')).toBe('false')
-          const liveTail = thinking.locator('[data-follow-end]')
-          await expect.poll(async () => {
-            if (await liveTail.count() !== 1) return false
-            return await liveTail.evaluate((element) => {
-              const text = element.firstElementChild
-              if (!(text instanceof HTMLElement)) return false
-              const viewport = element.getBoundingClientRect()
-              const content = text.getBoundingClientRect()
-              return content.width > viewport.width && Math.abs(content.right - viewport.right) <= 1
-            })
-          }, { timeout: 30_000, interval: 10 }).toBe(true)
-          const phoneLayout = await page.evaluate(() => {
-            const frame = document.querySelector<HTMLElement>('[data-sidebar-overlay]')
-            const center = frame?.querySelector<HTMLElement>('[class*="centerCol"]')
-            const seat = document.querySelector<HTMLElement>('[data-composer-seat]')
-            const card = seat?.querySelector<HTMLElement>('[data-composer-card]')
-            const toolbar = card?.querySelector<HTMLElement>('[data-composer-toolbar]')
-            if (frame === null || frame === undefined || center === null || center === undefined
-              || seat === null || seat === undefined || card === null || card === undefined
-              || toolbar === null || toolbar === undefined) return undefined
-            const rect = (element: HTMLElement) => {
-              const box = element.getBoundingClientRect()
-              return { left: box.left, right: box.right, bottom: box.bottom, width: box.width }
-            }
-            return {
-              viewport: { width: innerWidth, height: innerHeight },
-              frame: rect(frame),
-              center: rect(center),
-              seat: rect(seat),
-              card: rect(card),
-              toolbarFits: toolbar.scrollWidth <= toolbar.clientWidth,
-              documentFits: document.documentElement.scrollWidth <= innerWidth,
-            }
-          })
-          expect(phoneLayout).toBeDefined()
-          expect(phoneLayout!.viewport).toEqual({ width: 390, height: 844 })
-          expect(phoneLayout!.frame.width).toBe(390)
-          expect(phoneLayout!.center.left).toBe(0)
-          expect(phoneLayout!.center.right).toBe(390)
-          expect(phoneLayout!.card.left).toBeGreaterThanOrEqual(8)
-          expect(phoneLayout!.card.right).toBeLessThanOrEqual(382)
-          expect(phoneLayout!.seat.bottom).toBeLessThanOrEqual(844)
-          expect(phoneLayout!.card.bottom).toBeLessThanOrEqual(836)
-          expect(phoneLayout!.toolbarFits).toBe(true)
-          expect(phoneLayout!.documentFits).toBe(true)
+          await reasoningComplete.promise
+          expect(await thinking.getAttribute('data-preview')).toBeNull()
+          expect(await thinking.getByRole('button').getAttribute('aria-expanded')).toBe('false')
+          expect(await thinking.locator('[data-streaming]').isVisible()).toBe(false)
         }
         observedReasoning.resolve(undefined)
         return await settled
@@ -376,26 +384,6 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     expect(turnEnds).toHaveLength(1)
     expect((turnEnds[0] as SessionEvent & { data: { reason: { kind: string } } }).data.reason.kind).toBe('completed')
   }, 60_000)
-
-  it.skipIf(MODE === 'record')('keeps the settled composer and stats inside the phone viewport', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-lifecycle-phone-stats'))
-    const originalViewport = page.viewportSize() ?? { width: 1680, height: 1000 }
-    try {
-      await page.setViewportSize({ width: 390, height: 844 })
-      const dock = page.locator('[data-composer-card] + div').filter({
-        has: page.getByRole('button', { name: /Cache hit 99\.5%/ }),
-      })
-      await expect.poll(() => dock.evaluate((element) => {
-        const stats = element.getBoundingClientRect()
-        return stats.left >= 8 && stats.right <= innerWidth - 8
-          && stats.bottom <= innerHeight - 8
-          && element.scrollWidth <= element.clientWidth
-          && document.documentElement.scrollWidth <= innerWidth
-      }), { timeout: 10_000 }).toBe(true)
-    } finally {
-      await page.setViewportSize(originalViewport)
-    }
-  })
 
   it.skipIf(MODE === 'record')('pins an open Think header to the conversation scrollport (real layout)', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-think-sticky'))
@@ -517,9 +505,6 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
         name: 'Disconnected, reconnect now', exact: true,
       })
       await offline.waitFor({ timeout: 2_000 })
-      // Installation alone advances with wall time. Pause while retries are
-      // suspended so recovery confirmation survives separate browser commands.
-      await recoveryPage.clock.pauseAt(await recoveryPage.evaluate(() => Date.now() + 60_000))
       await recoveryPage.clock.fastForward(60_000)
       expect(sockets).toHaveLength(1)
 
@@ -580,7 +565,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       const automaticRecovery = recoveryPage.getByRole('status')
       await automaticRecovery.waitFor({ timeout: 10_000 })
       expect(await automaticRecovery.innerText()).toBe('Connected')
-      await recoveryPage.clock.runFor(2_150)
+      await recoveryPage.clock.fastForward(2_000)
       await automaticRecovery.waitFor({ state: 'detached' })
 
       holdConnections = true
@@ -598,8 +583,6 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       await recoveryPage.mouse.up()
 
       await expect.poll(() => sockets.length).toBe(12)
-      // The connecting indicator remains visible for at least 800 ms.
-      await recoveryPage.clock.fastForward(800)
       const recovered = recoveryPage.getByRole('status')
       await recovered.waitFor({ timeout: 10_000 })
       expect(await recovered.innerText()).toBe('Connected')
@@ -608,7 +591,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       expect(recoveredGeometry.outer[3]).toBe(connectingGeometry.outer[3])
       expect(recoveredGeometry.icon).toEqual(connectingGeometry.icon)
       expect(await connectionIndicatorTextAlignment(recovered)).toBe('left')
-      await recoveryPage.clock.runFor(2_150)
+      await recoveryPage.clock.fastForward(2_000)
       await recovered.waitFor({ state: 'detached', timeout: 5_000 })
       expect(recoveryTripwire.pageErrors).toEqual([])
       expect(recoveryTripwire.warnings.filter(warning => /connection lost, retry #/i.test(warning)))
@@ -623,7 +606,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'session.v3.jsonl', 'replay.override.json', 'command-menu.expected.md',
       'command-menu-fuzzy.expected.md', 'command-menu-zh.expected.md', 'connection-error.expected.md',
-      'hero.expected.md', 'plan-active.expected.md',
+      'hero.expected.md', 'plan-active.expected.md', 'plan-active-zh.expected.md',
       'reloaded.expected.md', 'reloaded-expanded.expected.md',
     ])
   })

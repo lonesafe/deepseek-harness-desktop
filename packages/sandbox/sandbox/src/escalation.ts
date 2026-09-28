@@ -86,9 +86,20 @@ export function escalationHintMarker(subject: string): string {
 }
 
 /**
- * The closed outcome vocabulary of one escalation ask — structurally identical
- * to the approval seam's `ApprovalOutcome` so an `ApprovalService.request`
- * return is assignable without this package importing it.
+ * The model-facing `sandbox_permissions` parameter description, which carries
+ * the escalation rules for every enforcing family.
+ * @param subject - the family's noun for the denied action (`command` for
+ *   bash, `operation` for a filesystem mutation).
+ * @returns the parameter description, exactly as the model sees it.
+ */
+export function sandboxPermissionsDescription(subject: string): string {
+  return `The narrowest wider sandbox mode for a one-shot retry of the exact ${subject} the sandbox just denied; the retry asks the user for approval.`
+}
+
+/**
+ * The closed outcome vocabulary of one escalation ask. It includes a
+ * remembered approval grant so an `ApprovalService.request` return is
+ * assignable without this package importing the approval seam.
  */
 export type EscalationOutcome = 'allowed-once' | 'allowed-always' | 'rejected' | 'cancelled' | 'unavailable'
 
@@ -102,7 +113,7 @@ export type EscalationOutcome = 'allowed-once' | 'allowed-always' | 'rejected' |
 export interface EscalationApprover<A = object, C = string> {
   /**
    * Ask the human to approve one action, resolving to a closed outcome.
-   * @param req - the audit-self-contained request (agent, tool, call id, reason, optional signal).
+   * @param req - the audit request with optional localized displayReason and presentation lifetime signal.
    * @returns the human's decision as a closed {@link EscalationOutcome}.
    */
   request(req: {
@@ -110,7 +121,7 @@ export interface EscalationApprover<A = object, C = string> {
     toolName: string
     callId: C
     reason: string
-    alwaysAllowKey: string
+    displayReason?: { readonly en: string; readonly [locale: string]: string }
     signal?: AbortSignal
   }): Promise<EscalationOutcome>
 }
@@ -179,15 +190,20 @@ export async function approveEscalation<A, C>(request: EscalationRequest, approv
     toolName: approval.toolName,
     callId: approval.callId,
     reason: `escalate sandbox to ${mode}: ${justification}`,
-    alwaysAllowKey: `sandbox:${approval.toolName}:${mode}`,
+    displayReason: {
+      en: `Allow this operation with ${mode} permissions: ${justification}`,
+      zh: `允许本次操作使用 ${mode} 权限：${justification}`,
+    },
     ...approval.signal ? { signal: approval.signal } : {},
   })
   switch (outcome) {
     // The schema enum already pinned `mode` to the closed target vocabulary;
     // the check above proved it is strictly wider.
-    case 'allowed-once':
-    case 'allowed-always': return mode as SandboxMode
-    case 'rejected': throw new Error(`the user rejected escalating this ${subject} to "${mode}"`)
+    case 'allowed-once': return mode as SandboxMode
+    // Escalation requests intentionally do not provide a stable grant key.
+    // A remembered grant is therefore not valid for this one-shot path.
+    case 'allowed-always': throw new Error(`sandbox escalation to "${mode}" requires a one-shot approval`)
+    case 'rejected': throw new Error(`the user rejected escalating this ${subject} to "${mode}"; it stays denied, so stop and explain instead of working around it`)
     case 'cancelled': throw new Error(`approval for escalating to "${mode}" was cancelled`)
     case 'unavailable': throw new Error(`sandbox escalation to "${mode}" requires approval, but no approval channel is available`)
     default: return assertNever(outcome, 'EscalationOutcome')

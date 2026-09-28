@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-directory-picker-browse/README.md
-README.md: cbfa591ed619d3674f9d0d8b5147f69f936eb3c3
-README.zh.md: bedfbb7dfa5383f846a52f6e375b9fd96730ea76
+/:
+  en: 5f823b578f5be33d
+  zh: 5e12bb5290b0286b
+/deepseek-ai-dsh-client-ui-directory-picker-browse:
+  en: d866390164091176
+  zh: a6272e2f828456ec
+/deepseek-ai-dsh-client-ui-directory-picker-browse/summary:
+  en: 94be7d2ea4a19728
+  zh: e6a688d97d95ac09
+/deepseek-ai-dsh-client-ui-directory-picker-browse/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-directory-picker-browse/use-this-package:
+  en: 5f48b9369379c097
+  zh: b9699e93adb2bb84
+/deepseek-ai-dsh-client-ui-directory-picker-browse/use-this-package/navigating-and-creating:
+  en: 18e10884b02f288f
+  zh: 06debd0a4a88bdac
+/deepseek-ai-dsh-client-ui-directory-picker-browse/understand-the-implementation:
+  en: 112f058685850f71
+  zh: 8fea66d56ceb2c8b
+/deepseek-ai-dsh-client-ui-directory-picker-browse/further-exploration:
+  en: d8268fa2c3da7d66
+  zh: d67e8d634b2bd6ef
+/deepseek-ai-dsh-client-ui-directory-picker-browse/model-experience:
+  en: 3bcc2b54b66f366e
+  zh: 489716ece3a4ef2a
+/deepseek-ai-dsh-client-ui-directory-picker-browse/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-client-ui-directory-picker-browse/known-limitations-and-deferred-work:
+  en: 20e381071e1644e2
+  zh: 9260bcb09a52dd8c
+/deepseek-ai-dsh-client-ui-directory-picker-browse/known-limitations-and-deferred-work/dev-note:
+  en: d31303387d07ac33
+  zh: 5613857edfa8b0b4

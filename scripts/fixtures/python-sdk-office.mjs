@@ -1,27 +1,26 @@
-/** Exercise the shipped Office provider and its external native assets. */
-import { readFile, stat, writeFile } from 'node:fs/promises'
+/** Exercise the wheel's external Office package from a shipped dsh profile. */
+import { readFile, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { createConverter } from '@deepseek-ai/libreoffice-kit'
 
 export const name = 'python-sdk-office-smoke'
-export const inject = ['officeToPdf']
 
 export async function apply(ctx, config) {
-  const source = await stat(config.input)
-  const version = `${source.size}:${source.mtimeMs}`
-  const result = await ctx.officeToPdf.convert({ extension: 'docx', priority: 'foreground', source: {
-    key: config.input, version, bytes: source.size,
-    read: async (signal, maxBytes) => {
-      signal.throwIfAborted()
-      const bytes = await readFile(config.input)
-      if (bytes.length > maxBytes) throw new Error('Office smoke input exceeds its reserved capacity')
-      return { bytes, version }
-    },
-  } })
-  await writeFile(config.output, result.pdf)
-  await writeFile(config.result, JSON.stringify({
-    missingFonts: result.missingFonts,
-    moduleUrl: import.meta.resolve('@deepseek-ai/libreoffice-kit'),
-    ...(process.platform === 'darwin' ? {
-      nativeModuleUrl: new URL('./lib/native/entry.js', import.meta.resolve('@deepseek-ai/dsh-office-to-pdf/package.json')).href,
-    } : {}),
-  }))
+  const converter = await createConverter({ timeoutMs: 120_000 })
+  try {
+    const result = await converter.render({ inputPath: config.input, outputPath: config.output })
+    const skill = await ctx.skills.get('office-docx')
+    const json = skill?.content.match(/\n(\{\n[\s\S]+)$/u)?.[1]
+    if (json === undefined) throw new Error('Office skill did not supply CLI paths')
+    const { libreofficeKit: { node, cli } } = JSON.parse(json)
+    const options = { env: { ...process.env, PATH: '' }, timeout: 120_000 }
+    const capabilities = await promisify(execFile)(node, [cli, 'capabilities'], options)
+    await promisify(execFile)(node, [cli, 'convert', '--input', config.input, '--output', config.output + '.cli.pdf'], options)
+    const pdf = await readFile(config.output + '.cli.pdf')
+    if (pdf.subarray(0, 5).toString() !== '%PDF-') throw new Error('Skill CLI did not create a PDF')
+    await writeFile(config.result, JSON.stringify({ ...result, capabilities: JSON.parse(capabilities.stdout), moduleUrl: import.meta.resolve('@deepseek-ai/libreoffice-kit') }))
+  } finally {
+    await converter.dispose()
+  }
 }

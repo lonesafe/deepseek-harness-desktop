@@ -199,7 +199,7 @@ function withMigratedEmptyHead(log: readonly SessionEvent[]): readonly unknown[]
       type: 'system/message', seq: 2, time: log[1]!.time, surfaceOp: 'append',
       data: { turn: 1, step: 1, message: {
         id: expect.stringMatching(/^v2-to-v3-system-[0-9a-f]{64}$/) as unknown,
-        role: 'system', content: [], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' },
+        role: 'system', content: [], source: { kind: 'system-prompt' },
       } },
     },
     ...log.slice(2).map(event => ({ ...event, seq: SessionSeq(event.seq + 1) })),
@@ -234,7 +234,7 @@ function releasedV1PackedPhysicalLog(header: SessionHeader): string {
       ...(event.type === 'assistant/message'
         ? { sourceEventSeqs: [3, 4, 5, 6, 7, 8].map(SessionSeq) }
         : {}),
-    } as unknown as SessionEvent)),
+    } as SessionEvent)),
   ]
   const packed = {
     type: 'text-chunks',
@@ -666,16 +666,17 @@ describe('JsonlSessionPersistence: stored-format refusals', () => {
       .rejects.toThrow(/contains event type "request\/header-delta" \(seq 1\) unknown to this harness/)
   })
 
-  it('rejects a stored v0 full header carrying the legacy fallback reason', async () => {
+  it('rejects a stored full header carrying the legacy fallback reason', async () => {
     const m = meta('legacy-header-fallback', '/legacy')
     const path = rawLogPath(root, m.cwd, m.id)
     await mkdir(sessionDir(root, m.cwd, m.id), { recursive: true })
     await writeFile(path, [
       JSON.stringify(toHeaderLine(m)),
+      JSON.stringify({ type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } }),
       JSON.stringify({
         type: 'request/header',
-        seq: SessionSeq(0),
-        time: 1,
+        seq: SessionSeq(1),
+        time: 2,
         data: { header: { config: { provider: 'mock', model: 'legacy' } }, reason: 'fallback' },
       }),
       '',
@@ -696,6 +697,51 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
   })
 
   afterEach(async () => { await ctx.fiber.dispose() })
+
+  it.each([3, SESSION_FORMAT_VERSION])('shares deeply frozen opaque JSON from format v%s', async (version) => {
+    type NestedValue = {
+      values: [null, boolean, number, string, unknown[]]
+      __proto__: { leaf: number }
+      constructor: { leaf: number }
+    }
+    const data = JSON.parse('{"nested":[[{"values":[null,true,7,"text",[]],"__proto__":{"leaf":1},"constructor":{"leaf":2}}]]}') as { nested: [[NestedValue]] }
+    const header = meta(`frozen-json-v${version}`, '/work')
+    const path = generationLogPath(root, header.cwd, header.id, version, 'none')
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, [
+      { ...toHeaderLine(header), version },
+      { type: 'external/frozen-json', seq: 0, time: 1, ignorable: true, data },
+    ].map(row => JSON.stringify(row) + '\n').join(''))
+
+    const handle = await ctx.sessionPersistence.open(header.id, 'read')
+    try {
+      const read = await handle.read()
+      expect(read.eventState).toBe('shared-frozen')
+      expect(read.events).toHaveLength(1)
+      const event = read.events[0] as SessionEvent
+      const actual = event.data as unknown as typeof data
+      const nested = actual.nested[0][0]
+      expect(actual).toEqual(data)
+      expect(Object.getPrototypeOf(nested)).toBe(Object.prototype)
+      expect(Object.hasOwn(nested, '__proto__')).toBe(true)
+      expect(Object.hasOwn(nested, 'constructor')).toBe(true)
+      expect([
+        event, actual, actual.nested, actual.nested[0], nested, nested.values,
+        nested.values[4], nested.__proto__, nested.constructor,
+      ].every(Object.isFrozen)).toBe(true)
+      expect(Reflect.set(nested.__proto__, 'leaf', 9)).toBe(false)
+      expect(Reflect.set(nested.constructor, 'leaf', 9)).toBe(false)
+      expect(() => nested.values[4].push('changed')).toThrow(TypeError)
+
+      const reread = await handle.read()
+      expect(reread.events).not.toBe(read.events)
+      expect(reread.events[0]).toBe(event)
+      expect(reread.events[0]?.data).toBe(actual)
+      expect(actual).toEqual(data)
+    } finally {
+      await handle.close()
+    }
+  })
 
   it('projects a released v0 header through stat and list without reading or mutating its body', async () => {
     const header = meta('released-v0-metadata', '/work')
@@ -971,7 +1017,7 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
       .toEqual(['session.v1.jsonl'])
   })
 
-  it('selects v1 from a v0/v1 directory, then the current writer from the retained three-generation set', async () => {
+  it('selects v1 from a v0/v1 directory, then the current generation from the retained three-generation set', async () => {
     const header = meta('mixed-generation-read', '/work')
     const directory = sessionDir(root, header.cwd, header.id)
     const v0Path = historicalLogPath(root, header.cwd, header.id)
@@ -1163,6 +1209,25 @@ describe('JsonlSessionPersistence: immutable format generations', () => {
 
     await expect(ctx.sessionPersistence.open(header.id, 'read'))
       .rejects.toThrow(/released v0 physical header lacks required member "type"/)
+  })
+
+  it('tracks a disappearing corpus member and propagates its storage faults in historical revisions', async () => {
+    const parent = meta('corpus-revision-parent', '/work')
+    const child = meta('corpus-revision-child', '/work')
+    for (const header of [parent, child]) {
+      const path = historicalLogPath(root, header.cwd, header.id)
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, `${JSON.stringify(releasedV0Header(header))}\n`)
+    }
+    const present = await ctx.sessionPersistence.stat(parent.id)
+    statFailure.path = historicalLogPath(root, child.cwd, child.id)
+    statFailure.error = Object.assign(new Error('member disappeared'), { code: 'ENOENT' })
+    const missing = await ctx.sessionPersistence.stat(parent.id)
+    expect(missing).toBeDefined()
+    expect(missing?.revision).not.toBe(present?.revision)
+    expect((await ctx.sessionPersistence.stat(parent.id))?.revision).toBe(missing?.revision)
+    statFailure.error = Object.assign(new Error('member denied'), { code: 'EACCES' })
+    await expect(ctx.sessionPersistence.stat(parent.id)).rejects.toBe(statFailure.error)
   })
 
   it('surfaces source-read storage faults and aborts unwrapped during migration', async () => {
@@ -2183,6 +2248,32 @@ describe('JsonlSessionPersistence: scanLog unit', () => {
     expect(() => scanLog(Buffer.from(log))).toThrow(/seq gap/)
   })
 
+  it.each([
+    ['assistant/message', {}, /assistant\/message requires a message/],
+    ['agent/inbox/spliced', { inserted: null }, /agent\/inbox\/spliced requires message array/],
+    ['session/title-llm-request', { messages: [null] }, /session\/title-llm-request requires message objects/],
+  ])('rejects malformed %s message slots before exposing a native scan', (type, data, error) => {
+    const prefix = [
+      { type: 'session', version: SESSION_FORMAT_VERSION, id: 'malformed-tail', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+    ].map(row => JSON.stringify(row)).join('\n') + '\n'
+    const malformed = JSON.stringify({ type, seq: 1, time: 2, data }) + '\n'
+    expect(() => scanLog(Buffer.from(prefix + malformed))).toThrow(error)
+    const committed = JSON.stringify({ type: 'turn/end', seq: 2, time: 3, data: { turn: 1, reason: { kind: 'completed' } } }) + '\n'
+    expect(() => scanLog(Buffer.from(prefix + malformed + committed))).toThrow(error)
+  })
+
+  it.each([false, true])('rejects malformed native tool results before recovery (sealed=%s)', (sealed) => {
+    const rows = [
+      { type: 'session', version: SESSION_FORMAT_VERSION, id: 'malformed-tool', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'tool/result', seq: 1, time: 2, data: { message: [] } },
+      ...(sealed ? [{ type: 'turn/end', seq: 2, time: 3, data: { turn: 1, reason: { kind: 'completed' } } }] : []),
+    ]
+    const log = rows.map(row => JSON.stringify(row)).join('\n') + '\n'
+    expect(() => scanLog(Buffer.from(log))).toThrow(/tool\/result.*message must be an object/)
+  })
+
   it('rejects malformed records before a later committed turn/end', () => {
     const corruptRecords = [
       ['{not json', /unparsable committed event/],
@@ -2233,7 +2324,7 @@ describe('JsonlSessionPersistence: scanLog unit', () => {
   })
 })
 
-describe('JsonlSessionPersistence: nested current Assistant streams', () => {
+describe('JsonlSessionPersistence: nested Assistant streams', () => {
   let ctx: Context
   beforeEach(async () => {
     root = await freshRoot()
@@ -2286,7 +2377,7 @@ describe('JsonlSessionPersistence: nested current Assistant streams', () => {
     expect(loaded.events).toEqual(log)
   })
 
-  it.each([2, 3, SESSION_FORMAT_VERSION])('reads v%s rows and appends a current turn without changing predecessor bytes', async (version) => {
+  it.each([2, 3])('reads v%s rows and appends a current turn without changing predecessor bytes', async (version) => {
     const m = meta('mixed', '/work')
     const log = chunkRunLog()
     const sourcePath = generationLogPath(root, '/work', m.id, version, 'none')
@@ -2306,7 +2397,7 @@ describe('JsonlSessionPersistence: nested current Assistant streams', () => {
     expect(restored.meta.version).toBe(SESSION_FORMAT_VERSION)
     expect(restored.events).toEqual(expected)
     expect(await readFile(sourcePath)).toEqual(source)
-    if (version !== SESSION_FORMAT_VERSION) await expect(readFile(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
     const secondTurn: SessionEvent[] = JSON.parse(JSON.stringify(log)) as SessionEvent[]
     for (const [k, e] of secondTurn.entries()) {
       ;(e as { seq: number }).seq = expected.length + k
@@ -2320,7 +2411,7 @@ describe('JsonlSessionPersistence: nested current Assistant streams', () => {
     const successor = (await readFile(currentPath, 'utf8')).trimEnd().split('\n')
     expect(JSON.parse(successor[0] as string)).toMatchObject({ version: SESSION_FORMAT_VERSION })
     expect(successor.slice(1).map(row => JSON.parse(row) as unknown)).toEqual([...expected, ...secondTurn])
-    if (version !== SESSION_FORMAT_VERSION) expect(await readFile(sourcePath)).toEqual(source)
+    expect(await readFile(sourcePath)).toEqual(source)
     // Compact tags stay nested; physical rows contain only current event tags.
     const tags = (await readFile(rawLogPath(root, '/work', m.id), 'utf8')).split('\n').filter(Boolean)
       .map(line => (JSON.parse(line) as { type: string }).type)

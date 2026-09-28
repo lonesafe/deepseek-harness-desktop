@@ -1,5 +1,2 @@
-- button "Settings":
-  - img
-  - text: Settings
-- 'button "Balance: --. Click to refresh"': Balance --
+- button "Settings"
 - button "Reconnecting, reconnect now": Reconnecting

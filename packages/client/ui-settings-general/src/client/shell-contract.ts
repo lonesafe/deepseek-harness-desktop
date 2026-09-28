@@ -7,7 +7,6 @@
  * The settings SLOT types (what registrants contribute) stay in ui-settings.
  */
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
   HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
@@ -16,8 +15,10 @@ import type {
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 // Type-only: pulls the settings slot declarations the shell renders into.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { BalanceState } from './balance-store.ts'
-import type { DesktopUpdateView } from './desktop-update-bridge.ts'
+import type { PropsStore } from '@deepseek-ai/dsh-client-store'
+import type { createSettingsShellStore } from './shell-store.ts'
+import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
+import type { DesktopUpdateView } from '../types.ts'
 
 /** One nav row projected from a settings.section registration's options. */
 export interface SettingsSectionRow {
@@ -42,11 +43,9 @@ export type SettingsRootInjected = {
   openDesktopUpdate: () => void
   /** Request a fresh logical generation and physical WebSocket immediately. */
   reconnect: () => void
-  /** Explicitly refresh the DeepSeek account balance. */
-  refreshBalance: () => void
   hooks: {
-    /** Account balance shown beside Settings. */
-    balance: SnapshotStore<BalanceState>
+    /** Effective command presentation, shared with the reference. */
+    shortcuts: HostObservable<readonly ShortcutCatalogEntry[]>
     /** Shared Electron status for both sidebar locations. */
     desktopUpdate: HostObservable<DesktopUpdateView>
     /** Connection-owned state for the current Host connection. */
@@ -61,12 +60,13 @@ export type SettingsRootInjected = {
 /**
  * Full component props of the settings shell root: the sidebar owner share
  * (wide/rail state) plus the declared render shares and the injected face
- * (hooks compartment bound to useSections). No store is registered — modal
- * open state and active section id are component-local viewing state.
+ * (hooks compartment bound to useSections). The declared store shares modal
+ * visibility and section selection with application commands.
  */
 export type SettingsRootComponentProps =
   PropsRuntime<'sidebar.settings'>
   & PropsRenderSlots<
+    | 'settings.launcher'
     | 'settings.trigger'
     | 'settings.header'
     | 'settings.action'
@@ -76,3 +76,4 @@ export type SettingsRootComponentProps =
   >
   & InjectFace<SettingsRootInjected>
   & PropsLocale<'settings'>
+  & PropsStore<ReturnType<typeof createSettingsShellStore>>

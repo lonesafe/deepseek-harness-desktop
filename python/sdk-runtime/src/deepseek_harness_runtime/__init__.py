@@ -25,10 +25,10 @@ import json
 import os
 import platform
 import shutil
-import stat
 import subprocess
 import sys
 from pathlib import Path
+from ._resources import validate_resources
 
 PACKAGE_METADATA_FILENAME = "deepseek-harness-runtime.json"
 
@@ -60,8 +60,9 @@ def bundled_runtime_path() -> Path:
 
     Raises FileNotFoundError when the platform is unsupported, the executable
     has not been placed into this package, the ripgrep or Office sidecar is
-    missing, a macOS Office helper lacks execution permission, or the required
-    macOS spawn helper is missing; the message names
+    missing, the authoring resources are incomplete, or the required macOS
+    spawn helper is missing. Invalid authoring metadata or Python permissions
+    raise ValueError. Missing executable/Office messages name
     the acquisition routes (acquisition strategy is deliberately separate from
     this lookup interface, so an on-demand download can replace it without
     touching callers).
@@ -106,21 +107,7 @@ def bundled_runtime_path() -> Path:
             f"deepseek-harness-runtime-bin is missing the Office sidecar engine {engine} at {office}. "
             + _EXE_ACQUISITION_HINT
         )
-    if tag.startswith("macos-"):
-        provider = office / "node_modules/@deepseek-ai/dsh-office-to-pdf"
-        for name in ("package.json", "lib/native/entry.js", "lib/native/manifest.json", "lib/native/NOTICE", "lib/native/libreoffice-kit-macos"):
-            asset = provider / name
-            if not asset.is_file():
-                raise FileNotFoundError(
-                    f"deepseek-harness-runtime-bin is missing the macOS Office asset at {asset}. "
-                    + _EXE_ACQUISITION_HINT
-                )
-        helper = provider / "lib/native/libreoffice-kit-macos"
-        if helper.stat().st_mode & stat.S_IXUSR == 0:
-            raise FileNotFoundError(
-                f"deepseek-harness-runtime-bin has a non-executable macOS Office helper at {helper}. "
-                + _EXE_ACQUISITION_HINT
-            )
+    validate_resources(path.with_name(tag), tag)
     return path
 
 

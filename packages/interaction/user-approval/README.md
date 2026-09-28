@@ -1,5 +1,5 @@
 ---
-description: "Channel-neutral approval seam with one-shot and session-remembered grants for composing answerers and fail-closed permission decisions."
+description: "Channel-neutral one-shot approval seam for users and maintainers composing answerers, setting policy, or debugging fail-closed permission decisions."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this package to pause sensitive tool actions for approval. The default `ask` policy consults human or machine answerers unless a matching rule was allowed for the session; `never` rejects before either path. Missing or failed answerers return `unavailable`, so actions fail closed. Approval permits one action or remembers an optional stable rule for matching requests in the same session. Every request and outcome enters the session audit log; the model sees the tool outcome and current policy, but not the permission UI or audit events.
+Use this package to require a one-shot decision before a sensitive tool action proceeds. The `ask` policy sends each request to the deployment's human or machine answerers; `never` rejects it without prompting. Missing or failed answerers return `unavailable`, so the action fails closed, and an approval applies only to that request. Every request and outcome is recorded in the requesting session's audit log. The model sees the resulting tool outcome and current policy, but not the human permission UI or audit events.
 
 ## Table of Contents
 
@@ -49,7 +49,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Requesting a decision
 
-`request(req)` names the agent, tool, optional call id and reason, an optional stable `alwaysAllowKey`, and an abort signal. When that key has a prior completed `allowed-always` audit pair in the same session, the matching request is granted without prompting. It requires an open turn: an idle or between-turn caller throws before auditing anything. Aborting withdraws the question — the request settles `cancelled` and a late answer is discarded. A failure that prevents either audit append from committing rejects instead of returning an unlogged decision.
+`request(req)` names the agent, tool, optional call id and reason, and an abort signal. Optional `displayReason` supplies localized presentation text without changing the logged reason. It requires an open turn: an idle or between-turn caller throws before auditing anything. Aborting withdraws the question — the request settles `cancelled` and a late answer is discarded. A failure that prevents either audit append from committing rejects instead of returning an unlogged decision.
 
 ### What the model and user see
 
@@ -75,7 +75,7 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 ### Dispatch
 
-`decide()` races the answerer waterfall against the request signal and contains every answerer failure: a throwing listener fails the question closed to `unavailable`, and a rogue non-vocabulary return is normalized to `unavailable`. The `never` policy is enforced before remembered-grant lookup and waterfall dispatch, so neither a stored rule nor a listener registered later with `prepend` can bypass the deterministic rejection. The request must be turn-enclosed because the turn is the durable log's commit/replay boundary — a bare event between turns is indistinguishable from a crash tail.
+`decide()` races the answerer waterfall against the request signal and contains every answerer failure: a throwing listener fails the question closed to `unavailable`, and a rogue non-vocabulary return is normalized to `unavailable`. The `never` policy is enforced inside the service before waterfall dispatch, so a listener registered later with `prepend` cannot bypass the deterministic rejection. The request must be turn-enclosed because the turn is the durable log's commit/replay boundary — a bare event between turns is indistinguishable from a crash tail.
 
 ### Policy and the runtime-context snapshot
 
@@ -83,7 +83,7 @@ The system-prompt contribution `approval:policy` states the complete current mea
 
 ### Audit
 
-`request()` appends `approval/asked` with the request identity, tool, and optional remembered-rule key, then `approval/decided` with the closed outcome; the exact appended fields live in [`src/index.ts`](src/index.ts). Both are log-only; the invariant validates the pair by id within one open turn and rejects `allowed-always` unless the ask carried a non-empty rule key.
+`request()` appends `approval/asked` with the request identity and tool, then `approval/decided` with the closed outcome; the exact appended fields live in [`src/index.ts`](src/index.ts). Both are log-only; the invariant validates the pair by id within one open turn and the closed outcome vocabulary.
 
 </details>
 
@@ -152,7 +152,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits define when the seam is a poor fit or needs special composition care. They are current package constraints, not a general permission comparison.
 
 - **Requests are valid only inside an open turn** — an idle or between-turn caller throws before auditing; a durable out-of-turn approval workflow is deferred.
-- **Remembered grants are session-local** — `allowed-always` applies only to later requests with the same stable key in the same session; a new session asks again, and there is no separate persistent grant store or revocation UI.
+- **Only one-shot grants exist** — the outcome vocabulary has `allowed-once` but no `allow-always`, remembered rule, revocation, or grant store; session policy is only `ask` / `never`.
 - **The request carries no tool arguments** — an answerer sees the tool name, reason, and optional call id; the ACP machine channel requires a call id and delegates requests without one.
 - **No built-in answerer** — headless or incompletely composed deployments resolve `unavailable` and fail closed; the service itself never prompts a human.
 

@@ -1,8 +1,8 @@
-import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url))
@@ -17,6 +17,7 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
       import { join } from 'node:path'
       import { Worker } from 'node:worker_threads'
       import { Context } from '@deepseek-ai/cordis'
+      import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
       import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 
       const root = await mkdtemp(join(tmpdir(), 'dsh-built-migration-'))
@@ -32,7 +33,7 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
         const handle = await ctx.sessionPersistence.open(id, 'write')
         await handle.close()
         await ctx.sessionPersistence.flush()
-        const currentPath = join(directory, 'session.v${SESSION_FORMAT_VERSION}.jsonl')
+        const currentPath = join(directory, 'session.v' + SESSION_FORMAT_VERSION + '.jsonl')
         const header = JSON.parse((await readFile(currentPath, 'utf8')).trim())
         await mkdir(join(root, 'lib'))
         await copyFile('package.json', join(root, 'package.json'))

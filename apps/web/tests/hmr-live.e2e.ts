@@ -1,4 +1,4 @@
-/** Published dsh web + pnpm dev:web → browser HMR, with no page reload. */
+/** Built dsh web + the `pnpm run dev:web --no-serve` watchers → browser HMR, with no page reload. */
 
 import { existsSync, globSync, statSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -39,7 +39,7 @@ function spawnSpec(argv: readonly string[], cwd: string, env?: Record<string, st
   }
 }
 
-function waitForOutput(child: SubprocessHandle, pattern: RegExp, label: string, timeoutMs: number): Promise<string> {
+function waitForOutput(child: SubprocessHandle, pattern: RegExp, label: string): Promise<string> {
   return new Promise((resolveReady, reject) => {
     let output = ''
     let settled = false
@@ -66,7 +66,7 @@ function waitForOutput(child: SubprocessHandle, pattern: RegExp, label: string, 
       if (match === null) return
       resolveOnce(match[1] ?? match[0])
     }
-    const timer = setTimeout(() => { rejectOnce(new Error(`${label} not ready:\n${output}`)) }, timeoutMs)
+    const timer = setTimeout(() => { rejectOnce(new Error(`${label} not ready:\n${output}`)) }, 60_000)
     child.stdout?.on('data', onData)
     child.stderr?.on('data', onData)
     void child.done.then((outcome) => {
@@ -108,13 +108,14 @@ it('hot-reloads a real client-plugin source edit without refreshing the page', a
   const failures: unknown[] = []
   try {
     subprocessFiber = await subprocessCtx.plugin(LocalSubprocessRuntime)
+    // Watchers only: the built `dsh web` below is the server under test, and the
+    // built tree is this lane's precondition rather than something to rebuild.
     watcher = subprocessCtx.subprocess.spawn(spawnSpec(
-      ['pnpm', 'run', 'dev:web'],
+      ['pnpm', 'run', 'dev:web', '--skip-build', '--no-serve'],
       REPO_ROOT,
       { ...clientBuildEnvironment },
     ))
-    // The watcher compiles the complete client graph before exposing readiness.
-    await waitForOutput(watcher, /dev-web: watching/, 'pnpm run dev:web', 120_000)
+    await waitForOutput(watcher, /dev-web: watching/, 'pnpm run dev:web --skip-build --no-serve')
     host = subprocessCtx.subprocess.spawn(spawnSpec(
       [process.execPath, binPath, 'web', '--no-open', '--port', '0'],
       world,
@@ -123,7 +124,7 @@ it('hot-reloads a real client-plugin source edit without refreshing the page', a
         DSH_HOME: join(world, '.dsh'),
       },
     ))
-    const baseUrl = await waitForOutput(host, /dsh web: (http:\/\/[^\s]+)/, 'built dsh web', 60_000)
+    const baseUrl = await waitForOutput(host, /dsh web: (http:\/\/[^\s]+)/, 'built dsh web')
     browser = await chromium.launch()
     const page = await browser.newPage()
     const pageErrors: string[] = []
@@ -166,4 +167,4 @@ it('hot-reloads a real client-plugin source edit without refreshing the page', a
     await rm(world, { recursive: true, force: true }).catch((error: unknown) => failures.push(error))
   }
   if (failures.length > 0) throw new AggregateError(failures, 'HMR browser test or cleanup failed')
-}, 300_000)
+}, 120_000)

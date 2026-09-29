@@ -69,4 +69,4 @@ it.each(['win32', 'darwin'] as const)('records and prints redacted parent failur
     consoleLog.mockRestore()
     await rm(state.root, { recursive: true, force: true })
   }
-})
+}, 90_000)

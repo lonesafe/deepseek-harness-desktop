@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-16-workspace-file-manager-preview.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-16-workspace-file-manager-preview.md
-2026-08-16-workspace-file-manager-preview.md: b5bfd4df97ee1dd8f52de7798f33d0a0fc5bc2b3
-2026-08-16-workspace-file-manager-preview.zh.md: 5837a2b88d92beccca46843d6a9d1d519c397128
+/agent-note-read-only-workspace-file-manager-and-preview:
+  en: 1d45968c6a00066b
+  zh: 5623b905ac33e237
+/agent-note-read-only-workspace-file-manager-and-preview/problem:
+  en: ab2be4fcb42a24d3
+  zh: 7905e9f0cb0c20a2
+/agent-note-read-only-workspace-file-manager-and-preview/decision:
+  en: b43d9cb26309924a
+  zh: 2ca16b2c5d66a69c
+/agent-note-read-only-workspace-file-manager-and-preview/verification:
+  en: 80812d879345a367
+  zh: c576b6349bbc38d3
+/agent-note-read-only-workspace-file-manager-and-preview/alternatives-considered:
+  en: ddfa0a39775bf16c
+  zh: 5044a6d4e209a63a
+/agent-note-read-only-workspace-file-manager-and-preview/consequences:
+  en: 0a0802fefc2ddec3
+  zh: dbdbc81f49f385ab

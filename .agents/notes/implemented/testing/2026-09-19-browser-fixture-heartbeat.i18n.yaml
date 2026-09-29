@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-19-browser-fixture-heartbeat.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-19-browser-fixture-heartbeat.md
-2026-09-19-browser-fixture-heartbeat.md: 2948b7d64ebafc5335053297150df06a124337af
-2026-09-19-browser-fixture-heartbeat.zh.md: a08cb6b159c21a4993fdf23383c6f7e0bfb6d8a7
+/agent-note-browser-fixture-heartbeat-cadence:
+  en: 53a9a495115cd445
+  zh: 86d89a650b163217
+/agent-note-browser-fixture-heartbeat-cadence/problem:
+  en: fecaeadb52001a8d
+  zh: d2615ca43b3bd898
+/agent-note-browser-fixture-heartbeat-cadence/decision:
+  en: 1323c84a51c686a5
+  zh: 4ef30ba93d7d91d4
+/agent-note-browser-fixture-heartbeat-cadence/alternatives-considered:
+  en: 17d7498028770c11
+  zh: 5b7a2e3d079e5942
+/agent-note-browser-fixture-heartbeat-cadence/consequences:
+  en: f06da26bffffab00
+  zh: 5a1014c4eaf862ec

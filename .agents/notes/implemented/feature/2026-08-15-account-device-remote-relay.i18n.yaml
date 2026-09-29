@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-15-account-device-remote-relay.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-account-device-remote-relay.md
-2026-08-15-account-device-remote-relay.md: 426e4e7d875fa2461568dc9e9920d50c6c391dc4
-2026-08-15-account-device-remote-relay.zh.md: 4e750480088cd4748cf3aba970943b11322a500e
+/agent-note-account-owned-devices-and-outbound-remote-relay:
+  en: e0600ba7deb4ec9f
+  zh: d8daec9bab312acb
+/agent-note-account-owned-devices-and-outbound-remote-relay/problem:
+  en: 91aba3eb13f01b99
+  zh: a8af595a87dbf3e7
+/agent-note-account-owned-devices-and-outbound-remote-relay/decision:
+  en: 53c7359c35803815
+  zh: 051750c6927df22a
+/agent-note-account-owned-devices-and-outbound-remote-relay/verification:
+  en: 4a8f72fcbbaf44c4
+  zh: 35a44017e0a9cd2a
+/agent-note-account-owned-devices-and-outbound-remote-relay/alternatives-considered:
+  en: 6ffb2a8b48607a91
+  zh: 38eaeabbd3820e1f
+/agent-note-account-owned-devices-and-outbound-remote-relay/consequences:
+  en: ae6a0ef4decc964f
+  zh: b47ae8c213a2af81

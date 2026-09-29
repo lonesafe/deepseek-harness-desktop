@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-10-isolated-oxlint-fixtures.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-10-isolated-oxlint-fixtures.md
-2026-09-10-isolated-oxlint-fixtures.md: 6b4ffc0d09d739667393f93cb41e6d3589cb173d
-2026-09-10-isolated-oxlint-fixtures.zh.md: 3f497522a50051a112cfdba9f21c82168096953d
+/agent-note-isolate-oxlint-fixtures-from-workspace-source-discovery:
+  en: 89082cc2e131bac5
+  zh: 1ec3786776546656
+/agent-note-isolate-oxlint-fixtures-from-workspace-source-discovery/problem:
+  en: acfe7438992fa511
+  zh: 45b3ffa9a133082d
+/agent-note-isolate-oxlint-fixtures-from-workspace-source-discovery/decision:
+  en: 4edb933e8f29a113
+  zh: ba9c29246ff0091f
+/agent-note-isolate-oxlint-fixtures-from-workspace-source-discovery/alternatives-considered:
+  en: 4c3a9dbdf84b42b6
+  zh: 4a80e4cca3c89cfa
+/agent-note-isolate-oxlint-fixtures-from-workspace-source-discovery/consequences:
+  en: ca4eca65d538354e
+  zh: 6e870dff20df3bf0

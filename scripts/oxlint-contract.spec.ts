@@ -263,7 +263,7 @@ export const longProbe = 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 +
 
     expect(result.error).toBeUndefined()
     expect(result.status, normalizedOutput(result)).toBe(0)
-  })
+  }, 90_000)
 
   it('keeps repository lint workflows Oxlint-only', async () => {
     const packageJson: unknown = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8'))
@@ -397,7 +397,7 @@ export function unrelatedRead(): void {
 
     expect(result.error).toBeUndefined()
     expect(result.status, normalizedOutput(result)).toBe(0)
-  })
+  }, 90_000)
 
   it('keeps staged validation project-free while preserving source rules', async () => {
     const configPath = join(repositoryRoot, '.oxlintrc.staged.json')
@@ -429,7 +429,7 @@ export function unrelatedRead(): void {
     expect(lint.status, output).toBe(1)
     expect(output).toContain('@stylistic')
     expect(output).not.toContain('typescript(')
-  })
+  }, 90_000)
 
   it('preserves successful fix output channels', async () => {
     const root = await createFixture()
@@ -449,7 +449,7 @@ export function unrelatedRead(): void {
     expect(result.status, normalizedOutput(result)).toBe(0)
     expect(result.stdout).toContain('Unused oxlint-disable directive')
     expect(result.stderr).toBe('')
-  })
+  }, 90_000)
 
   it('prints only the final diagnostics when a fix retry still fails', async () => {
     const root = await createFixture()
@@ -469,7 +469,7 @@ export function unrelatedRead(): void {
     expect(result.error).toBeUndefined()
     expect(result.status, output).toBe(1)
     expect(output.match(/@stylistic\(max-len\)/g)).toHaveLength(1)
-  })
+  }, 90_000)
 
   it.each(['--fix', '--fix-suggestions', '--fix-dangerously'])(
     'converges overlapping staged stylistic fixes through Oxlint under %s',

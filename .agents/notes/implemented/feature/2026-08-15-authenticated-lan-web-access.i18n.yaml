@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-15-authenticated-lan-web-access.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-15-authenticated-lan-web-access.md
-2026-08-15-authenticated-lan-web-access.md: 0891a989cf9846c2c995ada5458a0005dbb788dd
-2026-08-15-authenticated-lan-web-access.zh.md: 53ede688fbf4503b5dbc28a2868ba77b545831fb
+/agent-note-authenticated-lan-web-access:
+  en: 5f87e887bd2b29b0
+  zh: 867bc74337fa7bf9
+/agent-note-authenticated-lan-web-access/problem:
+  en: 415086c6042d18d1
+  zh: 5cea22d66f30ae57
+/agent-note-authenticated-lan-web-access/decision:
+  en: 90ea7bcd015bca82
+  zh: 0a79c2c121c88887
+/agent-note-authenticated-lan-web-access/verification:
+  en: a9aa5b933128901c
+  zh: 9aa678cba0fa5f32
+/agent-note-authenticated-lan-web-access/alternatives-considered:
+  en: 44948ce8a0d21f43
+  zh: 843ea133dea156e2
+/agent-note-authenticated-lan-web-access/consequences:
+  en: f3414a0aafbaa14d
+  zh: e79e66562cb329af

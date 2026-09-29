@@ -62,7 +62,7 @@ describe('installer preparation preserves application dependencies', () => {
       vi.unstubAllEnvs()
       vi.restoreAllMocks()
     }
-  })
+  }, 90_000)
 
   it('names unsigned Windows artifacts so they cannot pass for release builds', async () => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')

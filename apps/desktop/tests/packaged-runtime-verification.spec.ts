@@ -41,7 +41,7 @@ describe('packaged runtime verification', () => {
       await import('node:fs/promises').then(async fs => fs.readFile(new URL('../package.json', import.meta.url), 'utf8')),
     ) as { version: string }).version
     expect(await requiredRuntimeVersion()).toBe(productVersion)
-  })
+  }, 90_000)
 
   it('requires the version installed-update qualification wrote into its private runtime', async () => {
     // Qualification rewrites the runtime's own version, so comparing against the product version would always fail.

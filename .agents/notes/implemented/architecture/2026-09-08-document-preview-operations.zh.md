@@ -44,4 +44,4 @@ PDF.js 官方 TextLayerBuilder 在适配宽度的 canvas 上负责选择边界�
 
 替换渲染器不需要改变 Tab 或文件协议。全文格式承担有上限的整文件内存成本，PDF 增加随包发布的 Worker、字体和解码器字节。格式选择和查看状态仅属于当前页面，不是持久 Session 数据。Preview 独立于元数据观察，拥有 RPC 取消和原生缓冲区。tab 保留读取版本及读取开始时捕获的观察版本；刷新它既不丢弃其他 tab 的内容，也不清除其变更提示。文件读取仍非事务，不透明版本只比较相等性、不排序。[录制的浏览器场景](../../../../apps/web/tests/document-preview.e2e.ts) 覆盖共用工具栏、增量文本、隔离的 HTML 依赖、按宽度适配的位图与 SVG 渲染、不可执行的 SVG 脚本，以及惰性连续 PDF Worker 渲染。
 
-[PDF.js 许可证检查](../../../../packages/client/ui-sidebar-documentpreview/tests/pdf-license-bundle.e2e.ts)在依赖仓库构建的产物冒烟门禁中检查实际 npm tarball。打包不能放进仅消费源码的单元检查：它依赖 `lib/client.js`，并且必须验证发布字节。已构建通道在该包缺失时失败，保留每项随附许可证断言，并对这个确定性产物检查禁用重试。
+[PDF.js 许可证检查](../../../../packages/client/ui-sidebar-documentpreview/tests/document-preview-license-bundle.client.spec.ts)检查依赖仓库构建的浏览器包。该检查不能针对仅消费源码的单元输出运行，因为它依赖已生成的客户端产物并验证发布字节。

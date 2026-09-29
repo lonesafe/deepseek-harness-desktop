@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-19-macos-office-import-wakeup.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-19-macos-office-import-wakeup.md
-2026-09-19-macos-office-import-wakeup.md: 23b7ed8971cf1b4445153cf79bd2b5bc468af7a0
-2026-09-19-macos-office-import-wakeup.zh.md: ff7747bd9061eafb0f5ab4b6d04ed90ac3327bc2
+/agent-note-macos-office-importer-completion-wakeup:
+  en: 1ca2971d21742562
+  zh: 545b4a8b3e91f99b
+/agent-note-macos-office-importer-completion-wakeup/problem:
+  en: f5a2d3aaff07c590
+  zh: db21fe22f6e885c0
+/agent-note-macos-office-importer-completion-wakeup/decision:
+  en: f8ba744091b40594
+  zh: a35bc31a7cb9ff4d
+/agent-note-macos-office-importer-completion-wakeup/alternatives-considered:
+  en: 64d43ff264212499
+  zh: 2c2279a91f5b9d40
+/agent-note-macos-office-importer-completion-wakeup/consequences:
+  en: d081f9c438524372
+  zh: c6b1415668dd2cda

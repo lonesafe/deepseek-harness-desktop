@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-08-desktop-distribution-entrypoints.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-08-desktop-distribution-entrypoints.md
-2026-09-08-desktop-distribution-entrypoints.md: f9af74de08bd1d5a8a4964aecd4fdf2f84539199
-2026-09-08-desktop-distribution-entrypoints.zh.md: 9d17e489ca90db144409cf49c31ce3c38e0b9a05
+/agent-note-desktop-distribution-entrypoints:
+  en: 4dd649e38f608376
+  zh: 7fd73964cda3f034
+/agent-note-desktop-distribution-entrypoints/problem:
+  en: c11f24a4852aa224
+  zh: 9f8cf97ee28105d0
+/agent-note-desktop-distribution-entrypoints/decision:
+  en: 02258dc1ee659bd8
+  zh: ab10e1ab58a344c6
+/agent-note-desktop-distribution-entrypoints/alternatives-considered:
+  en: 5d1e4a51ba0b0ce3
+  zh: 8708b457c8a60a99
+/agent-note-desktop-distribution-entrypoints/consequences:
+  en: 8c5a69c391abf4b7
+  zh: d725180c6bf32b2a

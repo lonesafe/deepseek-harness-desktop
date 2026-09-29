@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-15-electron-desktop-launcher.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-15-electron-desktop-launcher.md
-2026-08-15-electron-desktop-launcher.md: 80228af72f8fa2955aa1c8206e2a79018cff64be
-2026-08-15-electron-desktop-launcher.zh.md: f0e35a52b1c4b756da427b2b523d188e87db3012
+/agent-note-electron-desktop-launcher-and-native-packaging:
+  en: 860fb0f47d38c0b2
+  zh: a361e1b8cf1c8abc
+/agent-note-electron-desktop-launcher-and-native-packaging/problem:
+  en: b3356c6e85c4d221
+  zh: d35423b0d25061aa
+/agent-note-electron-desktop-launcher-and-native-packaging/decision:
+  en: b7d53cdb861b5823
+  zh: c3728d659940c4a9
+/agent-note-electron-desktop-launcher-and-native-packaging/verification:
+  en: 52f315256ecf0dae
+  zh: 7df3ba29f089474e
+/agent-note-electron-desktop-launcher-and-native-packaging/alternatives-considered:
+  en: 766c9eafc3901e6a
+  zh: 18e57f26e474e7e0
+/agent-note-electron-desktop-launcher-and-native-packaging/consequences:
+  en: 319115f600494994
+  zh: 056747104a4b9a12

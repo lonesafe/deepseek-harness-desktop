@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-16-remote-websocket-rpc-carrier.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-16-remote-websocket-rpc-carrier.md
-2026-08-16-remote-websocket-rpc-carrier.md: 07d7cdb9e7e7a3820848c4831c041456094a7ebe
-2026-08-16-remote-websocket-rpc-carrier.zh.md: fe57f78fae878480f2a8c35ad5f0c3be102a24fd
+/agent-note-multiplexed-websocket-rpc-carrier-for-remote-access:
+  en: c1c56bd3f6692c47
+  zh: 9d50a1164b7e9ab7
+/agent-note-multiplexed-websocket-rpc-carrier-for-remote-access/problem:
+  en: 1e7ef5dd42756cd2
+  zh: 4235d09dc8d1e22d
+/agent-note-multiplexed-websocket-rpc-carrier-for-remote-access/decision:
+  en: c7562ab36d91b668
+  zh: 0a07c441fe5c467a
+/agent-note-multiplexed-websocket-rpc-carrier-for-remote-access/verification:
+  en: a67bba6d82afb139
+  zh: 64c6c181f069cd57
+/agent-note-multiplexed-websocket-rpc-carrier-for-remote-access/alternatives-considered:
+  en: b3e2315663cfde80
+  zh: 7758a9fc7573c2c2
+/agent-note-multiplexed-websocket-rpc-carrier-for-remote-access/consequences:
+  en: 0a0ca401c32de522
+  zh: d29b39dd7bb310c7

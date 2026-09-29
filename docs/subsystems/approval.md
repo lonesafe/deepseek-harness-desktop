@@ -22,9 +22,9 @@ type ApprovalRequestId = Branded<'ApprovalRequestId'>
 
 ```ts type-equiv
 /**
- * Closed approval outcomes: a one-shot or remembered grant, explicit
- * rejection, withdrawn request, or unavailable answerer. Callers fail closed
- * on `unavailable`.
+ * Closed approval outcomes: a one-shot grant, a session-local remembered
+ * grant, explicit rejection, withdrawn request, or unavailable answerer.
+ * Callers fail closed on `unavailable`.
  */
 type ApprovalOutcome = 'allowed-once' | 'allowed-always' | 'rejected' | 'cancelled' | 'unavailable'
 ```

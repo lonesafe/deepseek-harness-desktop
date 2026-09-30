@@ -790,7 +790,7 @@ describe('plugin registration', () => {
       (path) => { opened.push(path) },
     )
     const service = (ctx as { get(name: string): ChatFileMentions | undefined }).get('chatFileMentions')
-    const mentions = service?.forClosing(owner, SessionId('viewed-session'))
+    const mentions = service?.forClosing(owner)
     expect(mentions?.resolve('report.html')?.label).toBe('Open site/report.html in sidebar')
     mentions?.resolve('report.html')?.open()
     expect(opened).toEqual(['site/report.html'])
@@ -799,7 +799,7 @@ describe('plugin registration', () => {
     const preview = vi.fn<(path: string) => void>()
     for (const produced of [[], [{ path: 'out/report.docx', seq: 1 }]]) {
       const delivered = tailOwner({ produced, presented: [{ path: 'out/report.docx', seq: 2, index: 0 }] }, 3, preview)
-      const mentions = service?.forClosing(delivered, SessionId('child-session'))
+      const mentions = service?.forClosing(delivered)
       for (const text of ['report.docx', 'out/report.docx']) {
         const mention = mentions?.resolve(text)
         expect(mention?.label).toBe('Open out/report.docx in sidebar')
@@ -847,7 +847,7 @@ describe('plugin registration', () => {
     ctx.emit('connection/reset')
     expect(tabFace.hooks.changesDiff.getSnapshot()).toEqual({})
     // A turn that produced nothing yields no vocabulary at all.
-    expect(service?.forClosing(tailOwner(undefined, 2), SessionId('viewed-session'))).toBeUndefined()
+    expect(service?.forClosing(tailOwner(undefined, 2))).toBeUndefined()
 
     fetcher.mockResolvedValueOnce(Response.json({ name: 'last-host', available: true, fileManager: 'finder' }))
     await face.reloadPresentedHost()

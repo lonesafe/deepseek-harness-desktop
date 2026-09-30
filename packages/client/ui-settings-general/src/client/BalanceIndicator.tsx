@@ -4,6 +4,11 @@ import type { SettingsRootComponentProps } from './shell-contract.ts'
 import type { BalanceState } from './balance-store.ts'
 import css from './BalanceIndicator.module.css'
 
+type BalanceIndicatorProps = Pick<SettingsRootComponentProps, 'wide' | 't'> & {
+  useBalance: (selector: (state: BalanceState) => BalanceState) => BalanceState
+  refreshBalance: () => void
+}
+
 function amountLabel(currency: string, amount: string): string {
   if (currency === 'CNY') return `¥${amount}`
   if (currency === 'USD') return `$${amount}`
@@ -26,7 +31,7 @@ function detail(state: BalanceState, t: SettingsRootComponentProps['t']): string
 /** Clickable balance label; clicking performs an explicit refresh. */
 export function BalanceIndicator({
   wide, useBalance, refreshBalance, t,
-}: Pick<SettingsRootComponentProps, 'wide' | 'useBalance' | 'refreshBalance' | 't'>) {
+}: BalanceIndicatorProps) {
   const state = useBalance(value => value)
   if (!wide) return null
   const value = state.status === 'ready' && state.balances.length > 0

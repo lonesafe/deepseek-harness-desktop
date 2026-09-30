@@ -123,7 +123,7 @@ function portalRpcFetch(global: ClientTransportGlobal): RpcFetch | undefined {
     if (init.method !== 'POST' || typeof init.body !== 'string') {
       throw new Error('remote portal RPC requires a JSON POST request')
     }
-    return remote.request(input.pathname, JSON.parse(init.body), init.signal ?? undefined)
+    return remote.request(typeof input === 'string' ? input : input.pathname, JSON.parse(init.body), init.signal ?? undefined)
   }
 }
 

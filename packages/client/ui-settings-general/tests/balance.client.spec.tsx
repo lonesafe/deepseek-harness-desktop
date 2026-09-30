@@ -6,7 +6,6 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { BalanceIndicator } from '../src/client/BalanceIndicator.tsx'
 import { BalanceStore, type BalanceState } from '../src/client/balance-store.ts'
 import { en } from '../src/client/locales.ts'
-import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 
 afterEach(cleanup)
 
@@ -31,7 +30,7 @@ describe('DeepSeek balance footer', () => {
       balances: [{ currency: 'CNY', totalBalance: '12.34', grantedBalance: '2.34', toppedUpBalance: '10.00' }],
       error: null,
     }
-    const useBalance: SettingsRootComponentProps['useBalance'] = selector => selector(state)
+    const useBalance = (selector: (value: BalanceState) => BalanceState): BalanceState => selector(state)
     const refreshBalance = vi.fn()
     render(<BalanceIndicator
       wide

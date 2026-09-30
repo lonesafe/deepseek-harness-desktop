@@ -8,7 +8,7 @@ import { describe, expect, onTestFinished, vi } from 'vitest'
 import { RemoteStreamCarrierError, type ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { frames, ok, openStream, type RemoteMock, type StreamScript } from '@deepseek-ai/dsh-remote-mock'
+import { frames, openStream, type RemoteMock, type StreamScript } from '@deepseek-ai/dsh-remote-mock'
 import { createClientTest, type TestClient, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
 import {
   ClientWorkspaceModel,
@@ -323,17 +323,6 @@ describe('WorkspaceController', () => {
   })
 
   it('publishes the model source and exposes successful Workspace commands', async ({ mock, start }) => {
-    mock.remote.workspace.listFiles.mockResolvedValue(ok({ path: 'src', entries: [], truncated: false }))
-    mock.remote.workspace.readFile.mockResolvedValue(ok({
-      path: 'README.md',
-      name: 'README.md',
-      mime: 'text/plain',
-      size: 0,
-      modifiedAt: '1970-01-01T00:00:00.000Z',
-      kind: 'text',
-      encoding: 'utf8',
-      content: '',
-    }))
     const { remote, client } = await gatewayClient(mock, start)
     const model = new ClientWorkspaceModel(remote.workspace)
     model.replaceBaseline({ items: [workspace('one')], archivedSessionIds: [], pinnedSessionIds: [] })
@@ -343,8 +332,6 @@ describe('WorkspaceController', () => {
     expect(client.ctx.workspaces.list).toBe(model)
     await expect(controller.initializeDefault(new AbortController().signal)).resolves.toMatchObject({ workspaceId: 'default' })
     await expect(controller.create({ path: '/work/created' })).resolves.toMatchObject({ workspaceId: 'created' })
-    await expect(controller.listFiles(wid('created'), 'src')).resolves.toMatchObject({ path: 'src' })
-    await expect(controller.readFile(wid('created'), 'README.md')).resolves.toMatchObject({ name: 'README.md' })
     await expect(controller.rename(wid('one'), 'renamed')).resolves.toMatchObject({ title: 'renamed' })
     await expect(controller.insertBefore(wid('one'))).resolves.toBeUndefined()
     await expect(controller.insertSessionBefore(wid('one'), sid('session'))).resolves.toMatchObject({
@@ -357,8 +344,6 @@ describe('WorkspaceController', () => {
     await expect(controller.delete(wid('one'))).resolves.toBeUndefined()
     // Each command crosses the wire as one positional request object.
     expect(mock.log.requests('workspace/create')).toEqual([{ path: '/work/created' }])
-    expect(mock.log.requests('workspace/listFiles')).toEqual([{ workspaceId: 'created', path: 'src' }])
-    expect(mock.log.requests('workspace/readFile')).toEqual([{ workspaceId: 'created', path: 'README.md' }])
     expect(mock.log.requests('workspace/rename')).toEqual([{ workspaceId: 'one', title: 'renamed' }])
     expect(mock.log.requests('workspace/insertBefore')).toEqual([{ workspaceId: 'one' }])
     expect(mock.log.requests('workspace/insertSessionBefore')).toEqual([{ workspaceId: 'one', sessionId: 'session' }])

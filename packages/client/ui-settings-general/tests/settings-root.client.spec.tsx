@@ -12,6 +12,7 @@ import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import type { DesktopUpdateView } from '../src/types.ts'
+import type { BalanceState } from '../src/client/balance-store.ts'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
@@ -38,6 +39,8 @@ type AttentionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useSe
 type ConnectionSnapshot = Parameters<Parameters<SettingsRootComponentProps['useConnectionState']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 const useSessionStatus: SettingsRootComponentProps['useSessionStatus'] = selector => selector(noAttention)
+const readyBalance: BalanceState = { status: 'ready', isAvailable: true, balances: [], error: null }
+const useBalance: SettingsRootComponentProps['useBalance'] = selector => selector(readyBalance)
 
 function mount({
   shortcuts = [],
@@ -74,6 +77,7 @@ function mount({
   const listeners = new Set<() => void>()
   const connectionListeners = new Set<() => void>()
   const reconnect = vi.fn()
+  const refreshBalance = vi.fn()
   const renderSlot = vi.fn(
     ((key: string, _owner: unknown, opts?: { only?: string; fallback?: import('react').ReactNode }) => {
       if (key === 'settings.section') return <div data-testid={`section-${opts?.only ?? 'all'}`} />
@@ -106,6 +110,8 @@ function mount({
     useWorkspaces: unusedHook,
     wide,
     reconnect,
+    refreshBalance,
+    useBalance,
     openDesktopUpdate: () => {},
     useDesktopUpdate: select => select(desktopUpdate),
     t: makeTranslate(dictionary),

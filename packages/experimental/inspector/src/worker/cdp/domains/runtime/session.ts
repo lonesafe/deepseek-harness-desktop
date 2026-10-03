@@ -198,8 +198,10 @@ export class RuntimeDomainSession {
     this.enabled = true
     try {
       await Promise.all(this.realms.all().map(async (realm) => { await runtimeBackend(realm).enable() }))
-      await Promise.all(this.realms.all().map(async (realm) => { await this.attachConsole(realm) }))
-      for (const realm of this.realms.all()) this.announce(realm)
+      for (const realm of this.realms.all()) {
+        this.attachConsole(realm)
+        this.announce(realm)
+      }
       return {}
     } catch (error) {
       this.enabled = false
@@ -405,12 +407,14 @@ export class RuntimeDomainSession {
   private receiveRealm(event: InspectorRealmSessionEvent): void {
     if (event.type === 'opened') {
       if (this.enabled) {
-        void (async () => {
-          await runtimeBackend(event.session).enable()
-          const ready = this.attachConsole(event.session)
-          this.announce(event.session)
-          await ready
-        })().catch(() => { event.session.close() })
+        void runtimeBackend(event.session).enable().then(
+          () => {
+            if (this.closed || !this.enabled || !this.realms.all().includes(event.session)) return
+            this.attachConsole(event.session)
+            this.announce(event.session)
+          },
+          () => { event.session.close() },
+        )
       }
       return
     }
@@ -420,14 +424,13 @@ export class RuntimeDomainSession {
     this.destroy(event.session)
   }
 
-  private async attachConsole(realm: InspectorRealmSession): Promise<void> {
+  private attachConsole(realm: InspectorRealmSession): void {
     if (realm.console.state === 'unsupported' || this.consoleDisposers.has(realm.descriptor.realmId)) return
     const subscription = realm.console.backend.subscribe((event) => {
       if (!this.enabled) return
       this.transport.send(this.objects.consoleEvent(realm, event))
     })
     this.consoleDisposers.set(realm.descriptor.realmId, () => { subscription.dispose() })
-    await subscription.ready
   }
 
   private announce(realm: InspectorRealmSession): void {

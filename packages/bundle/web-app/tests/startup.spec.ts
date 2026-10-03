@@ -63,8 +63,8 @@ export const apply = ctx => globalThis.__webStartupApply(ctx)
     "    host: !!js ctx.webStartup.host ?? '127.0.0.1'",
     '    openBrowser: !!js ctx.webStartup.openBrowser',
     '    port: !!js ctx.webStartup.port ?? 3080',
+    '    publicUrl: !!js ctx.webStartup.publicUrl',
     '    trustedHosts: !!js ctx.webStartup.trustedHosts',
-    "    accessToken: !!js ctx.webStartup.accessToken ?? ''",
     '- id: provider',
     `  name: ${pathToFileURL(join(dir, 'provider.mjs')).href}`,
     '',
@@ -100,14 +100,12 @@ describe('web command-line provider', () => {
       '--port', '8080',
       '--trusted-host', 'lab.internal', 'lab-2.internal',
       '--trusted-host', '10.0.0.9',
-      '--access-token', 'desktop-lan-access-token-1234',
     ])
     expect(values).toEqual({
       host: '127.0.0.1',
       openBrowser: false,
       port: 8080,
       trustedHosts: ['lab.internal', 'lab-2.internal', '10.0.0.9'],
-      accessToken: 'desktop-lan-access-token-1234',
     })
     expect(observed.readerConfig).toEqual(values)
     expect(observed.exits).toEqual([])
@@ -121,7 +119,6 @@ describe('web command-line provider', () => {
       openBrowser: true,
       port: 3080,
       trustedHosts: [],
-      accessToken: '',
     })
   })
 
@@ -129,6 +126,7 @@ describe('web command-line provider', () => {
     const { values, observed } = await bootProvider(['--help'])
     expect(observed.out).toContain('dsh --profile web')
     expect(observed.out).toContain('--no-open')
+    expect(observed.out).toContain('--public-url')
     expect(observed.out).toContain('--trusted-host')
     expect(values).toBeUndefined()
     expect(observed.readerConfig).toBeUndefined()
@@ -143,28 +141,41 @@ describe('web command-line provider', () => {
     expect(observed.exits).toEqual([1])
   })
 
-  it('rejects an anonymous all-interfaces bind before the consumer activates', async () => {
+  it('rejects the intentionally unsupported all-interfaces host before the consumer activates', async () => {
     const { values, observed } = await bootProvider(['--host', '0.0.0.0'])
-    expect(observed.out).toContain('--host 0.0.0.0 requires --access-token')
+    expect(observed.out).toContain('--host 0.0.0.0 is intentionally not supported yet for safety: it would expose remote code execution to the network; use 127.0.0.1 instead')
     expect(values).toBeUndefined()
     expect(observed.readerConfig).toBeUndefined()
     expect(observed.exits).toEqual([1])
   })
 
-  it('accepts an authenticated all-interfaces bind and rejects a short token', async () => {
-    const accepted = await bootProvider([
-      '--host', '0.0.0.0', '--access-token', 'desktop-lan-access-token-1234',
+  it('publishes --public-url as advertisement only, leaving the fence to --trusted-host', async () => {
+    const { values, observed } = await bootProvider([
+      '--public-url', 'https://web.example/ui',
+      '--trusted-host', 'lab.internal',
     ])
-    expect(accepted.values).toMatchObject({
-      host: '0.0.0.0',
-      accessToken: 'desktop-lan-access-token-1234',
+    expect(values).toEqual({
+      openBrowser: true,
+      publicUrl: 'https://web.example/ui',
+      trustedHosts: ['lab.internal'],
     })
-    expect(accepted.observed.exits).toEqual([])
+    expect(observed.readerConfig).toEqual({
+      host: '127.0.0.1',
+      openBrowser: true,
+      port: 3080,
+      publicUrl: 'https://web.example/ui',
+      trustedHosts: ['lab.internal'],
+    })
+    expect(observed.exits).toEqual([])
+  })
 
-    const rejected = await bootProvider(['--access-token', 'short'])
-    expect(rejected.observed.out).toContain('--access-token must contain at least 24 characters')
-    expect(rejected.values).toBeUndefined()
-    expect(rejected.observed.readerConfig).toBeUndefined()
-    expect(rejected.observed.exits).toEqual([1])
+  it('rejects a malformed --public-url before the consumer activates', async () => {
+    // The parser's own suite owns the exhaustive spellings; the provider only
+    // has to fail the invocation before any consumer activates.
+    const { values, observed } = await bootProvider(['--public-url', '/web/ui'])
+    expect(observed.out).toContain('error: --public-url must be an absolute http or https URL of the form http(s)://host[/prefix]')
+    expect(values).toBeUndefined()
+    expect(observed.readerConfig).toBeUndefined()
+    expect(observed.exits).toEqual([1])
   })
 })

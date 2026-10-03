@@ -1001,15 +1001,11 @@ describe('runScenario', () => {
   })
 
   it.each([
-    {
-      step: { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 } as const,
-      message: /subagent child #2 did not persist closed turn 1 within 20ms/,
-    },
-    {
-      step: { op: 'waitForInboxMessage', text: 'missing', timeoutMs: 20 } as const,
-      message: /did not persist expected inbox message within 20ms/,
-    },
-  ])('identifies $step.op when its first log harvest outlasts the deadline', async ({ step, message }) => {
+    { label: 'session', step: { op: 'waitForTurnEnd', timeoutMs: 20 }, expected: 'did not persist turn/end within 20ms' },
+    { label: 'child', step: { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 },
+      expected: 'subagent child #2 did not persist closed turn 1 within 20ms' },
+  ] satisfies { label: string; step: InputStep; expected: string }[])
+  ('identifies the $label wait when its first log harvest outlasts the deadline', async ({ step, expected }) => {
     const { fixtureFile } = await scenario({})
     const reading = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
@@ -1028,48 +1024,17 @@ describe('runScenario', () => {
       { steps: [...boot, step] },
       { agent: AGENT, mode: 'replay', fixtureFile },
     )
-    const rejected = Promise.all([
-      expect(run).rejects.toThrow(message),
-      expect(run).rejects.toHaveProperty('cause', expect.any(Error)),
-    ])
+    const rejected = expect(run).rejects.toThrow(expected)
     try {
       await Promise.race([reading.promise, rejected])
       expect(pendingRead).toBeDefined()
       await rejected
+      await expect(run).rejects.toHaveProperty('cause', expect.any(Error))
     } finally {
       release.resolve(undefined)
       await Promise.allSettled([pendingRead, run, rejected])
       spy.mockRestore()
     }
-  })
-
-  it('retains an inbox log harvest failure as the diagnostic cause', async ({ onTestFinished }) => {
-    isolateDiagnosticTimeout(onTestFinished)
-    const { fixtureFile } = await scenario({
-      prompt: 'hang-until-cancel',
-      persistLogsOnCancel: true,
-      logs: [{
-        file: 'project/main/session.jsonl',
-        lines: [{ type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 }],
-      }],
-    })
-    const failure = Object.assign(new Error('inbox log harvest denied'), { code: 'EACCES' })
-    const originalReadFile = readFile
-    const spy = vi.spyOn(fsPromises, 'readFile').mockImplementation(async (...args) => {
-      if (typeof args[0] === 'string' && args[0].endsWith(join('project', 'main', 'session.jsonl'))) throw failure
-      return await originalReadFile(...args)
-    })
-    onTestFinished(() => { spy.mockRestore() })
-    const run = runScenario(
-      { steps: [
-        ...boot,
-        { op: 'promptAndCancel', text: 'hang' },
-        { op: 'waitForInboxMessage', text: 'missing', timeoutMs: 20 },
-      ] },
-      { agent: AGENT, mode: 'replay', fixtureFile },
-    )
-    await expect(run).rejects.toThrow('did not persist expected inbox message within 20ms')
-    await expect(run).rejects.toHaveProperty('cause', failure)
   })
 
   it('waitForSubagentTurnEnd requires a closed child work turn', { timeout: 20_000 }, async ({ onTestFinished }) => {

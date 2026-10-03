@@ -29,7 +29,7 @@ kind: "package-reference"
 
 调用方通过 `ctx.officeToPdf.convert()` 提交已授权源的标识、版本、可选字节数、延迟的有界读取、Office 扩展名和调度优先级。源版本变化会拒绝转换。结果包含调用方拥有的 PDF 字节、缺失字体、缓存键和转换 generation；配置替换后 generation 随之改变。取消以原因为拒绝值，转换失败使用 `OfficeToPdfError`。
 
-此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-harness/libreoffice-kit/tree/main/packages/entry) npm API，kit 版本为 `0.1.1`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。[平台引擎决策](../../../.agents/notes/implemented/architecture/2026-09-15-platform-office-engines.zh.md)定义安装与打包策略；[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
+此 provider 依赖独立发布的 [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-ai/dsh-libreoffice-kit) npm API，kit 版本为 `^0.1.5`。应用打包选择 kit 的 `optionalDependencies` 中声明的匹配原生包；目标没有声明原生包时选择 WASM。已声明的原生引擎缺失时拒绝打包，不会选择 WASM。[发布归属决策](../../../.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.zh.md)定义独立 kit 与 Harness 各自的职责。
 
 浏览器通过 `officeToPdf.render` Remote 方法请求 PDF，参数为 Session 标识、Office 路径和优先级。此入口使用 `workspaceFiles` 完成授权和源版本检查，再通过 `fs.readBytes` 在转换预留容量内读取原始字节。进程内 `convert()` 不要求这些服务。响应保留源文件路径与版本，通过二进制 Remote 的 multipart 传输携带原生 PDF 字节，并携带缺失字体和转换 generation。`officeToPdf.generation` Remote 方法返回当前提供方 generation；`api/remotes` 负责挂载生成的 Client 描述符。
 
@@ -62,7 +62,7 @@ kind: "package-reference"
 
 引擎元数据无效、必需资源缺失和转换错误会拒绝请求，不会切换引擎。共享的 WASM 引擎使用 LibreOffice 的 CPU 图像过滤器。原生转换使用独立的平台引擎。
 
-每个并发槽按需创建并复用一个 kit 转换器。提供方将已授权输入写入私有临时目录，读取有大小上限的普通 PDF 文件，并在完成前删除目录。取消已准入的读取方不会阻塞后续排队工作。读取方取消只会释放该读取方；最后一个读取方和提供方卸载会取消共享工作。卸载向未完成读取方报告 `unavailable`，并等待转换及转换器清理结束。活跃操作和临时目录清理由同一生命周期负责，因此不发布运行时不变量伴随入口。
+每个并发槽按需创建并复用一个 kit 转换器。提供方将已授权输入写入私有临时目录，读取有大小上限的普通 PDF 文件，并在完成前删除目录。取消已准入的读取方不会阻塞后续排队工作。读取方取消只会释放该读取方；最后一个读取方和提供方卸载会取消共享工作。卸载向未完成读取方报告 `unavailable`，并等待转换及转换器清理结束。
 
 macOS 使用捆绑的通用架构 helper，包含 [Quartz 完成唤醒修复](../../../.agents/notes/implemented/bug-fix/2026-09-19-macos-office-import-wakeup.zh.md)。校验和固定的私有 kit 入口保留原始引擎、字体 worker、验证器和子进程环境。`pnpm run build:office-native` 准备源码检出的资源；发布包自带这些资源，无需编译器。资源缺失或不兼容时报告 `unavailable`。[原生构建](native/build.mjs)在签名前验证源码固定值、两种 CPU 架构和产物哈希；应用签名负责最终可执行文件的字节。普通 Windows 和 Linux 安装使用未修改的 kit 入口。ASAR 安装保留 macOS 的兼容 helper 或其他平台的原始 helper；仅原生文件系统路径映射到解包资源，JavaScript 与字体 worker 导入仍使用归档逻辑 URL。
 
